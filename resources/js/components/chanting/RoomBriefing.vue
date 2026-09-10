@@ -2,6 +2,8 @@
 import { computed } from 'vue';
 import { Check, Clock3 } from '@lucide/vue';
 import type { RoomState } from '@/lib/chanting';
+import { usePanelMotion } from '@/composables/usePanelMotion';
+const panel = usePanelMotion();
 const props = defineProps<{
     state: RoomState;
     pending: boolean;
@@ -24,8 +26,6 @@ const step = computed(() => {
             'You are watching',
             'Follow the chat and public events until the next match.',
         ];
-    if (props.pending)
-        return ['Sending your choice…', 'Wait for confirmation.'];
     if (me.submitted)
         return phase === 'reveal'
             ? ['You are ready', 'Waiting for everyone to read their role.']
@@ -47,6 +47,16 @@ const step = computed(() => {
             'Make your night move',
             'Reveal your secrets to choose and confirm your private action.',
         ];
+    if (props.state.ritual.final_vote)
+        return phase === 'discussion'
+            ? [
+                  'One last discussion',
+                  'The ritual is full. Compare stories before the final vote.',
+              ]
+            : [
+                  'The final vote',
+                  'Banish every remaining cultist now. If any survive this vote, the cult wins.',
+              ];
     if (phase === 'discussion')
         return [
             'Discuss with the village',
@@ -60,6 +70,7 @@ const step = computed(() => {
 </script>
 <template>
     <section
+        ref="panel"
         id="your-turn"
         class="game-panel your-turn"
         aria-labelledby="turn-heading"
@@ -69,6 +80,9 @@ const step = computed(() => {
             <p class="eyebrow">
                 <Check v-if="state.me.submitted" :size="14" /> YOUR TURN
             </p>
+            <span class="turn-pending" role="status">
+                {{ pending ? 'Sending…' : '' }}
+            </span>
             <span v-if="timeLabel" class="turn-time"
                 ><Clock3 :size="14" /> {{ timeLabel }} left</span
             >

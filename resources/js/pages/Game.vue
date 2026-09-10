@@ -30,6 +30,7 @@ import {
 import RoomEntry from '@/components/chanting/RoomEntry.vue';
 import SecretRole from '@/components/chanting/SecretRole.vue';
 import RoomBriefing from '@/components/chanting/RoomBriefing.vue';
+import RitualWarning from '@/components/chanting/RitualWarning.vue';
 import RoomEvents from '@/components/chanting/RoomEvents.vue';
 import RoomHelp from '@/components/chanting/RoomHelp.vue';
 import CharacterPicker from '@/components/chanting/CharacterPicker.vue';
@@ -37,8 +38,10 @@ import CharacterPortrait from '@/components/chanting/CharacterPortrait.vue';
 import CursePanel from '@/components/chanting/CursePanel.vue';
 import MatchRecap from '@/components/chanting/MatchRecap.vue';
 import CardTable from '@/components/chanting/CardTable.vue';
+import GameAtmosphere from '@/components/chanting/GameAtmosphere.vue';
 import SoundControl from '@/components/chanting/SoundControl.vue';
 import type { MusicLibrary } from '@/lib/phaseMusic';
+import { prefersReducedMotion } from '@/composables/usePanelMotion';
 import {
     csrfToken,
     RoomError,
@@ -79,6 +82,14 @@ const message = ref('');
 const copied = ref(false);
 type RoomView = 'play' | 'role' | 'chat' | 'help';
 const activeView = ref<RoomView>('play');
+const workspace = ref<HTMLElement>();
+let viewAnimation: Animation | undefined;
+let navigationTimer: ReturnType<typeof setTimeout> | undefined;
+function finishNavigation() {
+    clearTimeout(navigationTimer);
+    window.removeEventListener('scrollend', finishNavigation);
+    workspace.value?.style.removeProperty('min-height');
+}
 const roleRead = ref(false);
 const hintDismissed = ref(false);
 const readMessageIds = ref<Set<string>>(new Set());
@@ -102,16 +113,19 @@ const newResults = computed(() =>
           )
         : 0,
 );
-const phaseLabel = computed(
-    () =>
-        ({
-            lobby: 'Lobby',
-            reveal: 'Read your role',
-            night: 'Night actions',
-            discussion: 'Discussion',
-            voting: 'Voting',
-            finished: 'Match complete',
-        })[state.value?.phase ?? 'lobby'],
+const phaseLabel = computed(() =>
+    state.value?.ritual.final_vote
+        ? state.value.phase === 'discussion'
+            ? 'Final discussion'
+            : 'Final vote'
+        : {
+              lobby: 'Lobby',
+              reveal: 'Read your role',
+              night: 'Night actions',
+              discussion: 'Discussion',
+              voting: 'Voting',
+              finished: 'Match complete',
+          }[state.value?.phase ?? 'lobby'],
 );
 const showTargetHint = computed(
     () => !hintDismissed.value && canSelectSeat.value,
@@ -149,13 +163,44 @@ function markChatRead() {
     );
 }
 async function navigate(view: RoomView, focus = true) {
+    if (activeView.value === view) return;
+    // A shorter view must not clamp the scroll position before we can scroll.
+    const previousHeight = workspace.value?.getBoundingClientRect().height;
+    finishNavigation();
+    if (workspace.value && previousHeight) {
+        workspace.value.style.minHeight = `${previousHeight}px`;
+    }
     activeView.value = view;
     await nextTick();
-    if (focus) {
-        const destination = document.getElementById(`room-${view}`);
-        destination?.focus({ preventScroll: true });
-        destination?.scrollIntoView({ block: 'start' });
+    if (activeView.value !== view) return;
+    const destination = document.getElementById(`room-${view}`);
+    viewAnimation?.cancel();
+    if (destination && !prefersReducedMotion()) {
+        viewAnimation = destination.animate(
+            [
+                { opacity: 0, translate: '0 6px' },
+                { opacity: 1, translate: '0 0' },
+            ],
+            { duration: 220, easing: 'ease-out' },
+        );
     }
+    if (focus) {
+        destination?.focus({ preventScroll: true });
+        const top = destination?.getBoundingClientRect().top;
+        // Keep the page still when the destination is already within reach.
+        if (top !== undefined && (top < 55 || top > window.innerHeight - 160)) {
+            window.addEventListener('scrollend', finishNavigation, {
+                once: true,
+            });
+            navigationTimer = setTimeout(finishNavigation, 1000);
+            destination?.scrollIntoView({
+                behavior: prefersReducedMotion() ? 'instant' : 'smooth',
+                block: 'start',
+            });
+            return;
+        }
+    }
+    finishNavigation();
 }
 async function showRole() {
     revealed.value = true;
@@ -163,7 +208,7 @@ async function showRole() {
 }
 async function showChat() {
     await navigate('chat');
-    document.getElementById('chat-message')?.focus();
+    document.getElementById('chat-message')?.focus({ preventScroll: true });
 }
 
 const chatList = ref<HTMLElement>();
@@ -522,7 +567,9 @@ onBeforeUnmount(() => {
     clearInterval(clock);
     echo?.disconnect();
     chatObserver?.disconnect();
+    viewAnimation?.cancel();
     document.removeEventListener('visibilitychange', onResume);
+    finishNavigation();
     window.removeEventListener('online', onResume);
 });
 </script>
@@ -534,6 +581,7 @@ onBeforeUnmount(() => {
         :data-phase="state?.phase"
         :data-winner="state?.winner"
     >
+        <GameAtmosphere v-if="!loading" :phase="state?.phase ?? 'lobby'" />
         <header class="site-header game-header">
             <a href="/" class="wordmark" aria-label="Who's Chanting? home"
                 ><span class="brand-eye"><Eye :size="26" /></span> who’s
@@ -612,12 +660,14 @@ onBeforeUnmount(() => {
                     </div>
                 </div>
             </div>
-            <p v-if="error" class="form-error game-error" role="alert">
-                <span>{{ error }}</span
-                ><button @click="error = ''" aria-label="Dismiss error">
-                    Dismiss
-                </button>
-            </p>
+            <Transition name="room-notice">
+                <p v-if="error" class="form-error game-error" role="alert">
+                    <span>{{ error }}</span
+                    ><button @click="error = ''" aria-label="Dismiss error">
+                        Dismiss
+                    </button>
+                </p>
+            </Transition>
             <p
                 v-if="!state.me.alive && state.phase !== 'finished'"
                 class="spectator-banner"
@@ -704,6 +754,7 @@ onBeforeUnmount(() => {
                 :curse="state.me.curse"
                 :time-label="timeLabel"
                 :phase-label="phaseLabel"
+                :final-vote="state.ritual.final_vote"
                 :disconnected="disconnected"
                 :pending="pending"
                 :error="curseError"
@@ -717,7 +768,7 @@ onBeforeUnmount(() => {
                 {{ state.me.curse_notice }}
             </p>
 
-            <div class="room-workspace" :data-view="activeView">
+            <div ref="workspace" class="room-workspace" :data-view="activeView">
                 <div class="room-phase-context" aria-label="Current phase">
                     <span
                         >{{ phaseLabel
@@ -733,6 +784,7 @@ onBeforeUnmount(() => {
                         }}</span
                     >
                 </div>
+                <RitualWarning v-if="state.ritual.final_vote" />
                 <div
                     id="room-play"
                     class="room-play"
@@ -889,13 +941,12 @@ onBeforeUnmount(() => {
                             <button
                                 class="button"
                                 :class="{ primary: !myReady }"
+                                :aria-pressed="myReady"
                                 :disabled="pending"
                                 @click="act('ready')"
                             >
                                 <Check :size="16" />{{
-                                    myReady
-                                        ? 'Ready — click to unready'
-                                        : 'Ready'
+                                    myReady ? 'Ready · undo' : 'Ready'
                                 }}</button
                             ><button
                                 v-if="host"
@@ -1447,7 +1498,12 @@ onBeforeUnmount(() => {
                                 class="ritual-tokens"
                                 role="progressbar"
                                 aria-label="Cult ritual progress in steps"
-                                :aria-valuenow="state.ritual.tokens"
+                                :aria-valuenow="
+                                    Math.min(
+                                        state.ritual.tokens,
+                                        state.ritual.threshold,
+                                    )
+                                "
                                 :aria-valuemin="0"
                                 :aria-valuemax="state.ritual.threshold"
                             >
@@ -1466,7 +1522,9 @@ onBeforeUnmount(() => {
                                         ? 'The goal adjusts as friends join. Fill the track and the cult wins.'
                                         : state.phase === 'finished'
                                           ? `${state.ritual.tokens} of ${state.ritual.threshold} ritual steps were completed. ${state.ritual.tokens >= state.ritual.threshold ? 'The ritual reached its goal.' : 'The match ended before the ritual was complete.'}`
-                                          : `Each filled mark is one step closer. ${Math.max(0, state.ritual.threshold - state.ritual.tokens)} more steps complete the ritual and the cult wins.`
+                                          : state.ritual.final_vote
+                                            ? 'The ritual is full. Banish every remaining cultist in this final vote to stop the summoning.'
+                                            : `${Math.max(0, state.ritual.threshold - state.ritual.tokens)} more steps fill the ritual. The village then gets one final discussion and vote before the summoning.`
                                 }}
                             </p>
                             <p
@@ -1537,7 +1595,8 @@ onBeforeUnmount(() => {
                                     v-model="message"
                                     maxlength="280"
                                     autocomplete="off"
-                                    :disabled="!canChat || pending"
+                                    :disabled="!canChat"
+                                    :readonly="pending"
                                     :placeholder="
                                         canChat
                                             ? 'What’s your story?'

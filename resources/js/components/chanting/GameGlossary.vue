@@ -18,7 +18,7 @@ const terms = [
     ],
     [
         'Cult',
-        'The hidden team working together to finish the ritual. They also win if no town players remain, or if the final two players are one cultist and one town player.',
+        'The hidden team working together to fill the ritual and survive the final vote. They also win if no town players remain, or if the final two players are one cultist and one town player.',
     ],
     [
         'Oracle',
@@ -70,7 +70,7 @@ const terms = [
     ],
     [
         'Ritual progress',
-        'The public countdown to a cult victory, measured in steps. When the track fills, the ritual is complete. The exact goal is shown beside the track.',
+        'The public countdown to the summoning, measured in steps. When the track fills, the village gets one final discussion and vote. Town wins by banishing every remaining cultist; otherwise the cult wins when that vote resolves. The exact goal is shown beside the track.',
     ],
     [
         'Banishment',

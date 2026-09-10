@@ -200,14 +200,17 @@ withDefaults(
                             fades at the following dawn.
                         </p>
                         <p>
-                            <strong>The ritual is a race.</strong> The cult wins
-                            when the ritual progress track fills. Each cultist
-                            can add one step per night by chanting, if their
-                            shared mission’s condition is met: chant together,
-                            avoid investigation, or keep cultists safe in the
-                            previous vote. The cult also wins if no town players
-                            remain, or if the final two players are one cultist
-                            and one town player.
+                            <strong>The ritual is a race.</strong> When the
+                            ritual track fills, the village gets one final
+                            discussion and vote. Banish every remaining cultist
+                            to win for the town; otherwise the cult summons
+                            Cthulhu when that vote resolves. Each cultist can
+                            add one step per night by chanting, if their shared
+                            mission’s condition is met: chant together, avoid
+                            investigation, or keep cultists safe in the previous
+                            vote. The cult also wins if no town players remain,
+                            or if the final two players are one cultist and one
+                            town player.
                         </p>
                         <p>
                             <strong

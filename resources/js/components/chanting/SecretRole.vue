@@ -2,6 +2,11 @@
 import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { Eye, EyeOff, LockKeyhole } from '@lucide/vue';
 import { roles, type RoomState } from '@/lib/chanting';
+import {
+    prefersReducedMotion,
+    usePanelMotion,
+} from '@/composables/usePanelMotion';
+const panel = usePanelMotion();
 const props = defineProps<{
     state: RoomState;
     active: boolean;
@@ -60,7 +65,11 @@ async function hideRole() {
 async function showResults() {
     resultsOpen.value = true;
     await nextTick();
-    resultsElement.value?.focus();
+    resultsElement.value?.focus({ preventScroll: true });
+    resultsElement.value?.scrollIntoView({
+        behavior: prefersReducedMotion() ? 'instant' : 'smooth',
+        block: 'nearest',
+    });
 }
 defineExpose({ showResults });
 onMounted(() =>
@@ -72,7 +81,11 @@ onBeforeUnmount(() => {
 });
 </script>
 <template>
-    <section class="game-panel role-panel" aria-label="Your private role">
+    <section
+        ref="panel"
+        class="game-panel role-panel"
+        aria-label="Your private role"
+    >
         <div v-if="!revealed" class="role-cover">
             <span class="role-sigil" aria-hidden="true">◈</span>
             <h2>Your private role</h2>
@@ -113,8 +126,8 @@ onBeforeUnmount(() => {
                 <p>
                     {{
                         state.me.alignment === 'cult'
-                            ? 'Complete the ritual, eliminate the town, or reach a final pair of one cultist and one town player.'
-                            : 'Find and banish every cultist before the ritual is complete.'
+                            ? 'Fill the ritual and have at least one cultist survive the final vote, eliminate the town, or reach a final pair of one cultist and one town player.'
+                            : 'Find and banish every cultist. If the ritual fills, you still have one final discussion and vote to stop the summoning.'
                     }}
                 </p>
             </div>

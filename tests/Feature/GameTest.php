@@ -158,12 +158,19 @@ class GameTest extends TestCase
                 $this->expire($room);
             }
         }
+        $this->assertSame('discussion', $room->state['phase']);
+        $this->assertNull($room->state['winner']);
+        $this->assertDatabaseCount('game_matches', 0);
+        $this->expire($room);
+        $this->assertSame('voting', $room->state['phase']);
+        $this->expire($room);
         $this->assertSame('cult', $room->state['winner']);
         $this->assertSame('finished', $room->state['phase']);
         $this->assertSame($playerCount, $room->state['tokens']);
         $view = $this->engine->access($room->code, 'secret-0');
         $this->assertCount($playerCount, $view['recap']['rounds']);
-        $this->assertArrayNotHasKey('vote', $view['recap']['rounds'][$playerCount - 1]);
+        $this->assertArrayHasKey('vote', $view['recap']['rounds'][$playerCount - 1]);
+        $this->assertFalse($view['ritual']['final_vote']);
     }
 
     public function test_two_players_cannot_start_and_an_eleventh_cannot_join(): void
@@ -419,7 +426,7 @@ class GameTest extends TestCase
         }
     }
 
-    public function test_ritual_victory_finishes_complete_match_after_three_nights(): void
+    public function test_ritual_victory_waits_for_the_final_vote_after_three_nights(): void
     {
         [$room, $identities] = $this->match();
         $r = $this->roles($room);
@@ -434,10 +441,96 @@ class GameTest extends TestCase
                 $this->expire($room);
             }
         }
+        $this->assertSame('discussion', $room->state['phase']);
+        $this->assertNull($room->state['winner']);
+        $this->expire($room);
+        $this->expire($room);
         $this->assertSame('finished', $room->state['phase']);
         $this->assertSame('cult', $room->state['winner']);
         $this->assertSame(6, $room->state['tokens']);
         $this->assertNull($room->deadline);
+    }
+
+    /** @return iterable<string, array{string, int, string}> */
+    public static function finalRitualVotes(): iterable
+    {
+        yield 'last cultist banished at 3 of 3' => ['last_cultist', 3, 'town'];
+        yield 'town player banished' => ['wrong_player', 3, 'cult'];
+        yield 'everyone abstains' => ['abstain', 3, 'cult'];
+        yield 'vote is tied' => ['tie', 3, 'cult'];
+        yield 'everyone misses the deadline' => ['timeout', 3, 'cult'];
+        yield 'one of two cultists banished after overshooting goal' => ['one_cultist', 5, 'cult'];
+    }
+
+    #[DataProvider('finalRitualVotes')]
+    public function test_full_ritual_grants_exactly_one_final_vote_with_town_victory_taking_precedence(string $outcome, int $playerCount, string $winner): void
+    {
+        [$room, $identities] = $this->match(mission: null, playerCount: $playerCount);
+        $roles = $this->roles($room);
+        $this->expire($room);
+        $state = $room->fresh()->state;
+        $state['tokens'] = $state['threshold'] - 1;
+        if ($playerCount === 5) {
+            $state['mission'] = config('game.missions.concord');
+        }
+        $room->update(['state' => $state]);
+        $this->assertFalse($this->engine->access($room->code, 'secret-0')['ritual']['final_vote']);
+
+        // Complete the night by submissions, rather than by the deadline.
+        foreach ($state['players'] as $id => $player) {
+            $this->act($room, $identities[$id], 'night', ['target' => $player['role'] === 'oracle' ? $roles['veilweaver'] : null]);
+        }
+        $view = $this->engine->access($room->code, 'secret-0');
+        $this->assertSame('discussion', $view['phase']);
+        $this->assertSame($playerCount === 3 ? 3 : 7, $view['ritual']['tokens']);
+        $this->assertTrue($view['ritual']['final_vote']);
+        $this->assertNull($view['winner']);
+        $this->assertNull($view['recap']);
+        foreach ($view['players'] as $player) {
+            $this->assertArrayNotHasKey('role', $player);
+        }
+        $this->assertStringContainsString('One final discussion and vote', implode(' ', $view['log']));
+        $this->assertDatabaseCount('game_matches', 0);
+        $this->assertSame($view, $this->engine->access($room->code, 'secret-0'));
+
+        foreach ($identities as $identity) {
+            $this->act($room, $identity, 'discussion_ready');
+        }
+        $voting = $this->engine->access($room->code, 'secret-0');
+        $this->assertSame('voting', $voting['phase']);
+        $this->assertTrue($voting['ritual']['final_vote']);
+        $this->assertNull($voting['winner']);
+        $this->assertDatabaseCount('game_matches', 0);
+
+        if ($outcome === 'timeout') {
+            $this->expire($room);
+        } else {
+            $ids = array_keys($identities);
+            foreach ($ids as $index => $id) {
+                $target = match ($outcome) {
+                    'last_cultist', 'one_cultist' => $id === $roles['veilweaver'] ? null : $roles['veilweaver'],
+                    'wrong_player' => $id === $roles['oracle'] ? null : $roles['oracle'],
+                    'tie' => $ids[($index + 1) % count($ids)],
+                    default => null,
+                };
+                $this->act($room, $identities[$id], 'vote', ['target' => $target]);
+            }
+        }
+        $finished = $this->engine->access($room->code, 'secret-0');
+        $this->assertSame('finished', $finished['phase']);
+        $this->assertSame($winner, $finished['winner']);
+        $this->assertFalse($finished['ritual']['final_vote']);
+        $this->assertNull($finished['deadline']);
+        $this->assertSame(1, $finished['day']);
+        $this->assertCount(1, $finished['recap']['rounds']);
+        $this->assertCount($playerCount, $finished['recap']['rounds'][0]['vote']['ballots']);
+        $this->assertDatabaseCount('game_matches', 1);
+        $archive = GameMatch::firstOrFail();
+        $this->assertSame($finished['recap']['rounds'], $archive->getAttribute('recap')['rounds']);
+        $this->engine->resolve($room->id);
+        $this->assertRejected(fn () => $this->engine->access($room->code, 'secret-0', ['type' => 'vote', 'phase_id' => $voting['phase_id']]));
+        $this->assertSame($finished, $this->engine->access($room->code, 'secret-0'));
+        $this->assertDatabaseCount('game_matches', 1);
     }
 
     public function test_tied_vote_and_missing_votes_abstain_without_elimination(): void
@@ -935,6 +1028,9 @@ class GameTest extends TestCase
         $state = $room->fresh()->state;
         $state['tokens'] = $state['threshold'];
         $room->update(['state' => $state]);
+        $this->expire($room);
+        $this->assertSame('discussion', $room->state['phase']);
+        $this->expire($room);
         $this->expire($room);
         $this->assertSame('finished', $room->state['phase']);
         foreach ($room->state['players'] as $player) {

@@ -10,6 +10,7 @@ import {
     DialogTitle,
 } from 'reka-ui';
 import type { Curse } from '@/lib/chanting';
+import RitualWarning from './RitualWarning.vue';
 
 const props = defineProps<{
     curse: Curse;
@@ -18,6 +19,7 @@ const props = defineProps<{
     timeLabel?: string;
     phaseLabel?: string;
     disconnected?: boolean;
+    finalVote?: boolean;
 }>();
 const emit = defineEmits<{
     solve: [payload: { curse_id: string; answer: string[] }];
@@ -115,6 +117,7 @@ function restoreFocus(event: Event) {
                     </span>
                 </div>
                 <div class="curse-dialog-body">
+                    <RitualWarning v-if="finalVote" />
                     <header
                         ref="introduction"
                         class="curse-heading"

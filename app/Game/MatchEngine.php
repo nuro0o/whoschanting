@@ -290,6 +290,9 @@ class MatchEngine
                 $this->resolveNight($s);
                 if (! $this->victory($room, $s)) {
                     $this->phase($room, $s, 'discussion');
+                    if ($s['tokens'] >= $s['threshold']) {
+                        $s['log'][] = 'The ritual is complete. The cult is preparing to summon. One final discussion and vote remain: banish every remaining cultist or the cult wins.';
+                    }
                 }
                 break;
             case 'discussion':
@@ -297,7 +300,7 @@ class MatchEngine
                 break;
             case 'voting':
                 $this->resolveVote($s);
-                if (! $this->victory($room, $s)) {
+                if (! $this->victory($room, $s, afterVote: true)) {
                     $s['day']++;
                     $this->phase($room, $s, 'night');
                 }
@@ -424,18 +427,21 @@ class MatchEngine
     }
 
     /** @param array<string, mixed> $s */
-    private function victory(GameRoom $room, array &$s): bool
+    private function victory(GameRoom $room, array &$s, bool $afterVote = false): bool
     {
         $cult = count(array_filter($s['players'], fn (array $p): bool => $p['alive'] && $p['alignment'] === 'cult'));
         $town = count(array_filter($s['players'], fn (array $p): bool => $p['alive'] && $p['alignment'] === 'town'));
+        // A full ritual grants one last vote. Banishment resolves before this check,
+        // so removing the final cultist still takes precedence over the summoning.
+        $summoned = $afterVote && $s['tokens'] >= $s['threshold'];
         if ($cult === 0) {
             $s['winner'] = 'town';
             $s['win_reason'] = 'Every cultist has been banished. The village sees another sunrise.';
-        } elseif ($s['tokens'] >= $s['threshold'] || $town === 0 || ($cult === 1 && $town === 1)) {
+        } elseif ($summoned || $town === 0 || ($cult === 1 && $town === 1)) {
             $s['winner'] = 'cult';
             $s['win_reason'] = match (true) {
                 $town === 0 => 'No townspeople remain to stop the summoning.',
-                $s['tokens'] >= $s['threshold'] => 'The ritual is complete. Cthulhu awakens.',
+                $summoned => 'The final vote is over, and cultists remain. Cthulhu awakens.',
                 default => 'One cultist and one town player remain. The last villager cannot banish the cult alone.',
             };
         }
@@ -503,7 +509,8 @@ class MatchEngine
             'id' => $room->id, 'code' => $room->code, 'phase' => $s['phase'], 'phase_id' => $s['phase_id'],
             'revision' => $s['revision'], 'day' => $s['day'], 'deadline' => $room->deadline?->toISOString(),
             'server_time' => now()->toISOString(), 'host_id' => $s['host_id'],
-            'ritual' => ['tokens' => $s['tokens'], 'threshold' => $s['threshold'], 'level' => $this->curses->level($s['tokens'], $s['threshold'])],
+            'ritual' => ['tokens' => $s['tokens'], 'threshold' => $s['threshold'], 'level' => $this->curses->level($s['tokens'], $s['threshold']),
+                'final_vote' => $s['threshold'] > 0 && $s['tokens'] >= $s['threshold'] && in_array($s['phase'], ['discussion', 'voting'], true)],
             'winner' => $s['winner'], 'win_reason' => $s['win_reason'], 'players' => $players,
             'me' => array_replace(array_intersect_key($me, array_flip(['id', 'name', 'alive', 'role', 'alignment', 'results'])), [
                 'character' => $this->character($me),

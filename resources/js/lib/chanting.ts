@@ -128,7 +128,12 @@ export interface RoomState {
     deadline: string | null;
     server_time: string;
     host_id: string;
-    ritual: { tokens: number; threshold: number; level: number };
+    ritual: {
+        tokens: number;
+        threshold: number;
+        level: number;
+        final_vote: boolean;
+    };
     winner: 'town' | 'cult' | null;
     win_reason: string | null;
     recap: MatchRecapData | null;
@@ -215,7 +220,7 @@ export const roles: Record<
         name: 'The Townsperson',
         subtitle: 'Town · a watchful neighbor',
         description:
-            'Keep watch at night. Read the room by day, compare stories, and vote to banish every cultist before the ritual is complete.',
+            'Keep watch at night. Read the room by day, compare stories, and vote to banish every cultist. A full ritual leaves one final discussion and vote to stop the summoning.',
         symbol: '✦',
     },
 };

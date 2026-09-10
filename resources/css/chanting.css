@@ -507,9 +507,99 @@
 }
 
 .game-page {
+    --atmosphere-duration: 3200ms;
+    --atmosphere-easing: cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    isolation: isolate;
+    background: #101d20;
+}
+/* An isolated background keeps the light behind controls, curses, and dialogs.
+   Only the night scene's opacity changes; its artwork filters stay static. */
+.game-atmosphere {
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    overflow: hidden;
+    pointer-events: none;
+    contain: strict;
+}
+.game-atmosphere__scene,
+.game-atmosphere__scene::before,
+.game-atmosphere__scene::after,
+.game-atmosphere__haze {
+    position: absolute;
+    inset: 0;
+}
+.game-atmosphere__scene::before,
+.game-atmosphere__scene::after {
+    content: '';
+}
+.game-atmosphere__scene::before {
+    background: url('/assets/chanting/village.png') center top / cover no-repeat;
+}
+.game-atmosphere__morning {
+    background: #293b32;
+}
+.game-atmosphere__morning::before {
+    opacity: 0.54;
+    filter: brightness(1.65) saturate(0.55) sepia(0.35);
+}
+.game-atmosphere__morning::after {
     background:
-        linear-gradient(#101d20eb, #101d20 650px),
-        url('/assets/chanting/village.png') top center/cover fixed;
+        radial-gradient(ellipse at 76% 4%, #f3d4983d, transparent 55%),
+        linear-gradient(180deg, #34433424, #192c2b96 65%, #142527e8),
+        radial-gradient(ellipse at 50% 30%, transparent 30%, #0e202b55 100%);
+}
+.game-atmosphere__night {
+    background: #080f1d;
+    opacity: 0;
+    transition: opacity var(--atmosphere-duration) var(--atmosphere-easing);
+}
+.game-atmosphere__night::before {
+    opacity: 0.56;
+    filter: brightness(0.85) saturate(0.65) hue-rotate(24deg);
+}
+.game-atmosphere__night::after {
+    background:
+        radial-gradient(ellipse at 76% 4%, #a3c6e61a, transparent 40%),
+        linear-gradient(180deg, #111a3526, #0a1526a3 65%, #091321f0),
+        radial-gradient(ellipse at 50% 30%, transparent 15%, #030817b3 100%);
+}
+.game-atmosphere.is-night .game-atmosphere__night {
+    opacity: 1;
+}
+.game-atmosphere__haze {
+    opacity: 0.38;
+    transition: opacity var(--atmosphere-duration) var(--atmosphere-easing);
+}
+.game-atmosphere__haze::before {
+    content: '';
+    position: absolute;
+    inset: -8%;
+    background:
+        radial-gradient(ellipse at 18% 36%, #b4cbbb1c, transparent 48%),
+        radial-gradient(ellipse at 80% 64%, #9bbad51a, transparent 45%);
+    animation: village-haze 28s ease-in-out infinite alternate;
+}
+.game-atmosphere.is-night .game-atmosphere__haze {
+    opacity: 0.65;
+}
+@keyframes village-haze {
+    from {
+        transform: translate3d(-2%, 1%, 0);
+    }
+    to {
+        transform: translate3d(2%, -1%, 0);
+    }
+}
+@media (prefers-reduced-motion: reduce) {
+    .game-atmosphere__night,
+    .game-atmosphere__haze {
+        transition: none;
+    }
+    .game-atmosphere__haze::before {
+        animation: none;
+    }
 }
 .game-header {
     height: 82px;
@@ -721,6 +811,7 @@
 .invite-line .button {
     margin: 0;
     width: auto;
+    min-width: 142px;
     padding: 10px;
 }
 .state-message {
@@ -982,7 +1073,17 @@
     border-radius: 50%;
 }
 .game-error {
-    margin-bottom: 20px;
+    position: fixed;
+    z-index: 45;
+    inset: auto 16px calc(90px + env(safe-area-inset-bottom));
+    width: fit-content;
+    max-width: min(600px, calc(100% - 32px));
+    margin: 0 auto;
+    padding: 14px 18px;
+    border: 1px solid var(--coral);
+    border-radius: 6px;
+    background: #293033;
+    box-shadow: 0 8px 32px #0005;
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -2305,19 +2406,6 @@
 }
 
 /* Candlelit gathering: the table and the next decision share the stage. */
-.game-page {
-    transition: background-color 900ms ease;
-}
-.game-page[data-phase='night'] {
-    background-color: #101d24;
-}
-.game-page[data-phase='discussion'],
-.game-page[data-winner='town'] {
-    background-color: #1b2929;
-}
-.game-page[data-winner='cult'] {
-    background-color: #142824;
-}
 .game-main {
     max-width: 1320px;
     padding-top: 25px;
@@ -2468,7 +2556,8 @@
         inset 0 0 0 2px #b8a77735;
     transition:
         background-color 900ms,
-        box-shadow 900ms;
+        box-shadow 900ms,
+        filter var(--atmosphere-duration, 3200ms) var(--atmosphere-easing, ease);
 }
 .table-inlay {
     position: absolute;
@@ -2481,20 +2570,24 @@
     position: absolute;
     inset: 0;
     pointer-events: none;
-    background: radial-gradient(ellipse at 50% 12%, #f9c36b0a, transparent 60%);
-    transition: background 900ms;
+    background: radial-gradient(ellipse at 50% 0%, #edb87620, transparent 75%);
 }
-.table-panel[data-phase='night'] .table-atmosphere {
+.table-atmosphere::after {
+    content: '';
+    position: absolute;
+    inset: 0;
     background:
-        radial-gradient(ellipse at 35% 80%, #99bfd415, transparent 65%),
-        linear-gradient(0deg, #a4cfdf0a, transparent 45%);
+        radial-gradient(ellipse at 35% 80%, #99bfd421, transparent 65%),
+        linear-gradient(0deg, #10213d45, #0b152b3d);
+    opacity: 0;
+    transition: opacity var(--atmosphere-duration, 3200ms)
+        var(--atmosphere-easing, ease);
+}
+.table-panel[data-phase='night'] .table-atmosphere::after {
+    opacity: 1;
 }
 .table-panel[data-phase='night'] .table-surface {
     filter: saturate(0.65) brightness(0.85);
-}
-.table-panel[data-phase='discussion'] .table-atmosphere,
-.table-panel[data-winner='town'] .table-atmosphere {
-    background: radial-gradient(ellipse at 50% 0%, #edb87620, transparent 75%);
 }
 .table-panel[data-phase='voting'] .table-surface {
     border-color: #66523b;
@@ -3042,6 +3135,7 @@
     .table-seat .character-portrait,
     .table-surface,
     .table-atmosphere,
+    .table-atmosphere::after,
     .ritual-rune {
         transition: none;
     }
@@ -3301,6 +3395,8 @@
     color: var(--muted);
     background: transparent;
     font-weight: 600;
+    flex: 1 1 0;
+    min-width: 0;
 }
 .room-navigation > button:hover,
 .room-navigation > button.active {
@@ -3335,6 +3431,8 @@
     grid-template-columns: minmax(0, 1.65fr) minmax(310px, 1fr);
     align-items: start;
     gap: 24px;
+    min-height: calc(100svh - 120px);
+    align-content: start;
 }
 .room-workspace > * {
     min-width: 0;
@@ -3434,6 +3532,13 @@
     font-size: clamp(25px, 2.2vw, 32px);
     line-height: 1.2;
     margin-bottom: 9px;
+}
+.turn-pending {
+    min-width: 65px;
+    margin-left: auto;
+    color: var(--muted);
+    font-size: 11px;
+    text-align: right;
 }
 .turn-status > p {
     color: var(--muted);
@@ -3779,5 +3884,80 @@
     }
     .action-stack .role-private {
         padding: 16px;
+    }
+}
+
+/* Room controls respond without changing their layout. */
+.game-page button,
+.game-page summary {
+    touch-action: manipulation;
+    transition:
+        background-color 180ms ease,
+        border-color 180ms ease,
+        color 180ms ease,
+        opacity 180ms ease,
+        box-shadow 180ms ease,
+        scale 180ms ease,
+        transform 180ms ease;
+}
+.game-page button > svg {
+    flex-shrink: 0;
+}
+.game-page button:active:not(:disabled) {
+    scale: 0.98;
+}
+.game-page .room-navigation > button:active {
+    scale: 0.97;
+}
+.game-page .room-navigation .room-badge,
+.game-page .room-navigation .nav-action-dot {
+    position: absolute;
+    right: 8px;
+    top: 4px;
+}
+.game-page .room-navigation .nav-action-dot {
+    right: 15%;
+    top: 10px;
+}
+.room-notice-enter-active,
+.room-notice-leave-active {
+    transition:
+        opacity 180ms ease,
+        transform 180ms ease;
+}
+.room-notice-enter-from,
+.room-notice-leave-to {
+    opacity: 0;
+    transform: translateY(6px);
+}
+@media (hover: none) {
+    .game-page .button:hover:not(:disabled) {
+        transform: none;
+    }
+    .game-page .button:active:not(:disabled) {
+        scale: 0.98;
+    }
+}
+@supports (interpolate-size: allow-keywords) {
+    .game-page details:not(.sound-settings) {
+        interpolate-size: allow-keywords;
+    }
+    .game-page details:not(.sound-settings)::details-content {
+        height: 0;
+        opacity: 0;
+        overflow: clip;
+        transition:
+            height 240ms ease,
+            opacity 180ms ease,
+            content-visibility 240ms allow-discrete;
+    }
+    .game-page details[open]:not(.sound-settings)::details-content {
+        height: auto;
+        opacity: 1;
+    }
+}
+@media (prefers-reduced-motion: reduce) {
+    .game-page details::details-content {
+        transition: none;
     }
 }

@@ -18,6 +18,8 @@ const nextAction = computed(() => {
         return 'Complete the curse challenge to return to the room. The phase timer keeps running; the curse also expires at the next dawn.';
     if (me.submitted)
         return 'Your choice is submitted. Wait for the next phase; during discussion and voting you can still use Chat.';
+    if (props.state.ritual.final_vote)
+        return 'The ritual is full. Use this final discussion and vote to banish every remaining cultist. If any cultist survives the vote, the cult wins immediately.';
     if (phase === 'reveal')
         return 'Open My role and reveal your secrets. Read your objective and ability, then return to Play and choose Ready for night.';
     if (phase === 'night')
@@ -40,13 +42,13 @@ const nextAction = computed(() => {
         <section class="help-answer">
             <h3>How do we win?</h3>
             <p>
-                <strong>Town:</strong> find and banish every cultist before the
-                ritual is complete.
+                <strong>Town:</strong> find and banish every cultist. When the
+                ritual fills, you still get one final discussion and vote.
             </p>
             <p>
-                <strong>Cult:</strong> complete the ritual, eliminate every town
-                player, or reach a final pair of one cultist and one town
-                player.
+                <strong>Cult:</strong> fill the ritual and have at least one
+                cultist survive the final vote, eliminate every town player, or
+                reach a final pair of one cultist and one town player.
             </p>
             <p>
                 Your private objective and any shared mission are in My role.
