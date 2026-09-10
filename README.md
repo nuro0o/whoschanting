@@ -62,6 +62,8 @@ PHPUnit uses a separate in-memory SQLite database by default. `tests/Feature/Gam
 
 ## Deploy at whoschanting.app
 
+The frontend build runs Artisan through Wayfinder. If the server uses a versioned PHP executable, select the same executable used for Composer and migrations: `WAYFINDER_COMMAND="php8.5 artisan wayfinder:generate" npm run build`. Export this variable in the deployment shell or set it inline as shown; adding it only to Laravel's `.env` does not configure this build command. To see an underlying generation error directly, run `php8.5 artisan wayfinder:generate --with-form`.
+
 Domain registration/DNS, hosting, TLS, and production credentials are external setup. Serve Laravel’s `public/` directory over HTTPS, set `APP_ENV=production`, `APP_DEBUG=false`, `APP_URL=https://whoschanting.app`, `SESSION_SECURE_COOKIE=true`, and use production MySQL. Set Reverb’s public hostname and HTTPS port, restrict `REVERB_ALLOWED_ORIGINS` to the site hostname, and proxy WebSockets to Reverb. Rebuild frontend assets after changing `VITE_REVERB_*`.
 
 Supervise the queue worker and Reverb. Run Laravel’s scheduler continuously (or `schedule:run` every minute, which runs the sub-minute tick). Run `php artisan migrate --force`, cache configuration, and restart workers on deploy. Multi-server deployments also need shared session/cache infrastructure and Reverb scaling configuration.
