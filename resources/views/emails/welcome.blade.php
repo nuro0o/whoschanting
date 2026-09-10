@@ -1,4 +1,7 @@
-@extends('emails.layout')
+@extends('emails.layout', [
+    'heroImage' => 'assets/chanting/welcome-email-ferryman.png',
+    'heroAlt' => 'From your seat aboard the boat, the hooded Ferryman rows you toward the lantern-lit village.',
+])
 
 @section('title', 'Welcome to Who’s Chanting?')
 @section('preheader', 'Your email is verified. Pick a character, gather your friends, and meet us in the village.')

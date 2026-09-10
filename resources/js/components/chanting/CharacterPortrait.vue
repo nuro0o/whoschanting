@@ -11,7 +11,11 @@ const tileIndex = computed(() => index.value % 8);
 <template>
     <span
         class="character-portrait"
-        :class="{ 'character-portrait--hooded': index >= 8 }"
+        :class="{
+            'character-portrait--hooded': index >= 8,
+            'character-portrait--ferryman': character === 'ferryman',
+            'character-portrait--trickster': character === 'trickster',
+        }"
         :role="decorative ? undefined : 'img'"
         :aria-hidden="decorative || undefined"
         :aria-label="decorative ? undefined : label"

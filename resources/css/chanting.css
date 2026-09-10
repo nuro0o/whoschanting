@@ -1494,7 +1494,7 @@
     width: 48px;
     aspect-ratio: 1;
     flex-shrink: 0;
-    background-image: url('/assets/chanting/characters-storybook.png');
+    background-image: url('/assets/chanting/characters-reimagined-illustrated.png');
     background-size: 400% 200%;
     background-repeat: no-repeat;
     border: 1px solid #8e9b77;
@@ -1502,7 +1502,15 @@
     box-shadow: 0 4px 12px #0004;
 }
 .character-portrait--hooded {
-    background-image: url('/assets/chanting/characters-hooded.png');
+    background-image: url('/assets/chanting/characters-hooded-reimagined-illustrated.png');
+}
+.character-portrait--ferryman {
+    background-image: url('/assets/chanting/ferryman-shadow.png');
+    background-size: 100% 100%;
+}
+.character-portrait--trickster {
+    background-image: url('/assets/chanting/trickster-clown.png');
+    background-size: 100% 100%;
 }
 .character-picker {
     border: 0;

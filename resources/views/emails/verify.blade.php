@@ -1,4 +1,7 @@
-@extends('emails.layout')
+@extends('emails.layout', [
+    'heroImage' => 'assets/chanting/verify-email-ferryman.png',
+    'heroAlt' => 'A hooded Ferryman with glowing eyes offers you a hand aboard his boat beside the village dock.',
+])
 
 @section('title', 'Verify your email · Who’s Chanting?')
 @section('preheader', 'One quick check before you settle into the village. Verify your email to finish creating your account.')

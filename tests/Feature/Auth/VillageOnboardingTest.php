@@ -179,9 +179,13 @@ class VillageOnboardingTest extends TestCase
             $this->assertSame('inline', $email->getAttachments()[0]->getDisposition());
         }
         $verify = $messages[0]->getOriginalMessage();
+        $this->assertSame('verify-email-ferryman.png', $verify->getAttachments()[0]->getFilename());
+        $this->assertStringContainsString('offers you a hand aboard his boat', $verify->getHtmlBody());
         $this->assertStringContainsString($url, $verify->getTextBody());
         $this->assertStringContainsString('Verify my email', $verify->getHtmlBody());
         $welcome = $messages[1]->getOriginalMessage();
+        $this->assertSame('welcome-email-ferryman.png', $welcome->getAttachments()[0]->getFilename());
+        $this->assertStringContainsString('rows you toward the lantern-lit village', $welcome->getHtmlBody());
         $this->assertStringContainsString('Welcome to Who', $welcome->getSubject());
         $this->assertStringContainsString(route('home'), $welcome->getTextBody());
     }

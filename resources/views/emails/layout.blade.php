@@ -20,7 +20,7 @@
                     </tr>
                     <tr>
                         <td bgcolor="#18282b" style="background-color:#18282b;">
-                            <img src="{{ $message->embed(public_path('assets/chanting/welcome-email-storybook.png')) }}" width="600" alt="Illustrated villagers welcome you to a lantern-lit table in Who’s Chanting?" style="display:block;width:100%;max-width:600px;height:auto;border:0;color:#eee9d5;font-size:14px;">
+                            <img src="{{ $message->embed(public_path($heroImage)) }}" width="600" alt="{{ $heroAlt }}" style="display:block;width:100%;max-width:600px;height:auto;border:0;color:#eee9d5;font-size:14px;">
                         </td>
                     </tr>
                     <tr>
