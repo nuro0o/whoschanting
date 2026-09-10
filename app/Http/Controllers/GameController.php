@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Game\MatchEngine;
+use App\Game\MusicLibrary;
 use App\Models\GameRoom;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -38,7 +39,11 @@ class GameController extends Controller
     {
         GameRoom::where('code', strtoupper($code))->firstOrFail();
 
-        return Inertia::render('Game', ['code' => strtoupper($code), ...$this->characterProps($request)]);
+        return Inertia::render('Game', [
+            'code' => strtoupper($code),
+            'music' => (new MusicLibrary)->tracks(public_path('assets/Music')),
+            ...$this->characterProps($request),
+        ]);
     }
 
     public function create(Request $request): JsonResponse

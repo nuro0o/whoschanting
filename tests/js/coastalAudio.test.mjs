@@ -260,7 +260,7 @@ await test('preferences validate stored data and migrate the old opt-in', () => 
     );
     assert.deepEqual(
         parseSoundPreferences('{"enabled":true,"effects":150,"ambience":-5}'),
-        { enabled: true, effects: 100, ambience: 0 },
+        { enabled: true, effects: 100, ambience: 0, music: 25 },
     );
     assert.equal(parseSoundPreferences('{"effects":12.8}').effects, 13);
 });

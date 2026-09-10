@@ -9,7 +9,7 @@
         "check": "vp check",
         "check:fix": "vp check --fix",
         "types:check": "vue-tsc --noEmit",
-        "test:audio": "node --experimental-strip-types --test tests/js/coastalAudio.test.mjs"
+        "test:audio": "node --experimental-strip-types --test tests/js/*.test.mjs"
     },
     "dependencies": {
         "@inertiajs/vite": "^3.0.0",

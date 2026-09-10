@@ -4,6 +4,7 @@ export interface SoundPreferences {
     enabled: boolean;
     effects: number;
     ambience: number;
+    music: number;
 }
 
 export const soundStorageKey = 'chanting-audio-v1';
@@ -11,6 +12,7 @@ export const defaultSoundPreferences: SoundPreferences = {
     enabled: false,
     effects: 45,
     ambience: 25,
+    music: 25,
 };
 
 export function parseSoundPreferences(
@@ -34,6 +36,7 @@ export function parseSoundPreferences(
                     : fallback.enabled,
             effects: volume(data.effects, fallback.effects),
             ambience: volume(data.ambience, fallback.ambience),
+            music: volume(data.music, fallback.music),
         };
     } catch {
         return fallback;

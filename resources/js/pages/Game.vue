@@ -32,6 +32,7 @@ import CursePanel from '@/components/chanting/CursePanel.vue';
 import MatchRecap from '@/components/chanting/MatchRecap.vue';
 import CardTable from '@/components/chanting/CardTable.vue';
 import SoundControl from '@/components/chanting/SoundControl.vue';
+import type { MusicLibrary } from '@/lib/phaseMusic';
 import {
     csrfToken,
     RoomError,
@@ -48,8 +49,12 @@ const props = withDefaults(
         code: string;
         characters?: Character[];
         preferredCharacter?: string | null;
+        music?: MusicLibrary;
     }>(),
-    { characters: () => defaultCharacters },
+    {
+        characters: () => defaultCharacters,
+        music: () => ({ day: [], night: [] }),
+    },
 );
 const page = usePage();
 const signedIn = computed(() => !!page.props.auth.user);
@@ -504,6 +509,7 @@ onBeforeUnmount(() => {
             </p>
             <div class="game-tools">
                 <GameGlossary /><SoundControl
+                    :music="music"
                     :phase="state.phase"
                     :phase-id="state.phase_id"
                     :submitted="state.me.submitted"

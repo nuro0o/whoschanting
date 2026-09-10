@@ -36,6 +36,10 @@ The game pairs the table and current action in a responsive play area, with a co
 
 Optional procedural audio adds coastal ambience and short cues for phases, sealed actions, ritual progress, and victory. Effects and ambience have separate saved volume controls. Sound requires a user gesture, even when an enabled preference was saved previously. Background tabs are silent, and discussion ambience is quieter. A gentle deadline reminder is limited to players who still need to act. Audio cues use public game events and the player's own submission; they never encode a secret role or target.
 
+Recorded music lives in `public/assets/Music/`. Add files named `day1.mp3`, `day2.mp3`, `night1.mp3`, `night2.mp3`, and so on (positive numbers; gaps are fine). MP3, OGG, WAV, M4A, AAC and Opus filenames are recognized; playback depends on browser codec support. Tracks are discovered on each room page load, so upload new files and refresh the room to include them—no code/configuration change or frontend rebuild is needed. Keep the capital `M` in `Music` on case-sensitive servers.
+
+Night uses the night playlist; the lobby, role reveal, discussion and voting use the day playlist. Each playlist shuffles through every track before repeating, avoids immediate repeats when there are multiple tracks, and repeats a single available track. Daytime phase changes keep the current song playing. Music stops after victory, pauses when sound is off or the tab is hidden, and softens during discussion. The saved **Music** volume is independent of effects and ambience. Missing or unsupported recordings are skipped for that page session; an empty playlist is silent.
+
 ## First-match rules (provisional)
 
 - **3–10 players**: 3–4 players have **1 cultist**, 5–6 have **2**, 7–8 have **3**, and 9–10 have **4**. Exactly one cultist is the Veilweaver; any remaining cultists are Acolytes. There is always one Oracle, with the remaining town seats assigned to Townspeople. Cultists know all their teammates. In 5–10-player matches they receive the same randomly selected mission. **Small Gathering (3–4 players)** gives the lone Veilweaver **A voice below**: each submitted chant advances the ritual by one step, even when investigated. The lobby previews the current roster and ritual goal before players ready up.
@@ -91,7 +95,7 @@ npm run build
 composer test
 ```
 
-`npm run test:audio` covers cue deduplication, deadline reminders, preference validation, independent volume controls, and audio lifecycle/cleanup with a mock audio context. It runs as part of `composer ci:check`. Browser checks should also cover first-click activation, mute, background-tab suspension, mobile sound settings, and keyboard seat selection.
+`npm run test:audio` covers cue deduplication, deadline reminders, preference validation, independent volume controls, audio lifecycle/cleanup, shuffled music playback, phase switching, missing tracks, and autoplay rejection with mocked browser audio. It runs as part of `composer ci:check`. Browser checks should also cover first-click activation, mute, background-tab suspension, mobile sound settings, and keyboard seat selection. `MusicLibraryTest` checks automatic discovery of new numbered recordings.
 
 PHPUnit uses a separate in-memory SQLite database by default. `tests/Feature/GameTest.php` covers hidden information, guest recovery, channel authorization, abilities in either direction, mission scoring, duplicate/stale actions, deadlines, ties and abstentions, both winners, dead-player restrictions, and rematches. MySQL should also be exercised before production because SQLite does not implement row-level locks. To run the suite on MySQL, create an **empty dedicated test database** and set process environment variables `DB_CONNECTION=mysql`, `DB_HOST`, `DB_PORT`, `DB_DATABASE`, `DB_USERNAME`, `DB_PASSWORD`, and `DB_URL` (empty) before running `php artisan test`; never point RefreshDatabase tests at real game data.
 

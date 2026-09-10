@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { SlidersHorizontal, Volume2, VolumeX } from '@lucide/vue';
 import { computed, onBeforeUnmount, onMounted, ref, useId, watch } from 'vue';
+import { PhaseMusic, type MusicLibrary } from '@/lib/phaseMusic';
 import {
     CoastalAudio,
     defaultSoundPreferences,
@@ -10,15 +11,17 @@ import {
     type SoundSnapshot,
 } from '@/lib/coastalAudio';
 
-const props = defineProps<SoundSnapshot>();
+const props = defineProps<SoundSnapshot & { music: MusicLibrary }>();
 const preferences = ref({ ...defaultSoundPreferences });
 const active = ref(false);
 const busy = ref(false);
 const issue = ref('');
+const musicIssue = ref('');
 const settings = ref<HTMLDetailsElement>();
 const controlId = useId();
 const tracker = new SoundCueTracker();
 let engine: CoastalAudio | null = null;
+let music: PhaseMusic | null = null;
 let activated = false;
 let disposed = false;
 const label = computed(() =>
@@ -43,6 +46,14 @@ function sync() {
     const cues = tracker.update({ ...props }, active.value && !document.hidden);
     engine?.update(preferences.value, props.phase);
     engine?.play(cues);
+    syncMusic();
+}
+function syncMusic(running = active.value) {
+    music?.update(
+        props.phase,
+        preferences.value.music,
+        running && !document.hidden,
+    );
 }
 async function enable() {
     if (!engine || busy.value || document.hidden) return;
@@ -50,6 +61,8 @@ async function enable() {
     issue.value = '';
     tracker.update({ ...props }, false);
     engine.update(preferences.value, props.phase);
+    // Start media within the user's gesture, before awaiting AudioContext.resume().
+    syncMusic(true);
     const started = await engine.enable();
     if (disposed) return;
     busy.value = false;
@@ -58,8 +71,11 @@ async function enable() {
         preferences.value.enabled = true;
         active.value = true;
         save();
-    } else if (!document.hidden)
-        issue.value = 'Sound could not start. Tap to try again.';
+    } else {
+        syncMusic(false);
+        if (!document.hidden)
+            issue.value = 'Sound could not start. Tap to try again.';
+    }
 }
 function toggle() {
     if (active.value) {
@@ -95,6 +111,10 @@ onMounted(() => {
     }
     engine = new CoastalAudio((running) => {
         active.value = running && !document.hidden;
+        syncMusic(running);
+    });
+    music = new PhaseMusic(props.music, (message) => {
+        musicIssue.value = message;
     });
     tracker.update({ ...props }, false);
     document.addEventListener('visibilitychange', visibilityChanged);
@@ -111,6 +131,7 @@ watch(
     () => {
         save();
         engine?.update(preferences.value, props.phase);
+        syncMusic();
     },
     { deep: true },
 );
@@ -119,6 +140,8 @@ onBeforeUnmount(() => {
     document.removeEventListener('visibilitychange', visibilityChanged);
     document.removeEventListener('pointerdown', closeSettings);
     engine?.close();
+    music?.close();
+    music = null;
     engine = null;
 });
 </script>
@@ -146,8 +169,22 @@ onBeforeUnmount(() => {
             <div class="sound-settings-panel">
                 <p class="sound-settings-title">Sounds of the village</p>
                 <p class="sound-settings-note">
-                    Quiet waves, distant bells, and a little mystery.
+                    Music, quiet waves, and distant bells.
                 </p>
+                <div class="sound-volume">
+                    <label :for="`${controlId}-music`">Music</label>
+                    <output :for="`${controlId}-music`"
+                        >{{ preferences.music }}%</output
+                    >
+                    <input
+                        :id="`${controlId}-music`"
+                        v-model.number="preferences.music"
+                        type="range"
+                        min="0"
+                        max="100"
+                        step="1"
+                    />
+                </div>
                 <div class="sound-volume">
                     <label :for="`${controlId}-effects`">Effects</label>
                     <output :for="`${controlId}-effects`"
@@ -177,7 +214,7 @@ onBeforeUnmount(() => {
                     />
                 </div>
                 <p class="sound-settings-note">
-                    Ambience softens during discussion.
+                    Music and ambience soften during discussion.
                 </p>
                 <button
                     v-if="active"
@@ -191,7 +228,9 @@ onBeforeUnmount(() => {
                 </p>
             </div>
         </details>
-        <span v-if="issue" class="sound-issue" role="status">{{ issue }}</span>
+        <span v-if="issue || musicIssue" class="sound-issue" role="status">{{
+            issue || musicIssue
+        }}</span>
     </div>
 </template>
 
