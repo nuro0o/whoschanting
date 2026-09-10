@@ -481,14 +481,15 @@ class GameTest extends TestCase
             $this->postJson('/rooms/'.$code.'/actions', ['type' => 'character', 'character' => $character['id'], 'phase_id' => 1])
                 ->assertOk()->assertJsonPath('me.character', $character['id']);
         }
+        $lastCharacter = collect(config('game.characters'))->last()['id'];
         $nextCode = $this->postJson('/rooms', ['name' => 'Neighbor'])->assertCreated()->json('code');
-        $this->getJson('/rooms/'.$nextCode.'/state')->assertJsonPath('me.character', 'musician');
+        $this->getJson('/rooms/'.$nextCode.'/state')->assertJsonPath('me.character', $lastCharacter);
         $room = GameRoom::where('code', $code)->firstOrFail();
         $s = $room->state;
         $s['phase'] = 'reveal';
         $room->update(['state' => $s]);
         $this->postJson('/rooms/'.$code.'/actions', ['type' => 'character', 'character' => 'baker', 'phase_id' => 1])->assertUnprocessable();
-        $this->getJson('/rooms/'.$code.'/state')->assertJsonPath('me.character', 'musician');
+        $this->getJson('/rooms/'.$code.'/state')->assertJsonPath('me.character', $lastCharacter);
         $this->withSession(['chanting.identity' => 'account-join']);
         $this->postJson('/rooms/join', ['name' => 'Joined', 'code' => $nextCode, 'character' => 'archivist'])->assertOk();
         $this->getJson('/rooms/'.$nextCode.'/state')->assertJsonPath('me.character', 'archivist');

@@ -113,6 +113,14 @@ export const characterIds = [
     'astronomer',
     'ferryman',
     'musician',
+    'drifter',
+    'whisperer',
+    'smuggler',
+    'lookout',
+    'trickster',
+    'locksmith',
+    'prowler',
+    'stranger',
 ];
 export const defaultCharacters: Character[] = characterIds.map((id) => ({
     id,

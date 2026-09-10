@@ -1494,12 +1494,15 @@
     width: 48px;
     aspect-ratio: 1;
     flex-shrink: 0;
-    background-image: url('/assets/chanting/characters.png');
+    background-image: url('/assets/chanting/characters-storybook.png');
     background-size: 400% 200%;
     background-repeat: no-repeat;
     border: 1px solid #8e9b77;
     border-radius: 50% 50% 8px 8px;
     box-shadow: 0 4px 12px #0004;
+}
+.character-portrait--hooded {
+    background-image: url('/assets/chanting/characters-hooded.png');
 }
 .character-picker {
     border: 0;
