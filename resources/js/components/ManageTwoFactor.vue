@@ -10,12 +10,14 @@ import { useTwoFactorAuth } from '@/composables/useTwoFactorAuth';
 import { disable, enable } from '@/routes/two-factor';
 
 export type Props = {
+    showHeading?: boolean;
     canManageTwoFactor?: boolean;
     requiresConfirmation?: boolean;
     twoFactorEnabled?: boolean;
 };
 
 withDefaults(defineProps<Props>(), {
+    showHeading: true,
     canManageTwoFactor: false,
     requiresConfirmation: false,
     twoFactorEnabled: false,
@@ -30,6 +32,7 @@ onUnmounted(() => clearTwoFactorAuthData());
 <template>
     <div v-if="canManageTwoFactor" class="space-y-6">
         <Heading
+            v-if="showHeading"
             variant="small"
             title="Two-factor authentication"
             description="Manage your two-factor authentication settings"

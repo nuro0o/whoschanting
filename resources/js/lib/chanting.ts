@@ -65,6 +65,41 @@ export interface Player {
     role?: string;
     alignment?: string;
 }
+export interface RecapNightAction {
+    player_id: string;
+    role: string;
+    target_id: string | null;
+    submitted: boolean;
+    contributed: boolean;
+    apparent_alignment: string | null;
+    veiled: boolean;
+}
+export interface MatchRecapData {
+    rules_version: string;
+    player_count: number;
+    mission: { id: string; name: string; description: string };
+    ritual_goal: number;
+    nights: number;
+    duration_seconds: number | null;
+    complete: boolean;
+    missed_actions: { night: number; vote: number };
+    rounds: {
+        day: number;
+        night?: {
+            actions: RecapNightAction[];
+            gained: number;
+            tokens: number;
+        };
+        vote?: {
+            ballots: {
+                player_id: string;
+                target_id: string | null;
+                submitted: boolean;
+            }[];
+            banished_id: string | null;
+        };
+    }[];
+}
 export interface RoomState {
     id: number;
     code: string;
@@ -78,6 +113,7 @@ export interface RoomState {
     ritual: { tokens: number; threshold: number };
     winner: 'town' | 'cult' | null;
     win_reason: string | null;
+    recap: MatchRecapData | null;
     players: Player[];
     me: {
         id: string;
@@ -97,6 +133,9 @@ export interface RoomState {
         min_players: number;
         max_players: number;
         seconds: Record<string, number>;
+        ritual_goals: { players: number; steps: number }[];
+        cultists_by_player_count: Record<number, number>;
+        small_gathering_max_players: number;
     };
 }
 

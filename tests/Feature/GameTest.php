@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Events\RoomUpdated;
 use App\Game\MatchEngine;
+use App\Models\GameMatch;
 use App\Models\GameRoom;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -27,7 +28,7 @@ class GameTest extends TestCase
     }
 
     /** @return array{GameRoom, array<string, string>} */
-    private function match(string $mission = 'concord', int $playerCount = 5): array
+    private function match(?string $mission = 'concord', int $playerCount = 5): array
     {
         $room = $this->engine->create('secret-0', 'Player 0');
         for ($i = 1; $i < $playerCount; $i++) {
@@ -41,7 +42,9 @@ class GameTest extends TestCase
         }
         $this->act($room, 'secret-0', 'start');
         $s = $room->fresh()->state;
-        $s['mission'] = config('game.missions.'.$mission);
+        if ($mission !== null) {
+            $s['mission'] = config('game.missions.'.$mission);
+        }
         $room->update(['state' => $s]);
 
         return [$room, $identities];
@@ -133,22 +136,32 @@ class GameTest extends TestCase
         $this->assertSame('finished', $room->fresh()->state['phase']);
     }
 
-    public function test_three_player_lone_cultist_can_complete_the_ritual(): void
+    /** @return array<string, array{int}> */
+    public static function smallGatherings(): array
     {
-        [$room, $identities] = $this->match(playerCount: 3);
+        return ['three players' => [3], 'four players' => [4]];
+    }
+
+    #[DataProvider('smallGatherings')]
+    public function test_small_gathering_lone_cultist_can_complete_the_ritual(int $playerCount): void
+    {
+        [$room, $identities] = $this->match(mission: null, playerCount: $playerCount);
         $cultist = $this->roles($room)['veilweaver'];
         $this->expire($room);
-        for ($night = 1; $night <= 6; $night++) {
+        for ($night = 1; $night <= $playerCount; $night++) {
             $this->act($room, $identities[$cultist], 'night');
             $this->expire($room);
-            if ($night < 6) {
+            if ($night < $playerCount) {
                 $this->expire($room);
                 $this->expire($room);
             }
         }
         $this->assertSame('cult', $room->state['winner']);
         $this->assertSame('finished', $room->state['phase']);
-        $this->assertSame(6, $room->state['tokens']);
+        $this->assertSame($playerCount, $room->state['tokens']);
+        $view = $this->engine->access($room->code, 'secret-0');
+        $this->assertCount($playerCount, $view['recap']['rounds']);
+        $this->assertArrayNotHasKey('vote', $view['recap']['rounds'][$playerCount - 1]);
     }
 
     public function test_two_players_cannot_start_and_an_eleventh_cannot_join(): void
@@ -572,7 +585,150 @@ class GameTest extends TestCase
         $this->act($room, 'secret-0', 'discussion_ready');
         $this->expire($room);
         $this->assertSame('voting', $room->state['phase']);
-        $this->assertSame([6, 6, 6, 8, 9, 10, 11, 12], array_column($this->engine->rules()['ritual_goals'], 'steps'));
+        $this->assertSame([3, 4, 6, 8, 9, 10, 11, 12], array_column($this->engine->rules()['ritual_goals'], 'steps'));
+    }
+
+    #[DataProvider('rosterSizes')]
+    public function test_actual_mission_selection_and_goals_match_room_size(int $playerCount, int $cultistCount): void
+    {
+        [$room, $identities] = $this->match(mission: null, playerCount: $playerCount);
+        $s = $room->fresh()->state;
+        $this->assertSame([3 => 3, 4 => 4, 5 => 6, 6 => 8, 7 => 9, 8 => 10, 9 => 11, 10 => 12][$playerCount], $s['threshold']);
+        if ($cultistCount === 1) {
+            $this->assertSame('solitary', $s['mission']['id']);
+            $this->expire($room);
+            $roles = $this->roles($room);
+            $this->act($room, $identities[$roles['veilweaver']], 'night');
+            $this->act($room, $identities[$roles['oracle']], 'night', ['target' => $roles['veilweaver']]);
+            $this->expire($room);
+            $this->assertSame(1, $room->state['tokens'], 'Investigation must not block a solitary chant.');
+        } else {
+            $this->assertContains($s['mission']['id'], ['concord', 'shadows', 'patience']);
+        }
+    }
+
+    public function test_one_on_one_ends_shadows_stalemate_but_larger_parity_does_not_win(): void
+    {
+        [$room, $identities] = $this->match('shadows', playerCount: 3);
+        $roles = $this->roles($room);
+        $this->expire($room);
+        $this->act($room, $identities[$roles['veilweaver']], 'night');
+        $this->act($room, $identities[$roles['oracle']], 'night', ['target' => $roles['veilweaver']]);
+        $this->expire($room);
+        $this->assertSame(0, $room->state['tokens']);
+        $this->expire($room);
+        $this->banish($room, $identities, $roles['townsperson']);
+        $view = $this->engine->access($room->code, 'secret-0');
+        $this->assertSame('cult', $view['winner']);
+        $this->assertStringContainsString('One cultist and one town player', $view['win_reason']);
+        $this->assertNull($view['deadline']);
+        $this->assertSame($roles['townsperson'], $view['recap']['rounds'][0]['vote']['banished_id']);
+
+        [$larger, $identities] = $this->match();
+        $roles = $this->roles($larger);
+        $this->expire($larger);
+        $this->expire($larger);
+        $this->expire($larger);
+        $this->banish($larger, $identities, $roles['townsperson']);
+        $this->assertSame('night', $larger->fresh()->state['phase']);
+        $this->assertNull($larger->state['winner']);
+    }
+
+    public function test_recap_is_private_until_victory_and_archive_survives_rematch_once(): void
+    {
+        [$room, $identities] = $this->match(mission: null, playerCount: 3);
+        $roles = $this->roles($room);
+        $this->expire($room);
+        $this->act($room, $identities[$roles['veilweaver']], 'night', ['target' => $roles['townsperson']]);
+        $this->act($room, $identities[$roles['oracle']], 'night', ['target' => $roles['townsperson']]);
+        $this->expire($room);
+        foreach ($identities as $identity) {
+            $view = $this->engine->access($room->code, $identity);
+            $this->assertNull($view['recap']);
+            $this->assertArrayNotHasKey('rounds', $view);
+            $this->assertArrayNotHasKey('match_id', $view);
+        }
+        $this->assertDatabaseCount('game_matches', 0);
+        $this->expire($room);
+        // An explicit abstention and missing votes are distinct in the final recap.
+        $this->act($room, $identities[$roles['townsperson']], 'vote');
+        $this->expire($room);
+        $this->expire($room);
+        $this->expire($room);
+        $this->banish($room, $identities, $roles['veilweaver']);
+        $view = $this->engine->access($room->code, 'secret-0');
+        $recap = $view['recap'];
+        $this->assertTrue($recap['complete']);
+        $this->assertSame(3, $recap['player_count']);
+        $this->assertSame(2, $recap['nights']);
+        $this->assertSame('solitary', $recap['mission']['id']);
+        $actions = array_column($recap['rounds'][0]['night']['actions'], null, 'player_id');
+        $this->assertTrue($actions[$roles['veilweaver']]['contributed']);
+        $this->assertSame($roles['townsperson'], $actions[$roles['veilweaver']]['target_id']);
+        $this->assertTrue($actions[$roles['oracle']]['veiled']);
+        $this->assertSame('cult', $actions[$roles['oracle']]['apparent_alignment']);
+        $this->assertFalse($actions[$roles['townsperson']]['submitted']);
+        $this->assertSame(['night' => 4, 'vote' => 2], $recap['missed_actions']);
+        $this->assertGreaterThan(0, $recap['duration_seconds']);
+        $ballots = array_column($recap['rounds'][0]['vote']['ballots'], null, 'player_id');
+        $this->assertTrue($ballots[$roles['townsperson']]['submitted']);
+        $this->assertNull($ballots[$roles['townsperson']]['target_id']);
+        $this->assertFalse($ballots[$roles['oracle']]['submitted']);
+        $this->assertStringNotContainsString('identity', json_encode($recap));
+        $this->assertDatabaseCount('game_matches', 1);
+        $archive = GameMatch::firstOrFail();
+        $this->assertSame($recap['rounds'], $archive->getAttribute('recap')['rounds']);
+        $this->assertArrayNotHasKey('recap', $archive->toArray());
+        $this->assertStringNotContainsString('identity', json_encode($archive->getAttribute('recap')));
+        $this->engine->resolve($room->id);
+        $this->engine->access($room->code, 'secret-1');
+        $this->assertDatabaseCount('game_matches', 1);
+        $this->act($room, 'secret-0', 'chat', ['body' => 'That veil fooled me.']);
+        $this->assertSame($recap, $this->engine->access($room->code, 'secret-0')['recap']);
+        $rematch = $this->act($room, 'secret-0', 'rematch');
+        $this->assertNull($rematch['recap']);
+        $this->assertArrayNotHasKey('rounds', $room->fresh()->state);
+        $this->assertDatabaseCount('game_matches', 1);
+        foreach ($identities as $identity) {
+            $this->act($room, $identity, 'ready');
+        }
+        $this->act($room, 'secret-0', 'start');
+        $this->assertNotSame($archive->getKey(), $room->fresh()->state['match_id']);
+        $this->assertSame([], $room->fresh()->state['rounds']);
+        $this->expire($room);
+        $this->expire($room);
+        $this->expire($room);
+        $this->banish($room, $identities, $this->roles($room)['veilweaver']);
+        $this->assertDatabaseCount('game_matches', 2);
+        $this->artisan('game:stats --json')->expectsOutputToContain('"matches": 2')->assertSuccessful();
+    }
+
+    public function test_in_progress_rules_keep_their_goal_mission_and_phase_lengths(): void
+    {
+        [$room] = $this->match(mission: null, playerCount: 3);
+        config(['game.ritual_goals_by_player_count.3' => 9, 'game.seconds.night' => 300]);
+        $this->expire($room);
+        $this->assertSame(3, $room->state['threshold']);
+        $this->assertSame('solitary', $room->state['mission']['id']);
+        $this->assertSame(45, (int) now()->diffInSeconds($room->deadline));
+        $this->assertSame(45, $this->engine->access($room->code, 'secret-0')['rules']['seconds']['night']);
+    }
+
+    public function test_legacy_matches_finish_with_partial_tracking(): void
+    {
+        [$room, $identities] = $this->match(playerCount: 3);
+        $s = $room->fresh()->state;
+        unset($s['match_id'], $s['match_rules'], $s['started_at'], $s['rounds'], $s['missed_actions']);
+        $room->update(['state' => $s]);
+        $this->expire($room);
+        $this->expire($room);
+        $this->expire($room);
+        $this->banish($room, $identities, $this->roles($room)['veilweaver']);
+        $recap = $this->engine->access($room->code, 'secret-0')['recap'];
+        $this->assertFalse($recap['complete']);
+        $this->assertSame('legacy', $recap['rules_version']);
+        $this->assertNull($recap['duration_seconds']);
+        $this->assertDatabaseHas('game_matches', ['rules_version' => 'legacy', 'recap_complete' => false]);
     }
 
     private function assertRejected(callable $action): void

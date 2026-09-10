@@ -8,11 +8,13 @@ import PasskeyRegister from '@/components/PasskeyRegister.vue';
 import { destroy } from '@/actions/Laravel/Passkeys/Http/Controllers/PasskeyRegistrationController';
 
 export type Props = {
+    showHeading?: boolean;
     canManagePasskeys?: boolean;
     passkeys?: Passkey[];
 };
 
 withDefaults(defineProps<Props>(), {
+    showHeading: true,
     canManagePasskeys: false,
     passkeys: () => [],
 });
@@ -32,6 +34,7 @@ const handleRegisterSuccess = () => {
 <template>
     <div v-if="canManagePasskeys" class="space-y-6">
         <Heading
+            v-if="showHeading"
             variant="small"
             title="Passkeys"
             description="Manage your passkeys for passwordless sign-in"

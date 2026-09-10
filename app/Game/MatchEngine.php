@@ -3,7 +3,9 @@
 namespace App\Game;
 
 use App\Events\RoomUpdated;
+use App\Models\GameMatch;
 use App\Models\GameRoom;
+use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -15,10 +17,16 @@ class MatchEngine
     {
         $rules = config('game');
         $rules['ritual_goals'] = array_map(fn (int $players): array => [
-            'players' => $players, 'steps' => max(6, (int) ceil($players * $rules['tokens_per_player'])),
+            'players' => $players, 'steps' => $this->ritualGoal($players),
         ], range($rules['min_players'], $rules['max_players']));
 
         return $rules;
+    }
+
+    private function ritualGoal(int $players): int
+    {
+        return config('game.ritual_goals_by_player_count.'.$players)
+            ?? max(6, (int) ceil($players * config('game.tokens_per_player')));
     }
 
     public function create(string $identity, string $name, ?string $character = null): GameRoom
@@ -161,6 +169,7 @@ class MatchEngine
             unset($player);
             $s = array_replace($s, ['day' => 0, 'tokens' => 0, 'threshold' => 0, 'winner' => null, 'win_reason' => null,
                 'mission' => null, 'awards' => [], 'messages' => [], 'log' => ['The village gathers again.'], 'cult_banished' => false]);
+            unset($s['match_id'], $s['match_rules'], $s['started_at'], $s['finished_at'], $s['rounds'], $s['missed_actions']);
             $this->phase($room, $s, 'lobby');
 
             return;
@@ -183,9 +192,16 @@ class MatchEngine
                 };
                 $s['players'][$pid]['alignment'] = $index < $cultistCount ? 'cult' : 'town';
             }
-            $s['threshold'] = max(6, (int) ceil($count * config('game.tokens_per_player')));
+            $s['threshold'] = $this->ritualGoal($count);
             $missions = config('game.missions');
-            $s['mission'] = $missions[array_rand($missions)];
+            $s['mission'] = $count <= config('game.small_gathering_max_players')
+                ? config('game.small_gathering_mission') : $missions[array_rand($missions)];
+            $s['match_id'] = (string) Str::uuid();
+            $s['match_rules'] = ['version' => config('game.rules_version'), 'player_count' => $count,
+                'seconds' => config('game.seconds')];
+            $s['started_at'] = now()->toISOString();
+            $s['rounds'] = [];
+            $s['missed_actions'] = ['night' => 0, 'vote' => 0];
             $this->phase($room, $s, 'reveal');
             $s['log'][] = 'The roles are sealed. Keep yours close.';
 
@@ -285,8 +301,10 @@ class MatchEngine
         }
         $allChanted = count(array_intersect(array_keys($cult), array_keys($s['actions']))) === count($cult);
         $gained = 0;
+        $contributors = [];
         foreach ($cult as $id => $player) {
             $eligible = isset($s['actions'][$id]) && match ($s['mission']['id']) {
+                'solitary' => true,
                 'concord' => $allChanted,
                 'shadows' => ! in_array($id, $investigated),
                 'patience' => ! $s['cult_banished'],
@@ -297,8 +315,27 @@ class MatchEngine
                 $s['awards'][$key] = true;
                 $s['tokens']++;
                 $gained++;
+                $contributors[] = $id;
             }
         }
+        $actions = [];
+        foreach ($s['players'] as $id => $player) {
+            if (! $player['alive']) {
+                continue;
+            }
+            $submitted = isset($s['actions'][$id]);
+            $target = $s['actions'][$id]['target'] ?? null;
+            $reading = $player['role'] === 'oracle' && $submitted ? end($player['results']) : null;
+            $actions[] = ['player_id' => $id, 'role' => $player['role'], 'target_id' => $target,
+                'submitted' => $submitted, 'contributed' => in_array($id, $contributors, true),
+                'apparent_alignment' => $reading ? $reading['alignment'] : null,
+                'veiled' => $reading && in_array($target, $veiled, true)];
+            if (! $submitted) {
+                $s['missed_actions']['night'] = ($s['missed_actions']['night'] ?? 0) + 1;
+            }
+        }
+        $s['rounds'][$s['day']]['day'] = $s['day'];
+        $s['rounds'][$s['day']]['night'] = ['actions' => $actions, 'gained' => $gained, 'tokens' => $s['tokens']];
         $s['log'][] = 'Dawn '.$s['day'].': the ritual advanced by '.$gained.' step'.($gained === 1 ? '' : 's').'.';
     }
 
@@ -306,6 +343,16 @@ class MatchEngine
     private function resolveVote(array &$s): void
     {
         $votes = [];
+        $ballots = [];
+        foreach ($s['players'] as $id => $player) {
+            if ($player['alive']) {
+                $submitted = isset($s['actions'][$id]);
+                $ballots[] = ['player_id' => $id, 'target_id' => $s['actions'][$id]['target'] ?? null, 'submitted' => $submitted];
+                if (! $submitted) {
+                    $s['missed_actions']['vote'] = ($s['missed_actions']['vote'] ?? 0) + 1;
+                }
+            }
+        }
         foreach ($s['actions'] as $a) {
             $target = $a['target'] ?? 'abstain';
             $votes[$target] = ($votes[$target] ?? 0) + 1;
@@ -316,14 +363,18 @@ class MatchEngine
         arsort($votes);
         $top = array_keys($votes, max($votes), true);
         $s['cult_banished'] = false;
+        $banished = null;
         if (count($top) === 1 && $top[0] !== 'abstain') {
             $id = $top[0];
+            $banished = $id;
             $s['players'][$id]['alive'] = false;
             $s['cult_banished'] = $s['players'][$id]['alignment'] === 'cult';
             $s['log'][] = $s['players'][$id]['name'].' was banished by the village. Their allegiance remains unknown.';
         } else {
             $s['log'][] = 'The vote ended without a banishment.';
         }
+        $s['rounds'][$s['day']]['day'] = $s['day'];
+        $s['rounds'][$s['day']]['vote'] = ['ballots' => $ballots, 'banished_id' => $banished];
     }
 
     /** @param array<string, mixed> $s */
@@ -334,11 +385,17 @@ class MatchEngine
         if ($cult === 0) {
             $s['winner'] = 'town';
             $s['win_reason'] = 'Every cultist has been banished. The village sees another sunrise.';
-        } elseif ($s['tokens'] >= $s['threshold'] || $town === 0) {
+        } elseif ($s['tokens'] >= $s['threshold'] || $town === 0 || ($cult === 1 && $town === 1)) {
             $s['winner'] = 'cult';
-            $s['win_reason'] = $town === 0 ? 'No townspeople remain to stop the summoning.' : 'The ritual is complete. Cthulhu awakens.';
+            $s['win_reason'] = match (true) {
+                $town === 0 => 'No townspeople remain to stop the summoning.',
+                $s['tokens'] >= $s['threshold'] => 'The ritual is complete. Cthulhu awakens.',
+                default => 'One cultist and one town player remain. The last villager cannot banish the cult alone.',
+            };
         }
         if ($s['winner'] !== null) {
+            $s['finished_at'] = now()->toISOString();
+            $this->archive($room, $s);
             $this->phase($room, $s, 'finished');
             $s['log'][] = $s['win_reason'];
 
@@ -354,7 +411,7 @@ class MatchEngine
         $s['phase'] = $phase;
         $s['phase_id']++;
         $s['actions'] = [];
-        $duration = config('game.seconds.'.$phase);
+        $duration = $s['match_rules']['seconds'][$phase] ?? config('game.seconds.'.$phase);
         $room->deadline = $duration === null ? null : now()->addSeconds($duration);
     }
 
@@ -403,8 +460,43 @@ class MatchEngine
                 'allies' => $allies, 'submitted' => isset($s['actions'][$id]),
             ]),
             'messages' => $s['messages'], 'log' => $s['log'],
-            'rules' => array_intersect_key($this->rules(), array_flip(['min_players', 'max_players', 'seconds'])),
+            'recap' => $s['phase'] === 'finished' ? $this->recap($s) : null,
+            'rules' => array_replace(array_intersect_key($this->rules(), array_flip(['min_players', 'max_players', 'seconds', 'ritual_goals', 'cultists_by_player_count', 'small_gathering_max_players'])),
+                isset($s['match_rules']['seconds']) ? ['seconds' => $s['match_rules']['seconds']] : []),
         ];
+    }
+
+    /** @param array<string, mixed> $s
+     * @return array<string, mixed>
+     */
+    private function recap(array $s): array
+    {
+        return ['rules_version' => $s['match_rules']['version'] ?? 'legacy',
+            'player_count' => $s['match_rules']['player_count'] ?? count($s['players']),
+            'mission' => $s['mission'], 'ritual_goal' => $s['threshold'], 'nights' => $s['day'],
+            'duration_seconds' => isset($s['started_at'], $s['finished_at'])
+                ? max(0, (int) CarbonImmutable::parse($s['started_at'])->diffInSeconds(CarbonImmutable::parse($s['finished_at']))) : null,
+            'complete' => isset($s['match_id']),
+            'missed_actions' => array_replace(['night' => 0, 'vote' => 0], $s['missed_actions'] ?? []),
+            'rounds' => array_values($s['rounds'] ?? [])];
+    }
+
+    /** Archive in the same locked transaction as victory, before rematch can clear secrets.
+     * @param  array<string, mixed>  $s
+     */
+    private function archive(GameRoom $room, array $s): void
+    {
+        $recap = $this->recap($s);
+        GameMatch::firstOrCreate(['id' => $s['match_id'] ?? (string) Str::uuid()], [
+            'game_room_id' => $room->id, 'rules_version' => $recap['rules_version'],
+            'player_count' => $recap['player_count'], 'mission' => $s['mission']['id'],
+            'winner' => $s['winner'], 'win_reason' => $s['win_reason'], 'nights' => $s['day'],
+            'ritual_goal' => $s['threshold'], 'ritual_steps' => $s['tokens'],
+            'missed_night_actions' => $recap['missed_actions']['night'], 'missed_votes' => $recap['missed_actions']['vote'],
+            'duration_seconds' => $recap['duration_seconds'], 'recap_complete' => $recap['complete'],
+            'recap' => ['players' => array_values(array_map(fn (array $p): array => array_intersect_key($p, array_flip(['id', 'name', 'role', 'alignment', 'character'])), $s['players'])), ...$recap],
+            'started_at' => $s['started_at'] ?? null, 'finished_at' => $s['finished_at'],
+        ]);
     }
 
     /** Older rooms receive a stable cosmetic portrait without altering their roles.

@@ -18,7 +18,7 @@ const terms = [
     ],
     [
         'Cult',
-        'The hidden team working together to finish the ritual. They also win if no townspeople remain.',
+        'The hidden team working together to finish the ritual. They also win if no town players remain, or if the final two players are one cultist and one town player.',
     ],
     [
         'Oracle',
@@ -46,7 +46,11 @@ const terms = [
     ],
     [
         'Shared mission',
-        'The cult’s private condition for making ritual progress: chant together, avoid investigation, or keep cultists safe in the previous vote. All cultists share the same mission.',
+        'The cult’s private condition for making ritual progress. In larger gatherings, chant together, avoid investigation, or keep cultists safe in the previous vote. All cultists share the same mission. In a small gathering, the lone cultist only needs to chant.',
+    ],
+    [
+        'Small gathering',
+        'A match with 3 or 4 players: one cultist, one Oracle, and the remaining players are townspeople. The ritual takes 3 steps with 3 players, or 4 steps with 4. A submitted chant adds one step even when the Oracle investigates the cultist.',
     ],
     [
         'Ritual progress',

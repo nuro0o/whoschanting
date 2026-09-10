@@ -27,6 +27,7 @@ import SecretRole from '@/components/chanting/SecretRole.vue';
 import CharacterPicker from '@/components/chanting/CharacterPicker.vue';
 import CharacterPortrait from '@/components/chanting/CharacterPortrait.vue';
 import GameGlossary from '@/components/chanting/GameGlossary.vue';
+import MatchRecap from '@/components/chanting/MatchRecap.vue';
 import CardTable from '@/components/chanting/CardTable.vue';
 import SoundControl from '@/components/chanting/SoundControl.vue';
 import {
@@ -112,6 +113,26 @@ const canStart = computed(
         state.value.players.length >= state.value.rules.min_players &&
         readyCount.value === state.value.players.length,
 );
+const lobbyRoster = computed(() => {
+    if (!state.value) return null;
+    const count = state.value.players.length;
+    const cultists = state.value.rules.cultists_by_player_count[count];
+    const goal = state.value.rules.ritual_goals.find(
+        (entry) => entry.players === count,
+    );
+    if (
+        count < state.value.rules.min_players ||
+        cultists === undefined ||
+        !goal
+    )
+        return null;
+    return {
+        cultists,
+        townspeople: count - cultists - 1,
+        steps: goal.steps,
+        small: count <= state.value.rules.small_gathering_max_players,
+    };
+});
 const targets = computed(
     () =>
         state.value?.players.filter(
@@ -520,6 +541,40 @@ onBeforeUnmount(() => {
                             Send your friends an invite. Once everyone is ready,
                             the host can let the secrets begin.
                         </p>
+                        <div v-if="lobbyRoster" class="lobby-rules">
+                            <p class="eyebrow">
+                                {{
+                                    lobbyRoster.small
+                                        ? 'SMALL GATHERING'
+                                        : 'TONIGHT’S GATHERING'
+                                }}
+                                · {{ state.players.length }} PLAYERS
+                            </p>
+                            <p>
+                                <strong
+                                    >{{ lobbyRoster.cultists }}
+                                    {{
+                                        lobbyRoster.cultists === 1
+                                            ? 'cultist'
+                                            : 'cultists'
+                                    }}, 1 Oracle, {{ lobbyRoster.townspeople }}
+                                    {{
+                                        lobbyRoster.townspeople === 1
+                                            ? 'townsperson'
+                                            : 'townspeople'
+                                    }}.</strong
+                                >
+                                The ritual takes {{ lobbyRoster.steps }} steps.
+                            </p>
+                            <p v-if="lobbyRoster.small">
+                                The lone cultist adds one step each night they
+                                chant, even if investigated.
+                            </p>
+                            <p>
+                                With just one cultist and one town player left,
+                                the cult wins immediately.
+                            </p>
+                        </div>
                         <div class="invite-line">
                             <code>{{ code }}</code
                             ><button
@@ -879,6 +934,11 @@ onBeforeUnmount(() => {
                             already saved.
                         </p>
                     </section>
+                    <MatchRecap
+                        v-if="state.phase === 'finished' && state.recap"
+                        :recap="state.recap"
+                        :players="state.players"
+                    />
                     <section class="game-panel chat-panel">
                         <div class="panel-title">
                             <h2>Village chat</h2>
@@ -963,7 +1023,11 @@ onBeforeUnmount(() => {
                             v-if="state.phase === 'lobby'"
                             class="ritual-pregame"
                         >
-                            Set when the match begins.
+                            {{
+                                lobbyRoster
+                                    ? `${lobbyRoster.steps} steps with ${state.players.length} players.`
+                                    : `Gather at least ${state.rules.min_players} players to see the ritual goal.`
+                            }}
                         </p>
                         <div
                             v-if="
@@ -989,7 +1053,7 @@ onBeforeUnmount(() => {
                         <p>
                             {{
                                 state.phase === 'lobby'
-                                    ? 'The goal depends on how many friends join. The exact number of steps appears when the match begins.'
+                                    ? 'The goal adjusts as friends join. Fill the track and the cult wins.'
                                     : `Each filled mark is one step closer. ${Math.max(0, state.ritual.threshold - state.ritual.tokens)} more steps complete the ritual and the cult wins.`
                             }}
                         </p>

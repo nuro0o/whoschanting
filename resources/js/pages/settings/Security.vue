@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { Form, Head } from '@inertiajs/vue3';
 import SecurityController from '@/actions/App/Http/Controllers/Settings/SecurityController';
-import Heading from '@/components/Heading.vue';
+import RegistrySection from '@/components/account/RegistrySection.vue';
 import InputError from '@/components/InputError.vue';
 import PasswordInput from '@/components/PasswordInput.vue';
 import { Button } from '@/components/ui/button';
@@ -35,13 +35,11 @@ defineOptions({
 <template>
     <Head title="Security settings" />
 
-    <div class="space-y-6">
-        <Heading
-            variant="small"
-            title="Update password"
-            description="Ensure your account is using a long, random password to stay secure"
-        />
-
+    <RegistrySection
+        number="I"
+        title="Password"
+        description="The first lock on your account. Choose a long, unique password and keep it to yourself."
+    >
         <Form
             v-bind="SecurityController.update.form()"
             :options="{
@@ -53,7 +51,7 @@ defineOptions({
                 'password_confirmation',
                 'current_password',
             ]"
-            class="space-y-6"
+            class="registry-security-form space-y-6"
             v-slot="{ errors, processing, recentlySuccessful }"
         >
             <div class="grid gap-2">
@@ -110,16 +108,32 @@ defineOptions({
                 </p>
             </div>
         </Form>
-    </div>
+    </RegistrySection>
 
-    <ManageTwoFactor
-        :canManageTwoFactor="canManageTwoFactor"
-        :requiresConfirmation="requiresConfirmation"
-        :twoFactorEnabled="twoFactorEnabled"
-    />
+    <RegistrySection
+        v-if="canManageTwoFactor"
+        number="II"
+        title="Two-factor authentication"
+        description="A second lock, with a code from your authenticator app."
+    >
+        <ManageTwoFactor
+            :show-heading="false"
+            :canManageTwoFactor="canManageTwoFactor"
+            :requiresConfirmation="requiresConfirmation"
+            :twoFactorEnabled="twoFactorEnabled"
+        />
+    </RegistrySection>
 
-    <ManagePasskeys
-        :canManagePasskeys="canManagePasskeys"
-        :passkeys="passkeys"
-    />
+    <RegistrySection
+        v-if="canManagePasskeys"
+        :number="canManageTwoFactor ? 'III' : 'II'"
+        title="Passkeys"
+        description="A familiar device can let you in. No password required."
+    >
+        <ManagePasskeys
+            :show-heading="false"
+            :canManagePasskeys="canManagePasskeys"
+            :passkeys="passkeys"
+        />
+    </RegistrySection>
 </template>

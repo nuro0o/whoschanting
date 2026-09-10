@@ -195,8 +195,17 @@ withDefaults(
                             can add one step per night by chanting, if their
                             shared mission’s condition is met: chant together,
                             avoid investigation, or keep cultists safe in the
-                            previous vote. The cult also wins if no townspeople
-                            remain.
+                            previous vote. The cult also wins if no town players
+                            remain, or if the final two players are one cultist
+                            and one town player.
+                        </p>
+                        <p>
+                            <strong
+                                >A small gathering, a quicker ritual.</strong
+                            >
+                            With 3 players, the ritual takes 3 steps; with 4, it
+                            takes 4. The lone cultist adds one step each night
+                            they chant, even if the Oracle investigates them.
                         </p>
                         <table
                             v-if="rules.ritual_goals?.length"

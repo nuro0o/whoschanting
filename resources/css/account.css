@@ -1,4 +1,4 @@
-/* The village ledger. Tokens also reach account dialogs teleported to body. */
+/* Village account tokens also reach dialogs teleported to body. */
 .account-theme,
 .account-shell {
     --account-ink: #eee9dc;
@@ -85,15 +85,6 @@
 .account-skip:focus {
     top: 12px;
 }
-.account-header {
-    min-height: 88px;
-    padding: 20px 42px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    gap: 24px;
-    border-bottom: 1px solid var(--account-line);
-}
 .account-brand {
     display: inline-flex;
     align-items: center;
@@ -119,31 +110,6 @@
 .account-question {
     color: var(--account-brass);
 }
-.account-home-link {
-    display: inline-flex;
-    align-items: center;
-    gap: 11px;
-    font-size: 12px;
-    color: var(--account-muted);
-}
-.account-home-link:hover {
-    color: var(--account-green);
-}
-.account-layout {
-    max-width: 1600px;
-    min-height: calc(100vh - 155px);
-    margin: 0 auto;
-    display: grid;
-    grid-template-columns: 222px minmax(0, 1fr);
-}
-.account-sidebar {
-    padding: 38px 22px 28px;
-    border-right: 1px solid var(--account-line);
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
-    gap: 100px;
-}
 .account-kicker {
     color: var(--account-muted);
     text-transform: uppercase;
@@ -151,105 +117,6 @@
     font-weight: 600;
     letter-spacing: 1.65px;
     line-height: 1.6;
-}
-.account-sidebar-top > .account-kicker {
-    padding: 0 13px;
-    margin-bottom: 18px;
-}
-.account-nav {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-}
-.account-nav a {
-    position: relative;
-    display: flex;
-    align-items: center;
-    gap: 11px;
-    min-height: 46px;
-    padding: 10px 12px;
-    color: var(--account-muted);
-    border: 1px solid transparent;
-    border-radius: 3px;
-    font-size: 12px;
-    transition:
-        background 0.18s,
-        color 0.18s;
-}
-.account-nav a:hover {
-    color: var(--account-text);
-    background: var(--account-panel);
-}
-.account-nav a.is-current {
-    color: var(--account-green);
-    border-color: var(--account-line);
-    background: var(--account-panel);
-}
-.account-nav-mark {
-    margin-left: auto;
-    color: var(--account-brass);
-    font-size: 10px;
-}
-.account-sidebar-note {
-    padding: 24px 14px 35px;
-    color: var(--account-brass);
-}
-.account-sidebar-note p {
-    margin-top: 15px;
-    font:
-        italic 16px/1.6 'Fraunces',
-        Georgia,
-        serif;
-}
-.account-signed-in {
-    border-top: 1px solid var(--account-line);
-    padding: 23px 8px 15px;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    min-width: 0;
-}
-.account-initial {
-    width: 33px;
-    height: 38px;
-    flex-shrink: 0;
-    display: grid;
-    place-items: center;
-    border: 1px solid var(--account-line);
-    border-radius: 18px 18px 3px 3px;
-    background: var(--account-panel);
-    color: var(--account-green);
-    font-family: 'Fraunces', Georgia, serif;
-}
-.account-signed-in > div {
-    min-width: 0;
-}
-.account-signed-in div > span {
-    display: block;
-    font-size: 10px;
-    color: var(--account-muted);
-}
-.account-signed-in strong {
-    display: block;
-    font-size: 11px;
-    font-weight: 500;
-    overflow-wrap: anywhere;
-}
-.account-logout {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 8px 11px;
-    font-size: 11px;
-    color: var(--account-muted);
-}
-.account-logout:hover {
-    color: var(--account-text);
-}
-.account-main {
-    min-width: 0;
-    padding: 36px 42px 30px;
-    background: radial-gradient(ellipse at 80% 0%, #adbb7a05, transparent 65%);
 }
 .account-page-heading {
     display: flex;
@@ -648,112 +515,6 @@
     margin-left: auto;
     white-space: nowrap;
 }
-.account-footer {
-    display: flex;
-    align-items: center;
-    gap: 28px;
-    padding: 23px 42px;
-    border-top: 1px solid var(--account-line);
-    font-size: 10px;
-    color: var(--account-muted);
-}
-.account-footer > span:first-child {
-    letter-spacing: 1.5px;
-    color: var(--account-brass);
-    font-size: 9px;
-}
-.account-footer > a {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    margin-left: auto;
-}
-.account-heading-description {
-    color: var(--account-muted);
-    font-size: 13px;
-    margin-top: 13px;
-}
-.account-settings-columns {
-    display: grid;
-    grid-template-columns: minmax(0, 1.6fr) minmax(230px, 1fr);
-    align-items: start;
-    gap: 30px;
-    margin-top: 30px;
-}
-.account-settings-form {
-    padding: 28px;
-    min-width: 0;
-    background: var(--account-panel);
-    border: 1px solid var(--account-line);
-    border-top: 2px solid var(--account-brass);
-    border-radius: 3px;
-}
-.account-settings-form > div + div {
-    border-top: 1px solid var(--account-line);
-    padding-top: 30px;
-    margin-top: 30px;
-}
-.account-settings-form h2 {
-    font-size: 24px;
-    margin-bottom: 8px;
-    letter-spacing: -0.45px;
-}
-.account-settings-form header > p {
-    font-size: 12px;
-    line-height: 1.7;
-}
-.account-settings-form label {
-    font-size: 12px;
-}
-.account-settings-form :is(input, [data-slot='input']) {
-    min-height: 43px;
-    background-color: var(--account-deep);
-    border-radius: 3px;
-    font-size: 13px;
-}
-.account-settings-form [data-slot='button'] {
-    border-radius: 3px;
-}
-.account-settings-form form > .flex > [data-slot='button'] {
-    min-width: 110px;
-    min-height: 40px;
-}
-.account-settings-aside {
-    overflow: hidden;
-    border: 1px solid var(--account-line);
-    border-radius: 3px;
-}
-.account-settings-aside > img {
-    width: 100%;
-    height: 190px;
-    object-fit: cover;
-    object-position: center top;
-}
-.account-settings-aside > div {
-    padding: 24px;
-}
-.account-settings-aside h2 {
-    font-size: 26px;
-    margin: 9px 0;
-    letter-spacing: -0.5px;
-}
-.account-settings-aside div > p:not(.account-kicker) {
-    color: var(--account-muted);
-    font-size: 12px;
-    line-height: 1.7;
-    margin-bottom: 19px;
-}
-.account-settings-back {
-    display: inline-flex;
-    align-items: center;
-    gap: 9px;
-    font-size: 11px;
-    color: var(--account-muted);
-    margin-top: 25px;
-}
-.account-settings-back:hover {
-    color: var(--account-green);
-}
 .account-theme [data-slot='dialog-content'] {
     background: var(--account-panel);
     border-color: var(--account-line);
@@ -774,21 +535,6 @@
 .account-theme [data-slot='dialog-content'] :is(button, input):focus-visible {
     outline: 2px solid var(--account-green);
     outline-offset: 3px;
-}
-.account-danger {
-    border: 1px solid color-mix(in srgb, var(--destructive) 35%, transparent);
-    background: color-mix(in srgb, var(--destructive) 7%, var(--account-panel));
-    border-radius: 3px;
-    padding: 20px;
-}
-.account-danger-copy {
-    color: var(--account-text);
-}
-.account-danger-copy > p:first-child {
-    color: var(--destructive);
-}
-.dark .account-danger-copy > p:first-child {
-    color: #e8a58f;
 }
 .account-save-status {
     color: var(--account-green);
@@ -902,24 +648,7 @@
     font-size: 12px;
     line-height: 1.7;
 }
-@media (min-width: 1600px) {
-    .account-header,
-    .account-footer {
-        padding-left: max(42px, calc((100vw - 1516px) / 2));
-        padding-right: max(42px, calc((100vw - 1516px) / 2));
-    }
-}
 @media (max-width: 1200px) {
-    .account-layout {
-        grid-template-columns: 188px minmax(0, 1fr);
-    }
-    .account-sidebar {
-        padding-left: 13px;
-        padding-right: 13px;
-    }
-    .account-main {
-        padding: 30px 28px;
-    }
     .ledger-edition {
         display: none;
     }
@@ -939,35 +668,8 @@
     .ledger-security h3 {
         font-size: 17px;
     }
-    .account-settings-columns {
-        gap: 22px;
-        grid-template-columns: minmax(0, 1.7fr) minmax(210px, 1fr);
-    }
-    .account-settings-form {
-        padding: 24px;
-    }
 }
 @media (max-width: 1020px) {
-    .account-layout {
-        grid-template-columns: 172px minmax(0, 1fr);
-    }
-    .account-sidebar {
-        padding: 30px 10px;
-    }
-    .account-nav a {
-        gap: 8px;
-        padding: 10px 8px;
-        font-size: 11px;
-    }
-    .account-main {
-        padding: 28px 24px;
-    }
-    .account-settings-columns {
-        grid-template-columns: minmax(0, 1fr);
-    }
-    .account-settings-aside {
-        display: none;
-    }
     .ledger-columns {
         grid-template-columns: minmax(0, 1fr);
         gap: 25px;
@@ -1008,11 +710,6 @@
     }
 }
 @media (max-width: 700px) {
-    .account-header {
-        min-height: 74px;
-        padding: 18px 20px;
-        gap: 15px;
-    }
     .account-brand {
         font-size: 22px;
         gap: 9px;
@@ -1020,77 +717,6 @@
     .account-brand-eye {
         width: 31px;
         height: 31px;
-    }
-    .account-home-link {
-        font-size: 0;
-        gap: 0;
-        padding: 8px;
-    }
-    .account-home-link svg {
-        width: 20px;
-        height: 20px;
-    }
-    .account-layout {
-        display: flex;
-        flex-direction: column;
-        min-height: calc(100vh - 145px);
-    }
-    .account-sidebar {
-        display: contents;
-    }
-    .account-sidebar-top {
-        padding: 0 16px;
-        border-bottom: 1px solid var(--account-line);
-    }
-    .account-sidebar-top > .account-kicker {
-        display: none;
-    }
-    .account-nav {
-        flex-direction: row;
-        gap: 0;
-        justify-content: space-between;
-    }
-    .account-nav a {
-        flex: 1;
-        justify-content: center;
-        flex-direction: column;
-        gap: 4px;
-        padding: 12px 4px 10px;
-        min-height: 65px;
-        border: 0;
-        border-bottom: 2px solid transparent;
-        border-radius: 0;
-        font-size: 10px;
-    }
-    .account-nav a.is-current {
-        border-color: var(--account-green);
-        background: transparent;
-    }
-    .account-nav-mark {
-        display: none;
-    }
-    .account-sidebar-bottom {
-        order: 2;
-        margin: 0 20px;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        border-top: 1px solid var(--account-line);
-        gap: 20px;
-        padding: 15px 0;
-    }
-    .account-sidebar-note {
-        display: none;
-    }
-    .account-signed-in {
-        border: 0;
-        padding: 0;
-    }
-    .account-logout {
-        flex-shrink: 0;
-    }
-    .account-main {
-        padding: 25px 20px 28px;
     }
     .account-page-heading {
         margin-bottom: 22px;
@@ -1193,29 +819,6 @@
     .ledger-field-guide > a {
         margin-left: 35px;
     }
-    .account-footer {
-        padding: 20px;
-        gap: 12px;
-    }
-    .account-footer > span:nth-child(2) {
-        display: none;
-    }
-    .account-heading-description {
-        font-size: 12px;
-    }
-    .account-settings-columns {
-        margin-top: 22px;
-    }
-    .account-settings-form {
-        padding: 23px 20px;
-    }
-    .account-settings-form h2 {
-        font-size: 23px;
-    }
-    .account-settings-form > div + div {
-        margin-top: 26px;
-        padding-top: 26px;
-    }
     .appearance-options {
         gap: 8px;
     }
@@ -1235,10 +838,6 @@
     }
 }
 @media (max-width: 380px) {
-    .account-main {
-        padding-left: 16px;
-        padding-right: 16px;
-    }
     .account-page-heading h1 {
         font-size: 28px;
     }
@@ -1247,9 +846,6 @@
     }
     .account-entry .entry-form {
         padding: 17px;
-    }
-    .account-settings-form {
-        padding: 20px 16px;
     }
     .appearance-option-label {
         flex-wrap: wrap;
@@ -1261,5 +857,904 @@
         animation: none !important;
         transition: none !important;
         scroll-behavior: auto !important;
+    }
+}
+
+/* The resident registry: an open book, with chapters instead of a sidebar. */
+.registry-shell {
+    display: flex;
+    flex-direction: column;
+    background-image: radial-gradient(
+        ellipse at 85% 15%,
+        #92966b07,
+        transparent 48%
+    );
+}
+.registry-masthead {
+    width: min(1240px, calc(100% - 80px));
+    margin: 0 auto;
+    min-height: 100px;
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    gap: 28px;
+}
+.registry-masthead-note {
+    font-size: 10px;
+    letter-spacing: 1.9px;
+    text-transform: uppercase;
+    color: var(--account-brass);
+}
+.registry-masthead-note > span {
+    display: block;
+    font-size: 10px;
+    letter-spacing: 0;
+    text-transform: none;
+    margin-top: 5px;
+    color: var(--account-muted);
+}
+.registry-masthead-actions {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 23px;
+}
+.registry-masthead-actions > a,
+.registry-logout {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 11px;
+    color: var(--account-muted);
+    padding: 7px 0;
+}
+.registry-masthead-actions > a:hover,
+.registry-logout:hover {
+    color: var(--account-green);
+}
+.registry-logout {
+    border-left: 1px solid var(--account-line);
+    padding-left: 21px;
+}
+.registry-chapter-bar {
+    width: min(1240px, calc(100% - 80px));
+    margin: 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-top: 1px solid var(--account-line);
+    border-bottom: 1px solid var(--account-line);
+    gap: 24px;
+}
+.registry-chapters {
+    display: flex;
+    gap: 40px;
+}
+.registry-chapters > a {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    padding: 18px 0 17px;
+    position: relative;
+    color: var(--account-muted);
+    font-size: 12px;
+}
+.registry-chapters > a::after {
+    content: '';
+    position: absolute;
+    bottom: -1px;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: transparent;
+}
+.registry-chapters > a:hover,
+.registry-chapters > a.is-current {
+    color: var(--account-green);
+}
+.registry-chapters > a.is-current::after {
+    background: var(--account-brass);
+}
+.registry-chapter-number {
+    font:
+        italic 13px 'Fraunces',
+        Georgia,
+        serif;
+    color: var(--account-brass);
+}
+.registry-chapter-note {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font:
+        italic 13px 'Fraunces',
+        Georgia,
+        serif;
+    color: var(--account-muted);
+}
+.registry-chapter-note > svg {
+    color: var(--account-brass);
+}
+.registry-main {
+    width: min(1120px, calc(100% - 112px));
+    margin: 0 auto;
+    flex: 1;
+    min-width: 0;
+    padding: 42px 0 40px;
+}
+.registry-footer {
+    width: min(1240px, calc(100% - 80px));
+    margin: 0 auto;
+    padding: 22px 0 28px;
+    border-top: 1px solid var(--account-line);
+    display: flex;
+    align-items: center;
+    gap: 25px;
+    color: var(--account-muted);
+    font-size: 11px;
+}
+.registry-footer > span {
+    font-size: 9px;
+    letter-spacing: 1.8px;
+    color: var(--account-brass);
+}
+.registry-footer > p {
+    font:
+        italic 13px 'Fraunces',
+        Georgia,
+        serif;
+}
+.registry-footer > a {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-left: auto;
+}
+.registry-footer > a:hover {
+    color: var(--account-green);
+}
+.registry-settings {
+    max-width: 1080px;
+    margin: 0 auto;
+}
+.resident-identity {
+    display: grid;
+    grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr);
+    align-items: center;
+    gap: 58px;
+    padding: 6px 0 38px;
+}
+.resident-identity-copy .account-kicker {
+    font-size: 10px;
+    letter-spacing: 1.65px;
+}
+.resident-identity-copy .account-kicker > span {
+    margin: 0 9px;
+    color: var(--account-brass);
+}
+.resident-identity h1 {
+    margin-top: 22px;
+    font-size: clamp(42px, 4.5vw, 65px);
+    font-weight: 400;
+    font-style: italic;
+    line-height: 1.07;
+    letter-spacing: -2px;
+    overflow-wrap: anywhere;
+    text-wrap: balance;
+}
+.resident-welcome {
+    margin-top: 17px;
+    font-size: 13px;
+    color: var(--account-muted);
+}
+.resident-inscription {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px 34px;
+    margin-top: 29px;
+}
+.resident-inscription > div > span {
+    display: block;
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 1.4px;
+    color: var(--account-brass);
+    margin-bottom: 7px;
+}
+.resident-inscription strong {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 12px;
+    font-weight: 400;
+}
+.resident-verification strong {
+    color: var(--account-green);
+}
+.resident-harbor {
+    margin: 0;
+    width: 100%;
+    max-width: 380px;
+    justify-self: end;
+    position: relative;
+    padding: 8px 8px 0;
+}
+.resident-harbor::before {
+    content: '';
+    position: absolute;
+    inset: 0 0 33px;
+    border: 1px solid var(--account-brass);
+    border-radius: 190px 190px 1px 1px;
+    pointer-events: none;
+    opacity: 0.6;
+}
+.resident-harbor-frame {
+    height: 235px;
+    border-radius: 185px 185px 0 0;
+    overflow: hidden;
+    background: #132225;
+}
+.resident-harbor-frame > img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: 66% 40%;
+}
+.resident-harbor figcaption {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    font:
+        italic 12px 'Fraunces',
+        Georgia,
+        serif;
+    color: var(--account-brass);
+    padding-top: 14px;
+}
+.resident-harbor figcaption > span:last-child {
+    font-size: 10px;
+    margin-left: auto;
+}
+.resident-harbor figcaption > svg {
+    margin-right: auto;
+}
+.registry-section {
+    display: grid;
+    grid-template-columns: minmax(0, 220px) minmax(0, 1fr);
+    gap: 65px;
+    border-top: 1px solid var(--account-line);
+    padding: 35px 0 38px;
+}
+.registry-section-margin {
+    min-width: 0;
+}
+.registry-section-number {
+    display: block;
+    font:
+        italic 25px 'Fraunces',
+        Georgia,
+        serif;
+    color: var(--account-brass);
+    line-height: 1;
+    margin-bottom: 16px;
+}
+.registry-section-margin > h2 {
+    font-size: 27px;
+    letter-spacing: -0.65px;
+    line-height: 1.18;
+}
+.registry-section-margin > p {
+    color: var(--account-muted);
+    font-size: 12px;
+    line-height: 1.8;
+    margin-top: 13px;
+    max-width: 210px;
+}
+.registry-section-body {
+    min-width: 0;
+    max-width: 730px;
+}
+.registry-profile-form {
+    padding-top: 0;
+}
+.registry-field {
+    display: grid;
+    grid-template-columns: 145px minmax(0, 1fr);
+    align-items: start;
+    gap: 20px;
+    padding: 16px 0 25px;
+}
+.registry-field + .registry-field {
+    padding-top: 17px;
+}
+.registry-field-label {
+    padding-top: 10px;
+}
+.registry-field-label > label {
+    font-size: 13px;
+    font-weight: 500;
+}
+.registry-field-label > p {
+    margin-top: 6px;
+    color: var(--account-muted);
+    font-size: 10px;
+}
+.registry-field-control {
+    min-width: 0;
+}
+.registry-settings-content
+    input:not([type='radio']):not([data-slot='input-otp-input']) {
+    min-height: 45px;
+    padding: 9px 12px;
+    border: 0;
+    border-bottom: 1px solid var(--account-line);
+    border-radius: 0;
+    background-color: color-mix(in srgb, var(--account-panel) 40%, transparent);
+    color: var(--account-text);
+    box-shadow: none;
+    font-size: 14px;
+}
+.registry-settings-content input:not([type='radio']):focus-visible {
+    outline: 2px solid var(--account-green);
+    outline-offset: 3px;
+}
+.registry-settings-content input[aria-invalid='true'] {
+    border-bottom-color: var(--destructive);
+}
+.registry-field-control > p {
+    margin-top: 9px;
+}
+.registry-form-footer {
+    border-top: 1px solid var(--account-line);
+    padding-top: 23px;
+    margin-top: 9px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 20px;
+}
+.registry-form-note {
+    font-size: 11px;
+    color: var(--account-muted);
+}
+.registry-form-footer .account-save-status {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+}
+.registry-settings-content [data-slot='button'] {
+    border-radius: 2px;
+    min-height: 41px;
+}
+.registry-form-footer > button {
+    gap: 18px;
+    min-width: 146px;
+}
+.registry-verification-note {
+    display: flex;
+    gap: 12px;
+    margin: 0 0 24px;
+    padding: 15px 0;
+    font-size: 12px;
+    color: var(--account-muted);
+}
+.registry-verification-note > svg {
+    color: var(--account-brass);
+    margin-top: 2px;
+}
+.registry-verification-note button {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--account-green);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    margin-top: 6px;
+}
+.registry-verification-note .account-save-status {
+    margin-top: 12px;
+}
+.registry-departure {
+    padding-top: 29px;
+    padding-bottom: 22px;
+}
+.registry-departure .registry-section-number {
+    font-size: 22px;
+}
+.registry-departure .registry-section-margin > h2 {
+    font-size: 23px;
+}
+.registry-departure .registry-section-margin > p {
+    font-size: 11px;
+}
+.registry-delete-disclosure {
+    margin-top: 10px;
+}
+.registry-delete-disclosure > summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 20px;
+    cursor: pointer;
+    padding: 10px 0 16px;
+    color: var(--account-muted);
+    font-size: 13px;
+    list-style: none;
+    border-bottom: 1px solid var(--account-line);
+}
+.registry-delete-disclosure > summary::-webkit-details-marker {
+    display: none;
+}
+.registry-delete-disclosure[open] > summary > svg {
+    transform: rotate(180deg);
+}
+.registry-delete-warning {
+    max-width: 560px;
+    color: var(--account-muted);
+    font-size: 12px;
+    line-height: 1.7;
+    padding: 17px 0;
+}
+.registry-back {
+    display: inline-flex;
+    align-items: center;
+    gap: 9px;
+    font-size: 11px;
+    color: var(--account-muted);
+    margin-top: 18px;
+}
+.registry-back:hover {
+    color: var(--account-green);
+}
+.registry-settings-intro {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 35px;
+    padding: 13px 0 44px;
+}
+.registry-settings-intro > div {
+    max-width: 790px;
+}
+.registry-settings-intro h1 {
+    margin-top: 15px;
+    font-size: clamp(34px, 3.7vw, 51px);
+    line-height: 1.15;
+    letter-spacing: -1.7px;
+}
+.registry-settings-intro h1 + p {
+    color: var(--account-muted);
+    font-size: 13px;
+    margin-top: 17px;
+}
+.registry-chapter-seal {
+    width: 88px;
+    height: 104px;
+    flex-shrink: 0;
+    border: 1px solid var(--account-brass);
+    border-radius: 50px 50px 2px 2px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    color: var(--account-brass);
+    outline: 1px solid var(--account-line);
+    outline-offset: 5px;
+    font:
+        italic 17px 'Fraunces',
+        Georgia,
+        serif;
+    margin-right: 6px;
+}
+.registry-security-form {
+    max-width: 620px;
+}
+.registry-security-form .relative > input {
+    padding-right: 42px;
+}
+.registry-security-form label {
+    font-size: 12px;
+}
+.registry-security-form > .flex {
+    flex-wrap: wrap;
+}
+.registry-security-form [data-test='update-password-button'] {
+    min-width: 150px;
+}
+.registry-appearance {
+    max-width: 650px;
+    padding-top: 6px;
+}
+.registry-appearance .appearance-preview {
+    height: 120px;
+}
+.registry-appearance .appearance-option {
+    padding: 10px;
+}
+.registry-appearance .appearance-option-label {
+    padding: 14px 3px 5px;
+    font-size: 12px;
+}
+@media (max-width: 1100px) {
+    .registry-masthead,
+    .registry-chapter-bar,
+    .registry-footer {
+        width: calc(100% - 56px);
+    }
+    .registry-masthead {
+        grid-template-columns: 1fr auto;
+        min-height: 89px;
+    }
+    .registry-masthead-note {
+        display: none;
+    }
+    .registry-masthead > .account-brand {
+        justify-self: start;
+    }
+    .registry-main {
+        width: calc(100% - 80px);
+        padding-top: 34px;
+    }
+    .registry-chapters {
+        gap: 32px;
+    }
+    .registry-section {
+        grid-template-columns: 190px minmax(0, 1fr);
+        gap: 42px;
+    }
+    .resident-identity {
+        gap: 35px;
+        grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+    }
+    .resident-identity h1 {
+        font-size: 51px;
+    }
+    .resident-harbor-frame {
+        height: 220px;
+    }
+    .registry-field {
+        grid-template-columns: 120px minmax(0, 1fr);
+        gap: 16px;
+    }
+    .registry-form-footer {
+        align-items: start;
+    }
+    .registry-form-note {
+        max-width: 150px;
+    }
+}
+@media (max-width: 850px) {
+    .registry-chapter-note {
+        display: none;
+    }
+    .registry-chapters {
+        width: 100%;
+        justify-content: space-between;
+        gap: 20px;
+    }
+    .registry-main {
+        width: calc(100% - 56px);
+    }
+    .resident-identity {
+        gap: 25px;
+    }
+    .resident-identity h1 {
+        font-size: 43px;
+    }
+    .resident-identity-copy .account-kicker {
+        font-size: 9px;
+        letter-spacing: 1.2px;
+    }
+    .resident-identity-copy .account-kicker > span {
+        margin: 0 3px;
+    }
+    .resident-harbor-frame {
+        height: 210px;
+    }
+    .resident-inscription {
+        gap: 17px;
+        margin-top: 23px;
+    }
+    .registry-section {
+        grid-template-columns: 160px minmax(0, 1fr);
+        gap: 32px;
+    }
+    .registry-section-margin > h2 {
+        font-size: 24px;
+    }
+    .registry-field {
+        display: block;
+        padding-top: 0;
+    }
+    .registry-field-label {
+        padding: 0 0 9px;
+    }
+    .registry-field-label > p {
+        display: none;
+    }
+    .registry-form-footer {
+        align-items: center;
+    }
+    .registry-form-note {
+        max-width: none;
+        font-size: 10px;
+    }
+    .registry-appearance .appearance-preview {
+        height: 90px;
+    }
+    .registry-appearance .appearance-option {
+        padding: 6px;
+    }
+}
+@media (max-width: 600px) {
+    .registry-masthead,
+    .registry-chapter-bar,
+    .registry-footer {
+        width: calc(100% - 40px);
+    }
+    .registry-masthead {
+        min-height: 83px;
+        gap: 15px;
+    }
+    .registry-masthead .account-brand {
+        font-size: 22px;
+        gap: 8px;
+        letter-spacing: -0.8px;
+    }
+    .registry-masthead .account-brand-eye {
+        width: 29px;
+        height: 29px;
+    }
+    .registry-masthead .account-brand-eye > svg {
+        width: 18px;
+    }
+    .registry-masthead-actions {
+        gap: 13px;
+    }
+    .registry-return {
+        display: none !important;
+    }
+    .registry-logout {
+        border: 0;
+        padding-left: 0;
+        font-size: 10px;
+        gap: 6px;
+    }
+    .registry-chapters {
+        gap: 13px;
+    }
+    .registry-chapters > a {
+        flex-direction: column;
+        align-items: start;
+        gap: 3px;
+        padding: 13px 0 12px;
+        font-size: 11px;
+    }
+    .registry-chapter-number {
+        font-size: 10px;
+    }
+    .registry-main {
+        width: calc(100% - 40px);
+        padding-top: 28px;
+        padding-bottom: 31px;
+    }
+    .resident-identity {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 23px;
+        padding-top: 0;
+        padding-bottom: 28px;
+    }
+    .resident-identity h1 {
+        font-size: 45px;
+        letter-spacing: -1.7px;
+        margin-top: 15px;
+        text-wrap: initial;
+    }
+    .resident-welcome {
+        font-size: 12px;
+        margin-top: 14px;
+    }
+    .resident-inscription {
+        gap: 22px;
+        margin-top: 22px;
+    }
+    .resident-inscription strong {
+        font-size: 11px;
+    }
+    .resident-harbor {
+        width: 100%;
+        max-width: none;
+        padding: 6px 6px 0;
+    }
+    .resident-harbor::before {
+        border-radius: 110px 110px 0 0;
+    }
+    .resident-harbor-frame {
+        height: 150px;
+        border-radius: 105px 105px 0 0;
+    }
+    .resident-harbor-frame > img {
+        object-position: 50% 43%;
+    }
+    .resident-harbor figcaption {
+        padding-top: 12px;
+        font-size: 11px;
+    }
+    .registry-section {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 24px;
+        padding-top: 28px;
+        padding-bottom: 30px;
+    }
+    .registry-section-margin {
+        position: relative;
+        padding-left: 35px;
+    }
+    .registry-section-number {
+        position: absolute;
+        left: 0;
+        top: 0;
+        font-size: 22px;
+    }
+    .registry-section-margin > h2 {
+        font-size: 26px;
+    }
+    .registry-section-margin > p {
+        margin-top: 10px;
+        font-size: 11px;
+        max-width: 310px;
+        line-height: 1.7;
+    }
+    .registry-field {
+        padding-bottom: 20px;
+    }
+    .registry-field + .registry-field {
+        padding-top: 0;
+    }
+    .registry-field-label {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 12px;
+    }
+    .registry-field-label > p {
+        display: block;
+        font-size: 9px;
+        margin: 0;
+        text-align: right;
+    }
+    .registry-field-label > label {
+        font-size: 12px;
+    }
+    .registry-form-footer {
+        padding-top: 20px;
+        margin-top: 3px;
+        align-items: center;
+        gap: 17px;
+    }
+    .registry-form-note {
+        font-size: 10px;
+        max-width: 125px;
+    }
+    .registry-form-footer > button {
+        min-width: 140px;
+        gap: 14px;
+    }
+    .registry-form-footer .account-save-status {
+        font-size: 11px;
+    }
+    .registry-departure {
+        gap: 14px;
+    }
+    .registry-delete-disclosure {
+        margin-top: 0;
+    }
+    .registry-delete-disclosure > summary {
+        padding-top: 5px;
+    }
+    .registry-back {
+        font-size: 11px;
+        margin-top: 6px;
+    }
+    .registry-footer {
+        padding: 19px 0 23px;
+        gap: 15px;
+    }
+    .registry-footer > p {
+        display: none;
+    }
+    .registry-footer > a {
+        font-size: 10px;
+    }
+    .registry-settings-intro {
+        padding-top: 3px;
+        padding-bottom: 31px;
+        gap: 15px;
+        align-items: start;
+    }
+    .registry-settings-intro h1 {
+        font-size: 36px;
+        letter-spacing: -1.2px;
+        margin-top: 13px;
+    }
+    .registry-settings-intro h1 + p {
+        font-size: 12px;
+        line-height: 1.7;
+        margin-top: 15px;
+    }
+    .registry-settings-intro .account-kicker {
+        font-size: 9px;
+    }
+    .registry-chapter-seal {
+        width: 45px;
+        height: 63px;
+        border-radius: 25px 25px 0 0;
+        outline-offset: 3px;
+        margin-top: 6px;
+        gap: 4px;
+        font-size: 12px;
+    }
+    .registry-chapter-seal > svg {
+        width: 19px;
+        height: 19px;
+    }
+    .registry-appearance .appearance-preview {
+        height: 85px;
+    }
+    .registry-appearance .appearance-option-label {
+        font-size: 11px;
+        gap: 4px;
+    }
+}
+@media (max-width: 360px) {
+    .registry-masthead,
+    .registry-chapter-bar,
+    .registry-main,
+    .registry-footer {
+        width: calc(100% - 32px);
+    }
+    .registry-masthead .account-brand {
+        font-size: 20px;
+    }
+    .registry-masthead .account-brand-eye {
+        width: 25px;
+        height: 25px;
+    }
+    .registry-masthead-actions {
+        gap: 0;
+    }
+    .registry-logout {
+        gap: 4px;
+        font-size: 9px;
+    }
+    .resident-identity h1 {
+        font-size: 40px;
+    }
+    .resident-inscription {
+        gap: 17px;
+    }
+    .resident-inscription strong {
+        font-size: 10px;
+    }
+    .registry-form-footer {
+        flex-wrap: wrap;
+        justify-content: stretch;
+    }
+    .registry-form-footer > div {
+        flex-basis: 100%;
+    }
+    .registry-form-note {
+        max-width: none;
+    }
+    .registry-form-footer > button {
+        width: 100%;
+    }
+    .registry-settings-intro h1 {
+        font-size: 31px;
+    }
+    .registry-appearance .appearance-option-label {
+        font-size: 10px;
     }
 }

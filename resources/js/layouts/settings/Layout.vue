@@ -1,73 +1,49 @@
 ﻿<script setup lang="ts">
 import { Link, usePage } from '@inertiajs/vue3';
-import { ArrowLeft, ArrowRight } from '@lucide/vue';
+import { ArrowLeft, Moon, ShieldCheck } from '@lucide/vue';
 import { computed } from 'vue';
 const page = usePage();
-const section = computed(() => {
-    if (page.url.startsWith('/settings/security'))
-        return {
-            title: 'Keep your secrets.',
-            label: 'Security',
-            description:
-                'Protect your account, from your password to your next sign-in.',
-        };
-    if (page.url.startsWith('/settings/appearance'))
-        return {
-            title: 'Set the atmosphere.',
-            label: 'Appearance',
-            description:
-                'A little lamplight, or a little darkness. Make the ledger yours.',
-        };
-    return {
-        title: 'Your name in the book.',
-        label: 'Profile',
-        description:
-            'The details that make your place in the village your own.',
-    };
-});
+const isProfile = computed(() => page.url.startsWith('/settings/profile'));
+const section = computed(() =>
+    page.url.startsWith('/settings/security')
+        ? {
+              title: 'Some secrets are yours alone.',
+              label: 'Security',
+              chapter: 'III',
+              description:
+                  'A strong password. A second lock. A little peace of mind.',
+              icon: ShieldCheck,
+          }
+        : {
+              title: 'By lamplight. Or moonlight.',
+              label: 'Appearance',
+              chapter: 'IV',
+              description: 'Choose the light in which you keep your records.',
+              icon: Moon,
+          },
+);
 </script>
-
 <template>
-    <div class="account-settings">
-        <header class="account-page-heading">
+    <div class="registry-settings">
+        <header v-if="!isProfile" class="registry-settings-intro">
             <div>
                 <p class="account-kicker">
-                    Your account <span aria-hidden="true">/</span>
-                    {{ section.label }}
+                    The village register / {{ section.label }}
                 </p>
                 <h1>{{ section.title }}</h1>
-                <p class="account-heading-description">
-                    {{ section.description }}
-                </p>
+                <p>{{ section.description }}</p>
             </div>
-        </header>
-        <div class="account-settings-columns">
-            <section
-                class="account-settings-form"
-                :aria-label="section.label + ' settings'"
+            <span class="registry-chapter-seal" aria-hidden="true"
+                ><component
+                    :is="section.icon"
+                    :size="28"
+                    :stroke-width="1"
+                /><span>{{ section.chapter }}</span></span
             >
-                <slot />
-            </section>
-            <aside class="account-settings-aside">
-                <img
-                    src="/assets/chanting/verify-email-ferryman.png"
-                    alt="The Ferryman offers a hand from his boat."
-                />
-                <div>
-                    <p class="account-kicker">You belong here</p>
-                    <h2>The boat is waiting.</h2>
-                    <p>
-                        Your next crossing is only a room away. Bring a few
-                        familiar faces.
-                    </p>
-                    <Link href="/dashboard" class="account-text-link"
-                        >Return to the ledger <ArrowRight :size="15"
-                    /></Link>
-                </div>
-            </aside>
-        </div>
-        <Link href="/dashboard" class="account-settings-back"
-            ><ArrowLeft :size="15" /> Back to the village ledger</Link
+        </header>
+        <div class="registry-settings-content"><slot /></div>
+        <Link href="/dashboard" class="registry-back"
+            ><ArrowLeft :size="15" /> Return to the village ledger</Link
         >
     </div>
 </template>

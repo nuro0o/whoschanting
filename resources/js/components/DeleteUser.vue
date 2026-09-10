@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { Form } from '@inertiajs/vue3';
+import { ChevronDown } from '@lucide/vue';
 import { useTemplateRef } from 'vue';
 import ProfileController from '@/actions/App/Http/Controllers/Settings/ProfileController';
-import Heading from '@/components/Heading.vue';
+import RegistrySection from '@/components/account/RegistrySection.vue';
 import InputError from '@/components/InputError.vue';
 import PasswordInput from '@/components/PasswordInput.vue';
 import { Button } from '@/components/ui/button';
@@ -22,19 +23,20 @@ const passwordInput = useTemplateRef('passwordInput');
 </script>
 
 <template>
-    <div class="space-y-6">
-        <Heading
-            variant="small"
-            title="Delete account"
-            description="Delete your account and all of its resources"
-        />
-        <div class="account-danger space-y-4">
-            <div class="account-danger-copy relative space-y-0.5">
-                <p class="font-medium">Warning</p>
-                <p class="text-sm">
-                    Please proceed with caution, this cannot be undone.
-                </p>
-            </div>
+    <RegistrySection
+        number="II"
+        title="Departure"
+        description="Every crossing has a return. This one closes your record for good."
+        class="registry-departure"
+    >
+        <details class="registry-delete-disclosure">
+            <summary>
+                <span>Delete account</span><ChevronDown :size="17" />
+            </summary>
+            <p class="registry-delete-warning">
+                Deleting your account permanently removes your account and its
+                resources. This cannot be undone.
+            </p>
             <Dialog>
                 <DialogTrigger as-child>
                     <Button variant="destructive" data-test="delete-user-button"
@@ -67,16 +69,25 @@ const passwordInput = useTemplateRef('passwordInput');
                         </DialogHeader>
 
                         <div class="grid gap-2">
-                            <Label for="password" class="sr-only"
-                                >Password</Label
-                            >
+                            <Label for="password">Password</Label>
                             <PasswordInput
                                 id="password"
                                 name="password"
                                 ref="passwordInput"
                                 placeholder="Password"
+                                autocomplete="current-password"
+                                :disabled="processing"
+                                :aria-invalid="!!errors.password"
+                                :aria-describedby="
+                                    errors.password
+                                        ? 'delete-password-error'
+                                        : undefined
+                                "
                             />
-                            <InputError :message="errors.password" />
+                            <InputError
+                                id="delete-password-error"
+                                :message="errors.password"
+                            />
                         </div>
 
                         <DialogFooter class="gap-2">
@@ -100,12 +111,14 @@ const passwordInput = useTemplateRef('passwordInput');
                                 :disabled="processing"
                                 data-test="confirm-delete-user-button"
                             >
-                                Delete account
+                                {{
+                                    processing ? 'Deleting…' : 'Delete account'
+                                }}
                             </Button>
                         </DialogFooter>
                     </Form>
                 </DialogContent>
             </Dialog>
-        </div>
-    </div>
+        </details>
+    </RegistrySection>
 </template>
