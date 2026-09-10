@@ -186,9 +186,10 @@ export class CoastalAudio {
         const now = this.context.currentTime;
         this.effects.gain.setTargetAtTime(preferences.effects / 100, now, 0.08);
         // Leave plenty of room for friends speaking around the table.
-        const discussion = phase === 'discussion' ? 0.28 : 1;
+        const daytime =
+            phase === 'discussion' || phase === 'voting' ? 0.28 : 1;
         this.ambience.gain.setTargetAtTime(
-            (preferences.ambience / 100) * discussion,
+            (preferences.ambience / 100) * daytime,
             now,
             0.5,
         );
@@ -326,7 +327,7 @@ export class CoastalAudio {
             () => {
                 this.creakTimer = null;
                 if (!this.active || !this.ambientSources.size) return;
-                // Sparse and quieter during discussion; no player state influences ambience.
+                // Sparse and quieter during discussion and voting; no player state influences ambience.
                 this.tone(
                     115,
                     this.context!.currentTime,

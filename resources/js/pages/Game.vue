@@ -581,7 +581,13 @@ onBeforeUnmount(() => {
         :data-phase="state?.phase"
         :data-winner="state?.winner"
     >
-        <GameAtmosphere v-if="!loading" :phase="state?.phase ?? 'lobby'" />
+        <GameAtmosphere
+            v-if="!loading"
+            :phase="state?.phase ?? 'lobby'"
+            :ritual-tokens="state?.ritual.tokens ?? 0"
+            :ritual-threshold="state?.ritual.threshold ?? 0"
+            :final-vote="state?.ritual.final_vote ?? false"
+        />
         <header class="site-header game-header">
             <a href="/" class="wordmark" aria-label="Who's Chanting? home"
                 ><span class="brand-eye"><Eye :size="26" /></span> who’s

@@ -68,9 +68,15 @@ await test('music needs activation, preserves progress within daytime phases, an
         assert.equal(day.currentTime, 18);
         assert.equal(day.volume, 0.25 * 0.35);
         assert.equal(day.plays, 1);
+        engine.update('voting', 25, true);
+        assert.equal(instances.length, 1);
+        assert.equal(day.currentTime, 18);
+        assert.equal(day.volume, 0.25 * 0.35);
+        assert.equal(day.plays, 1);
         engine.update('night', 25, true);
         assert.ok(day.paused && day.released);
         assert.equal(instances[1].src, '/night1.mp3');
+        assert.equal(instances[1].volume, 0.25);
         engine.update('finished', 25, true);
         assert.ok(instances[1].paused && instances[1].released);
     } finally {

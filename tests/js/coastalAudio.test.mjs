@@ -155,6 +155,9 @@ await test('effects and ambience can be independently silenced; phase changes re
         engine.update(preferences, 'discussion');
         assert.equal(seaFilter.frequency.value, 1050);
         assert.equal(context.nodes[2].gain.value, 0.25 * 0.28);
+        engine.update(preferences, 'voting');
+        assert.equal(context.nodes[2].gain.value, 0.25 * 0.28);
+        assert.equal(context.nodes.length, count);
         engine.update(
             { ...preferences, effects: 45, ambience: 0 },
             'discussion',
