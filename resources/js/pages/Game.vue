@@ -27,6 +27,7 @@ import SecretRole from '@/components/chanting/SecretRole.vue';
 import CharacterPicker from '@/components/chanting/CharacterPicker.vue';
 import CharacterPortrait from '@/components/chanting/CharacterPortrait.vue';
 import GameGlossary from '@/components/chanting/GameGlossary.vue';
+import CursePanel from '@/components/chanting/CursePanel.vue';
 import MatchRecap from '@/components/chanting/MatchRecap.vue';
 import CardTable from '@/components/chanting/CardTable.vue';
 import SoundControl from '@/components/chanting/SoundControl.vue';
@@ -55,6 +56,7 @@ const state = ref<RoomState>();
 const loading = ref(true);
 const outsider = ref(false);
 const error = ref('');
+const curseError = ref('');
 const pending = ref(false);
 const disconnected = ref(false);
 const live = ref(false);
@@ -168,8 +170,11 @@ const requiresTarget = computed(
 const canChooseNightTarget = computed(
     () =>
         state.value?.me.role === 'oracle' ||
-        state.value?.me.role === 'veilweaver',
+        state.value?.me.role === 'veilweaver' ||
+        state.value?.me.role === 'acolyte',
 );
+const puzzleCursed = computed(() => state.value?.me.curse?.type === 'puzzle');
+const mistCursed = computed(() => state.value?.me.curse?.type === 'mist');
 const nightLabel = computed(() =>
     state.value?.me.role === 'oracle'
         ? 'Confirm investigation'
@@ -268,6 +273,7 @@ async function act(type: string, extra: object = {}) {
     if (!state.value || pending.value) return false;
     pending.value = true;
     error.value = '';
+    if (type === 'solve_curse') curseError.value = '';
     try {
         accept(
             await roomRequest<RoomState>(
@@ -277,10 +283,12 @@ async function act(type: string, extra: object = {}) {
         );
         return true;
     } catch (cause) {
-        error.value =
+        const actionError =
             cause instanceof Error
                 ? cause.message
                 : 'Your action could not be submitted.';
+        if (type === 'solve_curse') curseError.value = actionError;
+        else error.value = actionError;
         return false;
     } finally {
         pending.value = false;
@@ -307,6 +315,12 @@ async function copyInvite() {
 function onResume() {
     if (document.visibilityState === 'visible') void refresh();
 }
+watch(
+    () => state.value?.me.curse?.id,
+    () => {
+        curseError.value = '';
+    },
+);
 watch(
     () => state.value?.phase_id,
     () => {
@@ -451,6 +465,7 @@ onBeforeUnmount(() => {
                 />
             </div>
             <CardTable
+                :class="{ 'is-mist-cursed': mistCursed }"
                 :players="state.players"
                 :phase="state.phase"
                 :phase-id="state.phase_id"
@@ -531,6 +546,24 @@ onBeforeUnmount(() => {
                     </p>
                 </section>
                 <div class="main-stack">
+                    <CursePanel
+                        v-if="
+                            state.me.curse &&
+                            state.me.alive &&
+                            state.phase !== 'finished'
+                        "
+                        :curse="state.me.curse"
+                        :pending="pending"
+                        :error="curseError"
+                        @solve="act('solve_curse', $event)"
+                    />
+                    <p
+                        v-if="state.me.curse_notice"
+                        class="curse-notice"
+                        role="status"
+                    >
+                        {{ state.me.curse_notice }}
+                    </p>
                     <section
                         v-if="state.phase === 'lobby'"
                         class="game-panel action-panel"
@@ -699,9 +732,9 @@ onBeforeUnmount(() => {
                                     state.me.role === 'oracle'
                                         ? 'Choose a living player to investigate. Your private reading arrives at dawn.'
                                         : state.me.role === 'veilweaver'
-                                          ? 'Choose someone to veil, or chant without a veil. A veil reverses their apparent alignment for this night only.'
-                                          : state.me.alignment === 'cult'
-                                            ? 'Chant to contribute to the ritual if your shared mission’s condition is met.'
+                                          ? 'Choose someone to veil and curse, or chant without a target. Their alignment appears reversed tonight; a random curse takes hold at dawn.'
+                                          : state.me.role === 'acolyte'
+                                            ? 'Choose someone to curse, or chant without a target. A random curse takes hold at dawn. Your chant advances the ritual if your shared mission’s condition is met.'
                                             : 'Stay alert. You have no secret ability, but your voice and your vote matter in the morning.'
                                 }}
                             </p>
@@ -745,19 +778,39 @@ onBeforeUnmount(() => {
                                         @click="target = null"
                                     >
                                         <Moon :size="15" /><span
-                                            >No veil tonight</span
+                                            >Chant without a target</span
                                         >
                                     </button>
                                 </div>
                                 <button
                                     class="button primary"
                                     :disabled="
-                                        pending || (requiresTarget && !target)
+                                        pending ||
+                                        (requiresTarget && !target) ||
+                                        (puzzleCursed && !!target)
+                                    "
+                                    :aria-describedby="
+                                        puzzleCursed
+                                            ? 'night-curse-help'
+                                            : undefined
                                     "
                                     @click="act('night', { target })"
                                 >
                                     {{ nightLabel }}<Check :size="16" />
                                 </button>
+                                <p
+                                    v-if="puzzleCursed"
+                                    id="night-curse-help"
+                                    class="curse-action-help"
+                                >
+                                    Solve your curse above before confirming a
+                                    target.
+                                    {{
+                                        requiresTarget
+                                            ? 'You can let this night pass without investigating.'
+                                            : 'You can still act without a target.'
+                                    }}
+                                </p>
                                 <p class="small-help">
                                     One final action per night. Missing the
                                     deadline forfeits your action.
@@ -878,7 +931,14 @@ onBeforeUnmount(() => {
                                 </div>
                                 <button
                                     class="button coral"
-                                    :disabled="pending"
+                                    :disabled="
+                                        pending || (puzzleCursed && !!target)
+                                    "
+                                    :aria-describedby="
+                                        puzzleCursed
+                                            ? 'vote-curse-help'
+                                            : undefined
+                                    "
                                     @click="act('vote', { target })"
                                 >
                                     {{
@@ -887,6 +947,14 @@ onBeforeUnmount(() => {
                                             : 'Confirm abstention'
                                     }}<Vote :size="16" />
                                 </button>
+                                <p
+                                    v-if="puzzleCursed"
+                                    id="vote-curse-help"
+                                    class="curse-action-help"
+                                >
+                                    Solve your curse above before confirming a
+                                    target, or choose Abstain.
+                                </p>
                                 <p class="small-help">
                                     You cannot change a submitted vote. Missing
                                     the deadline counts as abstention.
@@ -944,6 +1012,14 @@ onBeforeUnmount(() => {
                             <h2>Village chat</h2>
                             <span>Everyone can read this</span>
                         </div>
+                        <p
+                            v-if="mistCursed"
+                            class="chat-mist-notice"
+                            role="status"
+                        >
+                            A curse tangles the village’s words. Complete the
+                            focus challenge above to read clearly again.
+                        </p>
                         <div
                             ref="chatList"
                             class="chat-messages"
@@ -1055,6 +1131,20 @@ onBeforeUnmount(() => {
                                 state.phase === 'lobby'
                                     ? 'The goal adjusts as friends join. Fill the track and the cult wins.'
                                     : `Each filled mark is one step closer. ${Math.max(0, state.ritual.threshold - state.ritual.tokens)} more steps complete the ritual and the cult wins.`
+                            }}
+                        </p>
+                        <p
+                            v-if="state.phase !== 'lobby'"
+                            class="ritual-curse-level"
+                        >
+                            <strong
+                                >Curse level {{ state.ritual.level }} /
+                                3</strong
+                            >
+                            {{
+                                state.ritual.level === 3
+                                    ? 'Misdirection can now turn a chosen target against you.'
+                                    : 'As the ritual advances, curses become harder. Misdirection awakens at level 3.'
                             }}
                         </p>
                     </section>

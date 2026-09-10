@@ -3,12 +3,14 @@
 namespace Tests\Feature;
 
 use App\Events\RoomUpdated;
+use App\Game\CurseEngine;
 use App\Game\MatchEngine;
 use App\Models\GameMatch;
 use App\Models\GameRoom;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
@@ -729,6 +731,187 @@ class GameTest extends TestCase
         $this->assertSame('legacy', $recap['rules_version']);
         $this->assertNull($recap['duration_seconds']);
         $this->assertDatabaseHas('game_matches', ['rules_version' => 'legacy', 'recap_complete' => false]);
+    }
+
+    public function test_veiling_and_acolyte_cursing_apply_one_private_affliction_at_dawn(): void
+    {
+        [$room, $identities] = $this->match();
+        $roles = $this->roles($room);
+        $curses = \Mockery::mock(CurseEngine::class)->makePartial();
+        $curses->shouldReceive('create')->once()->with(2, 6, 1)->andReturn((new CurseEngine)->create(2, 6, 1));
+        $this->engine = new MatchEngine($curses);
+        $this->app->instance(MatchEngine::class, $this->engine);
+        $this->expire($room);
+        $this->act($room, $identities[$roles['veilweaver']], 'night', ['target' => $roles['townsperson']]);
+        $this->act($room, $identities[$roles['acolyte']], 'night', ['target' => $roles['townsperson']]);
+        $this->assertNull($this->engine->access($room->code, $identities[$roles['townsperson']])['me']['curse']);
+        $this->expire($room);
+        $view = $this->engine->access($room->code, $identities[$roles['townsperson']]);
+        $curse = $view['me']['curse'];
+        $this->assertSame(2, $curse['level']);
+        $this->assertContains($curse['type'], ['puzzle', 'mist']);
+        $this->assertArrayNotHasKey('solution', $curse);
+        $this->assertSame($curse, $this->engine->access($room->code, $identities[$roles['townsperson']])['me']['curse']);
+        foreach ($identities as $id => $identity) {
+            $other = $this->engine->access($room->code, $identity);
+            $this->assertArrayNotHasKey('curse', $other['players'][0]);
+            if ($id !== $roles['townsperson']) {
+                $this->assertStringNotContainsString($curse['id'], json_encode($other));
+            }
+        }
+        $this->assertSame(2, $room->fresh()->state['tokens']);
+    }
+
+    public function test_acolyte_can_curse_while_chanting_without_reversing_an_oracle_reading(): void
+    {
+        [$room, $identities] = $this->match();
+        $roles = $this->roles($room);
+        $this->expire($room);
+        $this->act($room, $identities[$roles['acolyte']], 'night', ['target' => $roles['veilweaver']]);
+        $this->act($room, $identities[$roles['veilweaver']], 'night');
+        $this->act($room, $identities[$roles['oracle']], 'night', ['target' => $roles['veilweaver']]);
+        $this->expire($room);
+        $this->assertNotNull($room->state['players'][$roles['veilweaver']]['curse']);
+        $this->assertSame('cult', $room->state['players'][$roles['oracle']]['results'][0]['alignment']);
+        $this->assertSame(2, $room->state['tokens']);
+        $actions = array_column($room->state['rounds'][1]['night']['actions'], null, 'player_id');
+        $this->assertSame($room->state['players'][$roles['veilweaver']]['curse']['type'], $actions[$roles['acolyte']]['curse_type']);
+    }
+
+    /** @return array<string, mixed> */
+    private function afflict(GameRoom $room, string $id, string $type): array
+    {
+        $curse = ['id' => (string) Str::uuid(), 'type' => $type, 'level' => 3, 'day' => $room->fresh()->state['day'],
+            ...($type === 'misdirection' ? ['challenge' => null, 'solution' => []] : app(CurseEngine::class)->challenge($type === 'mist' ? 'focus' : 'reverse', 3))];
+        $state = $room->fresh()->state;
+        $state['players'][$id]['curse'] = $curse;
+        $room->update(['state' => $state]);
+
+        return $curse;
+    }
+
+    public function test_puzzle_blocks_targets_and_http_solution_rejects_wrong_stale_and_other_players_answers(): void
+    {
+        [$room, $identities] = $this->match();
+        $roles = $this->roles($room);
+        $this->expire($room);
+        $this->expire($room);
+        $curse = $this->afflict($room, $roles['oracle'], 'puzzle');
+        $oracle = $identities[$roles['oracle']];
+        $this->act($room, $oracle, 'discussion_ready');
+        $payload = ['type' => 'solve_curse', 'phase_id' => $room->fresh()->state['phase_id'], 'curse_id' => $curse['id'], 'answer' => $curse['solution']];
+        $this->withSession(['chanting.identity' => $identities[$roles['townsperson']]])
+            ->postJson('/rooms/'.$room->code.'/actions', $payload)->assertUnprocessable();
+        $this->withSession(['chanting.identity' => $oracle])
+            ->postJson('/rooms/'.$room->code.'/actions', [...$payload, 'answer' => []])->assertUnprocessable();
+        $this->postJson('/rooms/'.$room->code.'/actions', [...$payload, 'answer' => [(string) Str::uuid()]])->assertUnprocessable();
+        $this->assertSame($curse, $room->fresh()->state['players'][$roles['oracle']]['curse']);
+        $this->expire($room);
+        $this->postJson('/rooms/'.$room->code.'/actions', $payload)->assertUnprocessable();
+        $this->assertRejected(fn () => $this->act($room, $oracle, 'vote', ['target' => $roles['acolyte']]));
+        $this->assertArrayNotHasKey($roles['oracle'], $room->fresh()->state['actions']);
+        $payload['phase_id'] = $room->fresh()->state['phase_id'];
+        $this->postJson('/rooms/'.$room->code.'/actions', $payload)->assertOk()->assertJsonPath('me.curse', null)->assertJsonPath('me.submitted', false);
+        $this->postJson('/rooms/'.$room->code.'/actions', $payload)->assertUnprocessable();
+        $this->act($room, $oracle, 'vote', ['target' => $roles['acolyte']]);
+    }
+
+    public function test_curse_can_be_solved_after_main_action_and_mist_only_garbles_victims_chat(): void
+    {
+        [$room, $identities] = $this->match();
+        $roles = $this->roles($room);
+        $this->expire($room);
+        $this->expire($room);
+        $curse = $this->afflict($room, $roles['oracle'], 'mist');
+        $body = 'The village heard chanting near the lighthouse.';
+        $normal = $this->act($room, $identities[$roles['acolyte']], 'chat', ['body' => $body]);
+        $this->assertSame($body, $normal['messages'][0]['body']);
+        $view = $this->act($room, $identities[$roles['oracle']], 'discussion_ready');
+        $this->assertNotSame($body, $view['messages'][0]['body']);
+        $this->assertSame($body, $room->fresh()->state['messages'][0]['body']);
+        $this->assertSame($view['messages'], $this->engine->access($room->code, $identities[$roles['oracle']])['messages']);
+        $solved = $this->act($room, $identities[$roles['oracle']], 'solve_curse', ['curse_id' => $curse['id'], 'answer' => $curse['solution']]);
+        $this->assertNull($solved['me']['curse']);
+        $this->assertTrue($solved['me']['submitted']);
+        $this->assertSame($body, $solved['messages'][0]['body']);
+    }
+
+    public function test_misdirection_changes_the_authoritative_vote_once_but_never_abstention(): void
+    {
+        [$room, $identities] = $this->match();
+        $roles = $this->roles($room);
+        $this->expire($room);
+        $this->expire($room);
+        $this->expire($room);
+        $this->afflict($room, $roles['oracle'], 'misdirection');
+        $this->afflict($room, $roles['townsperson'], 'misdirection');
+        $abstain = $this->act($room, $identities[$roles['townsperson']], 'vote');
+        $this->assertSame('misdirection', $abstain['me']['curse']['type']);
+        $view = $this->act($room, $identities[$roles['oracle']], 'vote', ['target' => $roles['acolyte']]);
+        $actual = $room->fresh()->state['actions'][$roles['oracle']]['target'];
+        $this->assertNotContains($actual, [$roles['oracle'], $roles['acolyte']]);
+        $this->assertTrue($room->fresh()->state['players'][$actual]['alive']);
+        $this->assertNull($view['me']['curse']);
+        $this->assertStringContainsString($room->fresh()->state['players'][$actual]['name'], $view['me']['curse_notice']);
+        $this->assertRejected(fn () => $this->act($room, $identities[$roles['oracle']], 'vote', ['target' => $roles['acolyte']]));
+        $this->expire($room);
+        $ballots = array_column($room->state['rounds'][1]['vote']['ballots'], 'target_id', 'player_id');
+        $this->assertSame($actual, $ballots[$roles['oracle']]);
+        $choices = array_column($room->state['rounds'][1]['vote']['ballots'], 'chosen_target_id', 'player_id');
+        $this->assertSame($roles['acolyte'], $choices[$roles['oracle']]);
+    }
+
+    public function test_misdirection_changes_oracle_reading_and_excludes_dead_players(): void
+    {
+        [$room, $identities] = $this->match();
+        $roles = $this->roles($room);
+        $this->expire($room);
+        $state = $room->fresh()->state;
+        $state['players'][$roles['townsperson']]['alive'] = false;
+        $room->update(['state' => $state]);
+        $this->afflict($room, $roles['oracle'], 'misdirection');
+        $this->act($room, $identities[$roles['oracle']], 'night', ['target' => $roles['acolyte']]);
+        $actual = $room->fresh()->state['actions'][$roles['oracle']]['target'];
+        $this->assertNotContains($actual, [$roles['oracle'], $roles['acolyte'], $roles['townsperson']]);
+        $this->expire($room);
+        $result = $room->state['players'][$roles['oracle']]['results'][0];
+        $this->assertSame($room->state['players'][$actual]['name'], $result['target']);
+        $this->assertSame($room->state['players'][$actual]['alignment'], $result['alignment']);
+        $actions = array_column($room->state['rounds'][1]['night']['actions'], null, 'player_id');
+        $this->assertSame($roles['acolyte'], $actions[$roles['oracle']]['chosen_target_id']);
+        $this->assertSame($actual, $actions[$roles['oracle']]['target_id']);
+    }
+
+    public function test_curses_survive_until_next_dawn_and_clear_on_banishment_victory_and_rematch(): void
+    {
+        [$room, $identities] = $this->match();
+        $roles = $this->roles($room);
+        $this->expire($room);
+        $this->expire($room);
+        $this->afflict($room, $roles['oracle'], 'puzzle');
+        $this->expire($room);
+        $this->assertNotNull($room->state['players'][$roles['oracle']]['curse']);
+        $this->expire($room);
+        $this->assertNotNull($room->state['players'][$roles['oracle']]['curse']);
+        $this->assertRejected(fn () => $this->act($room, $identities[$roles['oracle']], 'night', ['target' => $roles['acolyte']]));
+        $this->expire($room);
+        $this->assertNull($room->state['players'][$roles['oracle']]['curse']);
+        $this->afflict($room, $roles['townsperson'], 'mist');
+        $this->expire($room);
+        $this->banish($room, $identities, $roles['townsperson']);
+        $this->assertNull($room->fresh()->state['players'][$roles['townsperson']]['curse']);
+        $this->assertRejected(fn () => $this->act($room, $identities[$roles['townsperson']], 'solve_curse'));
+        $this->afflict($room, $roles['oracle'], 'mist');
+        $state = $room->fresh()->state;
+        $state['tokens'] = $state['threshold'];
+        $room->update(['state' => $state]);
+        $this->expire($room);
+        $this->assertSame('finished', $room->state['phase']);
+        foreach ($room->state['players'] as $player) {
+            $this->assertNull($player['curse']);
+        }
+        $this->act($room, 'secret-0', 'rematch');
+        $this->assertNull($this->engine->access($room->code, $identities[$roles['oracle']])['me']['curse']);
     }
 
     private function assertRejected(callable $action): void

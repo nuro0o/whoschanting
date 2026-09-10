@@ -18,6 +18,15 @@ const rounds = computed(() =>
 function name(id: string | null) {
     return id ? (names.value.get(id) ?? 'A former villager') : 'Nobody';
 }
+function redirection(action: {
+    chosen_target_id?: string | null;
+    target_id: string | null;
+}) {
+    return action.chosen_target_id &&
+        action.chosen_target_id !== action.target_id
+        ? `Originally chose ${name(action.chosen_target_id)}. Misdirection changed the target to ${name(action.target_id)}.`
+        : '';
+}
 function actionDescription(action: RecapNightAction) {
     if (!action.submitted) return 'Missed the night deadline. No action taken.';
     if (action.role === 'oracle') {
@@ -27,9 +36,17 @@ function actionDescription(action: RecapNightAction) {
         const chant = action.contributed
             ? 'Chanted. Added 1 ritual step.'
             : 'Chanted, but the mission condition was not met. No ritual step.';
-        return action.role === 'veilweaver'
-            ? `${chant} ${action.target_id ? `Veiled ${name(action.target_id)}.` : 'Placed no veil.'}`
-            : chant;
+        const veil =
+            action.role === 'veilweaver'
+                ? action.target_id
+                    ? `Veiled ${name(action.target_id)}.`
+                    : 'Placed no veil.'
+                : '';
+        const curse =
+            action.curse_type && action.target_id
+                ? `Cursed ${name(action.target_id)} with ${{ puzzle: 'a puzzle curse', mist: 'mind mist', misdirection: 'misdirection' }[action.curse_type]}.`
+                : '';
+        return [chant, veil, curse].filter(Boolean).join(' ');
     }
     return 'Kept watch.';
 }
@@ -121,6 +138,9 @@ function actionDescription(action: RecapNightAction) {
                                 }}</span>
                             </div>
                             <p>{{ actionDescription(action) }}</p>
+                            <p v-if="redirection(action)" class="recap-veil">
+                                {{ redirection(action) }}
+                            </p>
                             <p
                                 v-if="
                                     action.role === 'oracle' &&
@@ -149,13 +169,17 @@ function actionDescription(action: RecapNightAction) {
                             :key="ballot.player_id"
                         >
                             <strong>{{ name(ballot.player_id) }}</strong
-                            ><span>{{
-                                !ballot.submitted
-                                    ? 'Missed the deadline · counted as abstention'
-                                    : ballot.target_id
-                                      ? `Voted for ${name(ballot.target_id)}`
-                                      : 'Chose to abstain'
-                            }}</span>
+                            ><span
+                                >{{
+                                    !ballot.submitted
+                                        ? 'Missed the deadline · counted as abstention'
+                                        : ballot.target_id
+                                          ? `Voted for ${name(ballot.target_id)}`
+                                          : 'Chose to abstain'
+                                }}<template v-if="redirection(ballot)"
+                                    >. {{ redirection(ballot) }}</template
+                                ></span
+                            >
                         </li>
                     </ul>
                     <p class="recap-verdict">

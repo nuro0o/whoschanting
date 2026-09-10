@@ -7,6 +7,7 @@
     --cream: #eee9d5;
     --green: #bdcd9c;
     --coral: #e19b82;
+    --curse: #c6addc;
     min-height: 100vh;
     background: var(--ink);
     color: var(--cream);
@@ -2093,5 +2094,202 @@
     }
     .character-parade li:hover .character-portrait {
         transform: none;
+    }
+}
+
+/* A private inscription, kept clear even when the village is veiled in mist. */
+.curse-panel {
+    padding: 24px;
+    border-color: #665371;
+    border-left: 3px solid var(--curse);
+    background: linear-gradient(120deg, #271f30, #18252a 80%);
+    overflow-wrap: anywhere;
+}
+.curse-heading {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    margin-bottom: 16px;
+}
+.curse-sigil {
+    font-family: Georgia, serif;
+    font-size: 44px;
+    line-height: 1;
+    color: var(--curse);
+    flex-shrink: 0;
+}
+.curse-heading .eyebrow {
+    color: var(--curse);
+    font-size: 10px;
+    letter-spacing: 1.5px;
+    margin-bottom: 5px;
+}
+.curse-heading h2 {
+    font-size: clamp(23px, 3vw, 29px);
+    line-height: 1.2;
+}
+.curse-effect,
+.curse-challenge > p,
+.curse-clues {
+    color: var(--cream);
+    font-size: 13px;
+    line-height: 1.75;
+}
+.curse-challenge {
+    border-top: 1px solid #665371;
+    margin-top: 20px;
+    padding-top: 18px;
+}
+.curse-challenge h3 {
+    font-size: 21px;
+    margin-bottom: 7px;
+}
+.curse-clues {
+    margin: 16px 0;
+    padding: 12px 14px 12px 30px;
+    background: #0e171b80;
+    border-left: 1px solid var(--curse);
+    font-variant-numeric: tabular-nums;
+}
+.curse-clues li + li {
+    margin-top: 6px;
+}
+.curse-options {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+.curse-options button {
+    min-width: 44px;
+    min-height: 44px;
+    max-width: 100%;
+    padding: 8px 13px;
+    border: 1px solid #8e789a;
+    border-radius: 3px;
+    background: #211e2a;
+    color: var(--cream);
+    font-size: 15px;
+    font-weight: 600;
+    overflow-wrap: anywhere;
+}
+.curse-options button:hover:not(:disabled) {
+    border-color: var(--curse);
+    background: #3b3045;
+}
+.curse-options button:active:not(:disabled) {
+    background: #51405f;
+}
+.curse-panel :focus-visible {
+    outline-color: var(--curse);
+}
+.curse-answer {
+    margin: 18px 0;
+    padding: 12px 0;
+    border-block: 1px solid #66537180;
+    min-height: 80px;
+}
+.curse-answer > span {
+    color: var(--curse);
+    font-size: 11px;
+    font-weight: 600;
+}
+.curse-answer ol {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 20px;
+    padding-left: 19px;
+    margin: 8px 0 0;
+    font-size: 13px;
+}
+.curse-answer li {
+    padding-inline-end: 8px;
+}
+.curse-answer li::marker {
+    color: var(--curse);
+    font-size: 10px;
+}
+.curse-answer p {
+    color: var(--muted);
+    font-size: 12px;
+    margin-top: 7px;
+}
+.curse-controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+.curse-controls .button {
+    min-height: 44px;
+    margin: 0;
+    padding: 10px 12px;
+    font-size: 12px;
+}
+.curse-controls .curse-submit {
+    margin-left: auto;
+    color: #211b29;
+    background: var(--curse);
+    border-color: var(--curse);
+}
+.curse-controls .curse-submit:hover:not(:disabled) {
+    background: #dbc7eb;
+    color: #211b29;
+    border-color: #dbc7eb;
+}
+.curse-challenge .form-error {
+    margin-top: 12px;
+    color: #ffc7b4;
+}
+.curse-challenge .curse-hint,
+.curse-panel .curse-expiry {
+    color: var(--muted);
+    font-size: 11px;
+    line-height: 1.7;
+    margin-top: 13px;
+}
+.curse-panel .curse-expiry {
+    margin-top: 19px;
+}
+.curse-notice,
+.chat-mist-notice {
+    padding: 13px 18px;
+    color: var(--curse);
+    background: #292131;
+    border-left: 2px solid var(--curse);
+    font-size: 12px;
+    line-height: 1.7;
+}
+.action-panel .curse-action-help {
+    color: var(--curse);
+    font-size: 12px;
+    margin-top: 12px;
+}
+.ritual-panel .ritual-curse-level {
+    margin-top: 16px;
+    padding-top: 13px;
+    border-top: 1px solid var(--line);
+}
+.ritual-curse-level strong {
+    display: block;
+    color: var(--curse);
+    margin-bottom: 5px;
+}
+.is-mist-cursed .card-table {
+    filter: blur(2px);
+    opacity: 0.8;
+}
+@media (max-width: 600px) {
+    .curse-panel {
+        padding: 20px 16px;
+    }
+    .curse-heading {
+        gap: 10px;
+    }
+    .curse-heading .eyebrow {
+        font-size: 10px;
+        letter-spacing: 1px;
+    }
+    .curse-controls .curse-submit {
+        margin-left: 0;
+        flex-grow: 1;
     }
 }

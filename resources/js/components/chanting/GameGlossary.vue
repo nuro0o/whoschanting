@@ -30,15 +30,31 @@ const terms = [
     ],
     [
         'Veilweaver',
-        'A cult role. Can chant and disguise one other living player’s alignment for the Oracle that night.',
+        'A cult role. Can chant while veiling and cursing one other living player. The veil reverses their apparent alignment for the Oracle tonight; a random curse takes hold at dawn.',
     ],
     [
         'Acolyte',
-        'A cult role. Chants to advance the ritual when the cult’s shared mission condition is met.',
+        'A cult role. Chants to advance the ritual when the shared mission condition is met, and can optionally curse one other living player. A random curse takes hold at dawn.',
     ],
     [
         'Veiled',
         'Disguised for one night: the Oracle reads a town player as cult, or a cult player as town. The player’s real side stays the same. Your own role card always tells the truth.',
+    ],
+    [
+        'Eldritch curse',
+        'A private affliction placed by a cultist. It takes hold at dawn and expires at the following dawn. The type is random; challenge difficulty grows with the ritual level. Being cursed does not reveal your alignment.',
+    ],
+    [
+        'Puzzle curse',
+        'Solve a fresh cipher, ordering puzzle, missing pattern, arithmetic puzzle, odd-one-out, or reversal. Until solved, you cannot target a player at night or in a vote. Untargeted actions and abstention remain available.',
+    ],
+    [
+        'Mind mist',
+        'Blurs the village scenery and turns chat into gibberish. Complete the ordered focus challenge to restore your view and read chat again. Action controls and the timer stay clear.',
+    ],
+    [
+        'Misdirection',
+        'Only appears at ritual level 3, from two-thirds progress. Your next chosen night or vote target changes once to another legal living player. Abstaining does not trigger it. It fades at the following dawn.',
     ],
     [
         'Chant',

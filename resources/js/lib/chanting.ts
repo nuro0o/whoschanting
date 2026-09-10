@@ -69,6 +69,8 @@ export interface RecapNightAction {
     player_id: string;
     role: string;
     target_id: string | null;
+    chosen_target_id?: string | null;
+    curse_type?: 'puzzle' | 'mist' | 'misdirection' | null;
     submitted: boolean;
     contributed: boolean;
     apparent_alignment: string | null;
@@ -94,11 +96,27 @@ export interface MatchRecapData {
             ballots: {
                 player_id: string;
                 target_id: string | null;
+                chosen_target_id?: string | null;
                 submitted: boolean;
             }[];
             banished_id: string | null;
         };
     }[];
+}
+export interface CurseChallenge {
+    kind: string;
+    title: string;
+    instruction: string;
+    clues: string[];
+    options: { id: string; label: string }[];
+    answer_length: number;
+}
+export interface Curse {
+    id: string;
+    type: 'puzzle' | 'mist' | 'misdirection';
+    level: number;
+    day: number;
+    challenge: CurseChallenge | null;
 }
 export interface RoomState {
     id: number;
@@ -110,7 +128,7 @@ export interface RoomState {
     deadline: string | null;
     server_time: string;
     host_id: string;
-    ritual: { tokens: number; threshold: number };
+    ritual: { tokens: number; threshold: number; level: number };
     winner: 'town' | 'cult' | null;
     win_reason: string | null;
     recap: MatchRecapData | null;
@@ -126,6 +144,8 @@ export interface RoomState {
         allies: { id: string; name: string; role: string }[];
         results: { day: number; target: string; alignment: string }[];
         submitted: boolean;
+        curse: Curse | null;
+        curse_notice: string | null;
     };
     messages: { id: string; name: string; body: string; day: number }[];
     log: string[];
@@ -174,14 +194,14 @@ export const roles: Record<
         name: 'The Veilweaver',
         subtitle: 'Cult · master of misdirection',
         description:
-            'Chant for the ritual. Each night, you may veil another living player: their alignment appears reversed to the Oracle for that night.',
+            'Chant for the ritual. You may veil another living player: their alignment appears reversed to the Oracle tonight, and a random eldritch curse takes hold at dawn. Curses grow stronger with the ritual.',
         symbol: '◈',
     },
     acolyte: {
         name: 'The Acolyte',
         subtitle: 'Cult · keeper of the ritual',
         description:
-            'Chant each night to complete your shared mission. Keep your fellow cultists alive and your true intentions hidden.',
+            'Chant each night to complete your shared mission. You may also curse another living player: a random eldritch curse takes hold at dawn and grows stronger with the ritual. Keep your intentions hidden.',
         symbol: '✧',
     },
     oracle: {

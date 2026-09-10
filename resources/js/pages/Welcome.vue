@@ -190,6 +190,16 @@ withDefaults(
                             own role and mission are never disguised.
                         </p>
                         <p>
+                            <strong>Curses wake at dawn.</strong> The Veilweaver
+                            curses the player they veil; Acolytes may choose a
+                            curse target while chanting. A random puzzle can
+                            block targeted actions, or mind mist can blur the
+                            village and scramble chat until solved. At ritual
+                            level 3, from two-thirds progress, misdirection can
+                            redirect the next chosen target once. Every curse
+                            fades at the following dawn.
+                        </p>
+                        <p>
                             <strong>The ritual is a race.</strong> The cult wins
                             when the ritual progress track fills. Each cultist
                             can add one step per night by chanting, if their

@@ -47,6 +47,18 @@ The game includes a Phaser card table, an in-game glossary, and optional synthes
 
 Tune the player limits, cultist counts by room size, phase lengths, missions, and ritual goals in `config/game.php`. Explicit `ritual_goals_by_player_count` entries override the multiplier. Bump `rules_version` when adjusting balance so statistics remain comparable. Starting a match snapshots its rules version, player count, phase lengths, mission, and goal; configuration changes apply to the next gathering. The two-player ending also resolves existing matches. Self-veiling is not enabled.
 
+## Eldritch curses
+
+Cult night targets now also inflict an eldritch curse at dawn: the Veilweaver veils and curses, while Acolytes may curse a target while chanting. A victim receives at most one curse each dawn. Veils still reverse Oracle readings for that night. Curses never change the victim's actual role or allegiance.
+
+Ritual progress determines the tier after the night's chants resolve: level 1 below one-third, level 2 from one-third, and level 3 from two-thirds. Levels 1–2 choose equally between a puzzle curse and mind mist; level 3 adds misdirection as a third equally likely outcome. Puzzle and mist difficulty grows with the tier.
+
+- **Puzzle curse:** one of six freshly generated challenges (cipher, ordering, missing number, offerings arithmetic, odd sigil, or reversed runes). Blocks targeted votes and night actions until solved; untargeted actions and abstentions remain available.
+- **Mind mist:** blurs the village scenery and garbles incoming chat for the victim. Selecting numbered anchors in ascending order clears it. The controls, timer, and clues stay readable.
+- **Misdirection:** redirects the next targeted vote or night action to a random different living player, excluding the affected player and the original choice. The victim learns the actual target when submitting. Abstaining does not consume it.
+
+Curses persist through the following night and expire at the next dawn; solving puzzle/mist removes them sooner. Banishment, victory, and rematches clear them. Multiple cultists targeting the same victim do not stack curses. Challenges and option layouts persist across refreshes; answers are validated on the server and never sent to clients. Random content prevents fixed answer memorization, though the six puzzle mechanics can be learned.
+
 ## Recaps and balance tracking
 
 Run `php artisan migrate` to add `game_matches` before playing with this update. After victory, **What really happened** reveals each recorded night action, investigation reading and veil, ritual contribution, and ballot. Missed votes are distinguished from deliberate abstentions. No recap data is sent to players while a match is active, including banished players.
