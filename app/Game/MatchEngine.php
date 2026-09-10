@@ -13,12 +13,17 @@ class MatchEngine
     /** @return array<string, mixed> */
     public function rules(): array
     {
-        return config('game');
+        $rules = config('game');
+        $rules['ritual_goals'] = array_map(fn (int $players): array => [
+            'players' => $players, 'steps' => max(6, (int) ceil($players * $rules['tokens_per_player'])),
+        ], range($rules['min_players'], $rules['max_players']));
+
+        return $rules;
     }
 
-    public function create(string $identity, string $name): GameRoom
+    public function create(string $identity, string $name, ?string $character = null): GameRoom
     {
-        return DB::transaction(function () use ($identity, $name): GameRoom {
+        return DB::transaction(function () use ($identity, $name, $character): GameRoom {
             $id = (string) Str::uuid();
             do {
                 $code = strtoupper(Str::random(6));
@@ -26,7 +31,7 @@ class MatchEngine
 
             return GameRoom::create(['code' => $code, 'state' => [
                 'phase' => 'lobby', 'phase_id' => 1, 'revision' => 1, 'day' => 0,
-                'host_id' => $id, 'players' => [$id => $this->seat($id, $identity, $name)],
+                'host_id' => $id, 'players' => [$id => $this->seat($id, $identity, $name, $character)],
                 'tokens' => 0, 'threshold' => 0, 'mission' => null, 'winner' => null,
                 'win_reason' => null, 'actions' => [], 'awards' => [], 'messages' => [],
                 'log' => ['A new gathering takes shape.'], 'cult_banished' => false,
@@ -35,15 +40,19 @@ class MatchEngine
     }
 
     /** @return array<string, mixed> */
-    private function seat(string $id, string $identity, string $name): array
+    private function seat(string $id, string $identity, string $name, ?string $character = null): array
     {
+        $characters = array_column(config('game.characters'), 'id');
+        $this->ensure($character === null || in_array($character, $characters, true), 'Choose a character from the village.');
+
         return ['id' => $id, 'identity' => hash('sha256', $identity), 'name' => $name,
-            'alive' => true, 'ready' => false, 'role' => null, 'alignment' => null, 'results' => []];
+            'alive' => true, 'ready' => false, 'role' => null, 'alignment' => null, 'results' => [],
+            'character' => $character ?? $characters[random_int(0, count($characters) - 1)]];
     }
 
-    public function join(string $code, string $identity, string $name): GameRoom
+    public function join(string $code, string $identity, string $name, ?string $character = null): GameRoom
     {
-        return DB::transaction(function () use ($code, $identity, $name): GameRoom {
+        return DB::transaction(function () use ($code, $identity, $name, $character): GameRoom {
             $room = GameRoom::where('code', $code)->lockForUpdate()->firstOrFail();
             $s = $room->state;
             if ($this->playerId($s, $identity) !== null) {
@@ -55,7 +64,7 @@ class MatchEngine
                 $this->ensure(mb_strtolower($player['name']) !== mb_strtolower($name), 'That name is already at the table.');
             }
             $id = (string) Str::uuid();
-            $s['players'][$id] = $this->seat($id, $identity, $name);
+            $s['players'][$id] = $this->seat($id, $identity, $name, $character);
             $this->save($room, $s);
 
             return $room;
@@ -127,6 +136,13 @@ class MatchEngine
     {
         $p = $s['players'][$id];
         $type = $a['type'];
+        if ($type === 'character') {
+            $this->ensure($s['phase'] === 'lobby', 'Choose your character before the match begins.');
+            $this->ensure(in_array($a['character'] ?? null, array_column(config('game.characters'), 'id'), true), 'Choose a character from the village.');
+            $s['players'][$id]['character'] = $a['character'];
+
+            return;
+        }
         if ($type === 'chat') {
             $this->ensure(in_array($s['phase'], ['lobby', 'discussion', 'voting', 'finished']), 'The village is quiet during this phase.');
             $this->ensure($p['alive'] || $s['phase'] === 'finished', 'Banished players may only watch.');
@@ -193,7 +209,10 @@ class MatchEngine
         if ($target !== null) {
             $this->ensure(isset($s['players'][$target]) && $s['players'][$target]['alive'] && $target !== $id, 'Choose another living player.');
         }
-        if ($type === 'night') {
+        if ($type === 'discussion_ready') {
+            $this->ensure($s['phase'] === 'discussion', 'You can be ready for voting only during discussion.');
+            $this->ensure($target === null, 'Readiness does not target another player.');
+        } elseif ($type === 'night') {
             $this->ensure($s['phase'] === 'night', 'Night has ended.');
             $this->ensure($p['role'] !== 'oracle' || $target !== null, 'Choose someone to investigate.');
             $this->ensure(in_array($p['role'], ['oracle', 'veilweaver']) || $target === null, 'Your role does not target another player.');
@@ -280,7 +299,7 @@ class MatchEngine
                 $gained++;
             }
         }
-        $s['log'][] = 'Dawn '.$s['day'].': '.$gained.' ritual token'.($gained === 1 ? '' : 's').' surfaced from the deep.';
+        $s['log'][] = 'Dawn '.$s['day'].': the ritual advanced by '.$gained.' step'.($gained === 1 ? '' : 's').'.';
     }
 
     /** @param array<string, mixed> $s */
@@ -360,6 +379,8 @@ class MatchEngine
         $allies = [];
         foreach ($s['players'] as $pid => $p) {
             $public = array_intersect_key($p, array_flip(['id', 'name', 'alive', 'ready']));
+            $public['character'] = $this->character($p);
+            $public['discussion_ready'] = $s['phase'] === 'discussion' && isset($s['actions'][$pid]) && $s['actions'][$pid]['type'] === 'discussion_ready';
             if ($s['phase'] === 'finished') {
                 $public['role'] = $p['role'];
                 $public['alignment'] = $p['alignment'];
@@ -377,12 +398,23 @@ class MatchEngine
             'ritual' => ['tokens' => $s['tokens'], 'threshold' => $s['threshold']],
             'winner' => $s['winner'], 'win_reason' => $s['win_reason'], 'players' => $players,
             'me' => array_replace(array_intersect_key($me, array_flip(['id', 'name', 'alive', 'role', 'alignment', 'results'])), [
+                'character' => $this->character($me),
                 'mission' => $me['alignment'] === 'cult' ? $s['mission'] : null,
                 'allies' => $allies, 'submitted' => isset($s['actions'][$id]),
             ]),
             'messages' => $s['messages'], 'log' => $s['log'],
             'rules' => array_intersect_key($this->rules(), array_flip(['min_players', 'max_players', 'seconds'])),
         ];
+    }
+
+    /** Older rooms receive a stable cosmetic portrait without altering their roles.
+     * @param  array<string, mixed>  $player
+     */
+    private function character(array $player): string
+    {
+        $characters = array_column(config('game.characters'), 'id');
+
+        return $player['character'] ?? $characters[hexdec(substr(hash('sha256', $player['id']), 0, 6)) % count($characters)];
     }
 
     private function ensure(bool $condition, string $message): void

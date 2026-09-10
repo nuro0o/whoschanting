@@ -1,9 +1,23 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
+import { usePage } from '@inertiajs/vue3';
 import { ArrowRight, KeyRound, LoaderCircle, Plus } from '@lucide/vue';
-import { roomRequest } from '@/lib/chanting';
+import { defaultCharacters, roomRequest, type Character } from '@/lib/chanting';
+import CharacterPicker from './CharacterPicker.vue';
 
-const props = defineProps<{ initialCode?: string }>();
+const props = withDefaults(
+    defineProps<{
+        initialCode?: string;
+        characters?: Character[];
+        preferredCharacter?: string | null;
+    }>(),
+    { characters: () => defaultCharacters },
+);
+const page = usePage();
+const signedIn = computed(() => !!page.props.auth.user);
+const character = ref(
+    props.preferredCharacter || props.characters[0]?.id || 'mariner',
+);
 const mode = ref(props.initialCode ? 'join' : 'create');
 const name = ref('');
 const code = ref(props.initialCode ?? '');
@@ -17,6 +31,7 @@ async function enter() {
             mode.value === 'create' ? '/rooms' : '/rooms/join',
             {
                 name: name.value.trim(),
+                ...(signedIn.value ? { character: character.value } : {}),
                 ...(mode.value === 'join'
                     ? { code: code.value.trim().toUpperCase() }
                     : {}),
@@ -90,6 +105,18 @@ async function enter() {
                     :disabled="pending || !!initialCode"
                 />
             </template>
+            <CharacterPicker
+                v-if="signedIn"
+                v-model="character"
+                :characters="characters"
+                :disabled="pending"
+            />
+            <p v-else class="guest-character-note">
+                The village will choose a random character for you.
+                <a href="/login">Sign in</a> or
+                <a href="/register">create an account</a> to pick your own.
+                Looks never reveal your role.
+            </p>
             <p v-if="error" class="form-error" role="alert">{{ error }}</p>
             <button
                 class="button primary entry-submit"
@@ -107,7 +134,7 @@ async function enter() {
                 /></template>
             </button>
             <p class="entry-note">
-                No accounts. Just friends. And a little betrayal.
+                Play as a guest. Bring friends. Keep secrets.
             </p>
         </form>
     </section>

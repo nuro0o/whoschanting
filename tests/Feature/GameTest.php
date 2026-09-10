@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Events\RoomUpdated;
 use App\Game\MatchEngine;
 use App\Models\GameRoom;
+use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Validation\ValidationException;
@@ -172,7 +173,7 @@ class GameTest extends TestCase
             $p = $room->fresh()->state['players'][$id];
             $this->assertSame($p['role'], $view['me']['role']);
             foreach ($view['players'] as $public) {
-                $this->assertSame(['id', 'name', 'alive', 'ready'], array_keys($public));
+                $this->assertSame(['id', 'name', 'alive', 'ready', 'character', 'discussion_ready'], array_keys($public));
             }
             $this->assertStringNotContainsString('identity', json_encode($view));
             $this->assertArrayNotHasKey('actions', $view);
@@ -451,6 +452,126 @@ class GameTest extends TestCase
         $this->act($room, 'secret-0', 'chat', ['body' => 'The lighthouse looks suspicious.']);
         $this->assertSame('The lighthouse looks suspicious.', $this->engine->access($room->code, 'secret-1')['messages'][0]['body']);
         $this->assertRejected(fn () => $this->act($room, 'secret-0', 'chat', ['body' => str_repeat('a', 281)]));
+    }
+
+    public function test_guests_receive_stable_random_characters_and_cannot_choose_them(): void
+    {
+        $this->postJson('/rooms', ['name' => 'Guest', 'character' => 'mariner'])->assertUnprocessable();
+        $code = $this->postJson('/rooms', ['name' => 'Guest'])->assertCreated()->json('code');
+        $view = $this->getJson('/rooms/'.$code.'/state')->assertOk()->json();
+        $character = $view['me']['character'];
+        $this->assertContains($character, array_column(config('game.characters'), 'id'));
+        $this->assertSame($character, $view['players'][0]['character']);
+        $this->getJson('/rooms/'.$code.'/state')->assertJsonPath('me.character', $character);
+        $this->postJson('/rooms/'.$code.'/actions', ['type' => 'character', 'character' => 'baker', 'phase_id' => 1])->assertUnprocessable();
+        $this->postJson('/rooms/'.$code.'/actions', ['type' => 'character', 'phase_id' => 1])->assertForbidden();
+        $this->withSession(['chanting.identity' => 'new-guest']);
+        $this->postJson('/rooms/join', ['name' => 'Other guest', 'code' => $code, 'character' => 'baker'])->assertUnprocessable();
+        $this->postJson('/rooms/join', ['name' => 'Other guest', 'code' => $code])->assertOk();
+        $this->assertCount(2, GameRoom::first()->state['players']);
+    }
+
+    public function test_accounts_can_choose_every_character_and_change_only_in_lobby(): void
+    {
+        $this->actingAs(User::factory()->create());
+        $this->postJson('/rooms', ['name' => 'Neighbor', 'character' => 'invented'])->assertUnprocessable();
+        $code = $this->postJson('/rooms', ['name' => 'Neighbor', 'character' => 'botanist'])->assertCreated()->json('code');
+        $this->getJson('/rooms/'.$code.'/state')->assertJsonPath('me.character', 'botanist');
+        foreach (config('game.characters') as $character) {
+            $this->postJson('/rooms/'.$code.'/actions', ['type' => 'character', 'character' => $character['id'], 'phase_id' => 1])
+                ->assertOk()->assertJsonPath('me.character', $character['id']);
+        }
+        $nextCode = $this->postJson('/rooms', ['name' => 'Neighbor'])->assertCreated()->json('code');
+        $this->getJson('/rooms/'.$nextCode.'/state')->assertJsonPath('me.character', 'musician');
+        $room = GameRoom::where('code', $code)->firstOrFail();
+        $s = $room->state;
+        $s['phase'] = 'reveal';
+        $room->update(['state' => $s]);
+        $this->postJson('/rooms/'.$code.'/actions', ['type' => 'character', 'character' => 'baker', 'phase_id' => 1])->assertUnprocessable();
+        $this->getJson('/rooms/'.$code.'/state')->assertJsonPath('me.character', 'musician');
+        $this->withSession(['chanting.identity' => 'account-join']);
+        $this->postJson('/rooms/join', ['name' => 'Joined', 'code' => $nextCode, 'character' => 'archivist'])->assertOk();
+        $this->getJson('/rooms/'.$nextCode.'/state')->assertJsonPath('me.character', 'archivist');
+    }
+
+    public function test_characters_survive_roles_rematches_and_legacy_rooms(): void
+    {
+        [$room, $identities] = $this->match();
+        $before = array_column($room->fresh()->state['players'], 'character', 'id');
+        $s = $room->fresh()->state;
+        $s['phase'] = 'finished';
+        $room->update(['state' => $s, 'deadline' => null]);
+        $this->act($room, 'secret-0', 'rematch');
+        $this->assertSame($before, array_column($room->fresh()->state['players'], 'character', 'id'));
+        $s = $room->fresh()->state;
+        foreach ($s['players'] as &$player) {
+            unset($player['character']);
+        }
+        unset($player);
+        $room->update(['state' => $s]);
+        $first = $this->engine->access($room->code, 'secret-0');
+        $second = $this->engine->access($room->code, 'secret-0');
+        $this->assertSame(array_column($first['players'], 'character'), array_column($second['players'], 'character'));
+        $this->assertContains($first['me']['character'], array_column(config('game.characters'), 'id'));
+    }
+
+    public function test_discussion_readiness_is_public_and_unanimous_readiness_starts_voting_once(): void
+    {
+        [$room, $identities] = $this->match();
+        $this->assertRejected(fn () => $this->act($room, 'secret-0', 'discussion_ready'));
+        $this->expire($room);
+        $this->assertRejected(fn () => $this->act($room, 'secret-0', 'discussion_ready'));
+        $this->expire($room);
+        $phase = $room->fresh()->state['phase_id'];
+        $this->withSession(['chanting.identity' => 'secret-0']);
+        $view = $this->postJson('/rooms/'.$room->code.'/actions', ['type' => 'discussion_ready', 'phase_id' => $phase])->assertOk()->json();
+        $this->assertSame('discussion', $view['phase']);
+        $this->assertTrue($view['me']['submitted']);
+        $other = $this->engine->access($room->code, 'secret-1');
+        $this->assertCount(1, array_filter($other['players'], fn (array $p): bool => $p['discussion_ready']));
+        $this->assertRejected(fn () => $this->act($room, 'secret-0', 'discussion_ready'));
+        $this->act($room, 'secret-0', 'chat', ['body' => 'Still here if you have questions.']);
+        foreach ($identities as $identity) {
+            if ($identity !== 'secret-0') {
+                $view = $this->act($room, $identity, 'discussion_ready');
+            }
+        }
+        $this->assertSame('voting', $view['phase']);
+        $this->assertSame($phase + 1, $view['phase_id']);
+        $this->assertFalse($view['me']['submitted']);
+        $this->assertCount(0, array_filter($view['players'], fn (array $p): bool => $p['discussion_ready']));
+        $this->engine->resolve($room->id);
+        $this->assertSame($phase + 1, $room->fresh()->state['phase_id']);
+        $this->postJson('/rooms/'.$room->code.'/actions', ['type' => 'discussion_ready', 'phase_id' => $phase])->assertUnprocessable();
+    }
+
+    public function test_banished_players_cannot_ready_and_do_not_hold_up_discussion(): void
+    {
+        [$room, $identities] = $this->match();
+        $this->expire($room);
+        $this->expire($room);
+        $s = $room->fresh()->state;
+        $deadId = array_search('secret-0', $identities, true);
+        $s['players'][$deadId]['alive'] = false;
+        $room->update(['state' => $s]);
+        $this->assertRejected(fn () => $this->act($room, 'secret-0', 'discussion_ready'));
+        foreach ($identities as $identity) {
+            if ($identity !== 'secret-0') {
+                $this->act($room, $identity, 'discussion_ready');
+            }
+        }
+        $this->assertSame('voting', $room->fresh()->state['phase']);
+    }
+
+    public function test_readiness_deadline_still_advances_and_home_goals_match_game_rules(): void
+    {
+        [$room] = $this->match();
+        $this->expire($room);
+        $this->expire($room);
+        $this->act($room, 'secret-0', 'discussion_ready');
+        $this->expire($room);
+        $this->assertSame('voting', $room->state['phase']);
+        $this->assertSame([6, 6, 6, 8, 9, 10, 11, 12], array_column($this->engine->rules()['ritual_goals'], 'steps'));
     }
 
     private function assertRejected(callable $action): void

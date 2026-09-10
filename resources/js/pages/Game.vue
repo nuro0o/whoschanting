@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Head } from '@inertiajs/vue3';
+import { Head, usePage } from '@inertiajs/vue3';
 import {
     Check,
     Circle,
@@ -24,16 +24,32 @@ import {
 } from 'vue';
 import RoomEntry from '@/components/chanting/RoomEntry.vue';
 import SecretRole from '@/components/chanting/SecretRole.vue';
+import CharacterPicker from '@/components/chanting/CharacterPicker.vue';
+import CharacterPortrait from '@/components/chanting/CharacterPortrait.vue';
+import GameGlossary from '@/components/chanting/GameGlossary.vue';
+import CardTable from '@/components/chanting/CardTable.vue';
+import SoundControl from '@/components/chanting/SoundControl.vue';
 import {
     csrfToken,
     RoomError,
     roomRequest,
     roles,
     type RoomState,
+    type Character,
+    defaultCharacters,
 } from '@/lib/chanting';
 import '../../css/chanting.css';
 
-const props = defineProps<{ code: string }>();
+const props = withDefaults(
+    defineProps<{
+        code: string;
+        characters?: Character[];
+        preferredCharacter?: string | null;
+    }>(),
+    { characters: () => defaultCharacters },
+);
+const page = usePage();
+const signedIn = computed(() => !!page.props.auth.user);
 const state = ref<RoomState>();
 const loading = ref(true);
 const outsider = ref(false);
@@ -349,7 +365,11 @@ onBeforeUnmount(() => {
             </p>
             <h1>A seat is waiting.</h1>
             <p>Choose your name to join room {{ code }}.</p>
-            <RoomEntry :initial-code="code" />
+            <RoomEntry
+                :initial-code="code"
+                :characters="characters"
+                :preferred-character="preferredCharacter"
+            />
         </main>
         <main v-else-if="!state" class="game-loading">
             <h1>Lost in the mist.</h1>
@@ -402,6 +422,20 @@ onBeforeUnmount(() => {
                 You’ve been banished. Watch the story unfold—your seat is saved
                 for the next match.
             </p>
+            <div class="game-tools">
+                <GameGlossary /><SoundControl
+                    :phase="state.phase"
+                    :phase-id="state.phase_id"
+                    :submitted="state.me.submitted"
+                />
+            </div>
+            <CardTable
+                :players="state.players"
+                :phase="state.phase"
+                :phase-id="state.phase_id"
+                :me-id="state.me.id"
+                :submitted="state.me.submitted"
+            />
             <div
                 class="match-layout"
                 :class="{ 'is-lobby': state.phase === 'lobby' }"
@@ -424,10 +458,10 @@ onBeforeUnmount(() => {
                                 'is-dead': !player.alive,
                             }"
                         >
-                            <span class="player-avatar" aria-hidden="true">{{
-                                player.name.slice(0, 1).toUpperCase()
-                            }}</span
-                            ><span class="player-name"
+                            <CharacterPortrait
+                                :character="player.character"
+                                decorative
+                            /><span class="player-name"
                                 >{{ player.name
                                 }}<small
                                     >{{
@@ -455,6 +489,15 @@ onBeforeUnmount(() => {
                                 v-if="state.phase === 'lobby'"
                                 class="player-status"
                                 >{{ player.ready ? 'Ready' : 'Waiting' }}</span
+                            >
+                            <span
+                                v-else-if="
+                                    state.phase === 'discussion' &&
+                                    player.alive &&
+                                    player.discussion_ready
+                                "
+                                class="player-status discussion-badge"
+                                >Ready for voting</span
                             >
                         </li>
                     </ul>
@@ -494,6 +537,19 @@ onBeforeUnmount(() => {
                                 />{{ copied ? 'Copied' : 'Invite' }}
                             </button>
                         </div>
+                        <CharacterPicker
+                            v-if="signedIn"
+                            :model-value="state.me.character"
+                            :characters="characters"
+                            :disabled="pending"
+                            @update:model-value="
+                                act('character', { character: $event })
+                            "
+                        />
+                        <p v-else class="small-help">
+                            Your character was chosen at random. Every look can
+                            have any secret role.
+                        </p>
                         <p class="lobby-readiness" role="status">
                             <strong
                                 >{{ readyCount }} of
@@ -663,8 +719,40 @@ onBeforeUnmount(() => {
                         <p>
                             Compare stories in the village chat or talk with
                             your friends on a call. Keep an eye on the ritual.
-                            Voting begins when the discussion timer ends.
+                            Mark yourself ready when you have said your piece.
+                            Voting begins when everyone living is ready, or the
+                            timer ends.
                         </p>
+                        <template v-if="state.me.alive"
+                            ><p
+                                v-if="state.me.submitted"
+                                class="state-message"
+                                role="status"
+                            >
+                                <Check :size="17" />You are ready for voting.
+                                The village can see your badge.
+                            </p>
+                            <button
+                                v-else
+                                class="button primary"
+                                :disabled="pending"
+                                @click="act('discussion_ready')"
+                            >
+                                <Check :size="17" />I’m done discussing
+                            </button>
+                            <p class="small-help">
+                                {{
+                                    state.players.filter(
+                                        (p) => p.alive && p.discussion_ready,
+                                    ).length
+                                }}
+                                of
+                                {{
+                                    state.players.filter((p) => p.alive).length
+                                }}
+                                ready for voting. This choice is final.
+                            </p></template
+                        >
                         <p
                             v-if="state.me.role === 'oracle'"
                             class="state-message"
@@ -859,7 +947,7 @@ onBeforeUnmount(() => {
                 >
                     <section class="game-panel ritual-panel">
                         <div class="ritual-heading">
-                            <h2>The ritual</h2>
+                            <h2>Ritual progress</h2>
                             <span
                                 v-if="
                                     state.phase !== 'lobby' &&
@@ -867,7 +955,7 @@ onBeforeUnmount(() => {
                                 "
                                 >{{ state.ritual.tokens }}
                                 <small
-                                    >/ {{ state.ritual.threshold }}</small
+                                    >/ {{ state.ritual.threshold }} steps</small
                                 ></span
                             >
                         </div>
@@ -884,7 +972,7 @@ onBeforeUnmount(() => {
                             "
                             class="ritual-tokens"
                             role="progressbar"
-                            aria-label="Cult ritual tokens"
+                            aria-label="Cult ritual progress in steps"
                             :aria-valuenow="state.ritual.tokens"
                             :aria-valuemin="0"
                             :aria-valuemax="state.ritual.threshold"
@@ -901,8 +989,8 @@ onBeforeUnmount(() => {
                         <p>
                             {{
                                 state.phase === 'lobby'
-                                    ? 'The cult grows with the village. One shared ritual. The threshold scales with the village.'
-                                    : 'When the track fills, Cthulhu awakens and the cult wins. Time is a precious thing.'
+                                    ? 'The goal depends on how many friends join. The exact number of steps appears when the match begins.'
+                                    : `Each filled mark is one step closer. ${Math.max(0, state.ritual.threshold - state.ritual.tokens)} more steps complete the ritual and the cult wins.`
                             }}
                         </p>
                     </section>

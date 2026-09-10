@@ -1,6 +1,6 @@
 # Who’s Chanting?
 
-A private-room social deduction game built with Laravel 13, Vue 3, TypeScript, Reverb + Echo, MySQL, and a lazy-loaded Phaser atmosphere. No account is required: an encrypted Laravel session owns your seat.
+A private-room social deduction game built with Laravel 13, Vue 3, TypeScript, Reverb + Echo, MySQL, and a lazy-loaded Phaser card table. No account is required: an encrypted Laravel session owns your seat.
 
 ## Run locally
 
@@ -24,13 +24,19 @@ Open <http://127.0.0.1:8000>. Create a room, send its code or invite link to fri
 
 For phones on a local network, serve on `0.0.0.0`, set `APP_URL` and the Reverb/Vite host to the machine’s LAN address, add that hostname to `REVERB_ALLOWED_ORIGINS`, and rebuild. Friends must reach both HTTP and WebSocket ports. Do not expose development servers to the internet.
 
+## Characters and presentation
+
+Eight illustrated villagers are available as cosmetic portraits. Guests receive a random character; signed-in players can select any character when creating or joining a room, and change it in the lobby. Account choices are remembered within the browser session. Portraits stay with the seat through reconnects and rematches and never indicate a role or team. Older rooms receive a stable fallback portrait.
+
+The game includes a Phaser card table, an in-game glossary, and optional synthesized sound effects. Sound is enabled with a user gesture and can be muted. Reduced-motion preferences are respected; HTML controls remain available independently of the canvas.
+
 ## First-match rules (provisional)
 
 - **3–10 players**: 3–4 players have **1 cultist**, 5–6 have **2**, 7–8 have **3**, and 9–10 have **4**. Exactly one cultist is the Veilweaver; any remaining cultists are Acolytes. There is always one Oracle, with the remaining town seats assigned to Townspeople. Cultists know all their teammates and receive the same randomly selected mission. The lone cultist in a 3–4-player match is the Veilweaver and can complete missions alone.
-- **25-second reveal → 45-second night → 90-second discussion → 45-second vote**, repeating night/discussion/vote. Reveal, night, and voting finish early when all living players submit. Missing night actions forfeit; missing votes abstain. Discussion always uses its full timer.
+- **25-second reveal → 45-second night → 90-second discussion → 45-second vote**, repeating night/discussion/vote. Reveal, night, and voting finish early when all living players submit. Missing night actions forfeit; missing votes abstain. During discussion, living players can mark themselves Ready for voting. Everyone can see this status; voting starts early when all living players are ready, or when the timer ends.
 - Each cultist’s night action chants. The Veilweaver can also veil another living player, reversing their apparent alignment for the Oracle that night. Investigations resolve after all veils, independent of submission order. Your actual role and mission are never altered. Oracle results are private and should be treated as fallible evidence.
-- **Concord:** all surviving cultists must chant; award one token to each. **Shadows:** award one per chanting cultist who was not investigated. **Patience:** award one per chanting cultist if the preceding vote did not banish a cultist (first night qualifies). A surviving lone cultist can still score.
-- The shared ritual requires `max(6, ceil(player count × 1.2))` tokens: 6 / 6 / 6 / 8 / 9 / 10 / 11 / 12 for 3 / 4 / 5 / 6 / 7 / 8 / 9 / 10 players. With every cultist scoring, this takes six nights for 3–4 players, three for 5, 7, 9, or 10 players, and four for 6 or 8 players. These thresholds remain provisional as the expanded rosters are playtested.
+- **Concord:** all surviving cultists must chant; advance the ritual by one step for each. **Shadows:** advance one step per chanting cultist who was not investigated. **Patience:** advance one step per chanting cultist if the preceding vote did not banish a cultist (first night qualifies). A surviving lone cultist can still score.
+- The shared ritual has these progress goals: 6 / 6 / 6 / 8 / 9 / 10 / 11 / 12 for 3 / 4 / 5 / 6 / 7 / 8 / 9 / 10 players. With every cultist scoring, this takes six nights for 3–4 players, three for 5, 7, 9, or 10 players, and four for 6 or 8 players. These thresholds remain provisional as the expanded rosters are playtested.
 - One vote per living player; no self-votes. A unique plurality banishes its target. Abstention is an option that competes in the tally, and ties mean no banishment. A banished player’s allegiance stays hidden until victory.
 - Town wins immediately when all cultists are banished. Cult wins on completing the ritual, or if no townspeople remain. There is **no parity victory and no night kill** in this milestone: the ritual supplies the cult’s pressure.
 - Public text chat is available in the lobby, discussion, voting, and after victory. Banished players watch silently until the match ends. The host can then start a rematch, preserving seats and resetting all roles, missions, actions, messages, readiness, and investigation results.
@@ -39,11 +45,11 @@ Tune the player limits, cultist counts by room size, phase lengths, missions, an
 
 ## Authority and hidden information
 
-`app/Game/MatchEngine.php` owns every rule. Room state is persisted as a JSON aggregate in a MySQL row. Reads that can resolve deadlines and all mutations take the same `SELECT ... FOR UPDATE` lock. Night/vote submissions are keyed by player; token awards are keyed by night and player. A phase ID rejects stale submissions, and a revision keeps clients from accepting older responses.
+`app/Game/MatchEngine.php` owns every rule. Room state is persisted as a JSON aggregate in a MySQL row. Reads that can resolve deadlines and all mutations take the same `SELECT ... FOR UPDATE` lock. Night/vote submissions are keyed by player; ritual progress awards are keyed by night and player. A phase ID rejects stale submissions, and a revision keeps clients from accepting older responses.
 
 The API builds an explicit personalized allowlist. The authoritative model hides its state when serialized. Other players’ roles, the selected mission, seat identity hashes, night targets, ballots, awards, and private investigations are never included in another player’s response. Only cultists see their teammates and shared mission; final roles are public after victory. Responses use `Cache-Control: private, no-store`.
 
-The guest-only broadcast authorization endpoint validates both the encrypted session seat and exact room channel. Reverb events contain **only a revision**, never game state. Client events are disabled. Echo invalidates the current view; authenticated HTTP fetches recover it. Periodic polling and reconnect/visibility refresh also recover missed events. Queue delays or Reverb downtime therefore do not prevent play.
+The session-based broadcast authorization endpoint validates both the encrypted session seat and exact room channel. Reverb events contain **only a revision**, never game state. Client events are disabled. Echo invalidates the current view; authenticated HTTP fetches recover it. Periodic polling and reconnect/visibility refresh also recover missed events. Queue delays or Reverb downtime therefore do not prevent play.
 
 `game:tick` resolves due phases every second via Laravel’s scheduler, even with every browser closed. A state read also resolves an overdue phase under the same lock. After a server outage it advances one phase at a time and grants a fresh deadline; it does not fast-forward absent players through an entire match.
 
@@ -68,4 +74,4 @@ Domain registration/DNS, hosting, TLS, and production credentials are external s
 
 Supervise the queue worker and Reverb. Run Laravel’s scheduler continuously (or `schedule:run` every minute, which runs the sub-minute tick). Run `php artisan migrate --force`, cache configuration, and restart workers on deploy. Multi-server deployments also need shared session/cache infrastructure and Reverb scaling configuration.
 
-Not included in the first milestone: account-based cross-device seat recovery, host transfer/kicking, public matchmaking, moderation tools, automated room retention, sound effects, or a larger role roster. Private rooms should be played with trusted friends. The default poll fallback works without Reverb, but production should run all services above.
+Not included in the first milestone: account-based cross-device seat recovery, host transfer/kicking, public matchmaking, moderation tools, automated room retention, or a larger role roster. Private rooms should be played with trusted friends. The default poll fallback works without Reverb, but production should run all services above.

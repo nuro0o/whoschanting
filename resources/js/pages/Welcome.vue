@@ -3,10 +3,24 @@ import { Head } from '@inertiajs/vue3';
 import { ArrowDown, Eye, Moon, Users, Vote, Waves } from '@lucide/vue';
 import RoomEntry from '@/components/chanting/RoomEntry.vue';
 import VillageScene from '@/components/chanting/VillageScene.vue';
+import GameGlossary from '@/components/chanting/GameGlossary.vue';
+import CharacterPortrait from '@/components/chanting/CharacterPortrait.vue';
+import { defaultCharacters, type Character } from '@/lib/chanting';
 import '../../css/chanting.css';
 withDefaults(
-    defineProps<{ rules?: { min_players: number; max_players: number } }>(),
-    { rules: () => ({ min_players: 3, max_players: 10 }) },
+    defineProps<{
+        characters?: Character[];
+        preferredCharacter?: string | null;
+        rules?: {
+            min_players: number;
+            max_players: number;
+            ritual_goals?: { players: number; steps: number }[];
+        };
+    }>(),
+    {
+        characters: () => defaultCharacters,
+        rules: () => ({ min_players: 3, max_players: 10 }),
+    },
 );
 </script>
 <template>
@@ -64,11 +78,33 @@ withDefaults(
                         ><span><Moon :size="15" /> Secret roles</span
                         ><span><Waves :size="16" /> Endless suspicion</span>
                     </div>
-                    <RoomEntry />
+                    <RoomEntry
+                        :characters="characters"
+                        :preferred-character="preferredCharacter"
+                    />
                 </div>
                 <span class="hero-side-note" aria-hidden="true"
                     >WELCOME TO THE END OF THE WORLD. MAYBE.</span
                 >
+            </section>
+            <section class="character-parade" aria-labelledby="character-title">
+                <div>
+                    <p class="eyebrow">A FAMILIAR FACE. AN UNFAMILIAR ALIBI.</p>
+                    <h2 id="character-title">Meet your <em>neighbors.</em></h2>
+                    <p>
+                        Pick a face you love when you sign in. Guests get a
+                        surprise.<br />Every character can have any role. Trust
+                        nobody’s wardrobe.
+                    </p>
+                </div>
+                <ul>
+                    <li v-for="character in characters" :key="character.id">
+                        <CharacterPortrait
+                            :character="character.id"
+                            decorative
+                        /><span>{{ character.name }}</span>
+                    </li>
+                </ul>
             </section>
             <section
                 id="how-to-play"
@@ -131,9 +167,10 @@ withDefaults(
                         <p>
                             <strong>Night, discussion, vote. Repeat.</strong>
                             Living players act once per night and cast one final
-                            vote per day. Ties and abstentions banish nobody. If
-                            you miss a deadline, your action is forfeited.
-                            Banished players can watch until the match ends.
+                            vote per day. A tie for most votes, or abstention
+                            winning the vote, banishes nobody. If you miss a
+                            deadline, your action is forfeited. Banished players
+                            can watch until the match ends.
                         </p>
                         <p>
                             <strong>Your role card tells the truth.</strong>
@@ -143,13 +180,42 @@ withDefaults(
                             own role and mission are never disguised.
                         </p>
                         <p>
-                            <strong>The ritual is a race.</strong> A cultist may
-                            earn one token per night by chanting when the shared
-                            mission’s condition is met: chant together, avoid
-                            investigation, or keep cultists safe in the previous
-                            vote. The public track must reach max(6,
-                            ceil(players × 1.2)) tokens. The cult also wins if
-                            no townspeople remain.
+                            <strong>The ritual is a race.</strong> The cult wins
+                            when the ritual progress track fills. Each cultist
+                            can add one step per night by chanting, if their
+                            shared mission’s condition is met: chant together,
+                            avoid investigation, or keep cultists safe in the
+                            previous vote. The cult also wins if no townspeople
+                            remain.
+                        </p>
+                        <table
+                            v-if="rules.ritual_goals?.length"
+                            class="ritual-goals"
+                        >
+                            <caption>
+                                How many steps complete the ritual?
+                            </caption>
+                            <thead>
+                                <tr>
+                                    <th scope="col">Players</th>
+                                    <th scope="col">Steps to finish</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr
+                                    v-for="goal in rules.ritual_goals"
+                                    :key="goal.players"
+                                >
+                                    <td>{{ goal.players }}</td>
+                                    <td>{{ goal.steps }} steps</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                        <p>
+                            <strong>Finished discussing?</strong> Mark yourself
+                            ready for voting. Everyone sees your ready badge,
+                            and voting starts as soon as every living player is
+                            ready, or when the timer ends.
                         </p>
                         <p>
                             <strong
@@ -166,6 +232,7 @@ withDefaults(
                         </p>
                     </div>
                 </details>
+                <GameGlossary />
             </section>
         </main>
         <footer class="site-footer">

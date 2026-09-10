@@ -1469,3 +1469,402 @@
         scroll-behavior: auto !important;
     }
 }
+
+/* Illustrated villagers and the shared table. */
+.character-portrait {
+    display: block;
+    width: 48px;
+    aspect-ratio: 1;
+    flex-shrink: 0;
+    background-image: url('/assets/chanting/characters.png');
+    background-size: 400% 200%;
+    background-repeat: no-repeat;
+    border: 1px solid #8e9b77;
+    border-radius: 50% 50% 8px 8px;
+    box-shadow: 0 4px 12px #0004;
+}
+.character-picker {
+    border: 0;
+    padding: 0;
+    margin: 21px 0 10px;
+    min-width: 0;
+}
+.character-picker legend {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--cream);
+}
+.chanting .character-picker p {
+    margin: 5px 0 12px;
+    color: var(--muted);
+    font-size: 10px;
+    line-height: 1.5;
+}
+.character-choices {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px 7px;
+}
+.character-choices label {
+    display: flex;
+    align-items: center;
+    flex-direction: column;
+    gap: 5px;
+    position: relative;
+    padding: 6px 2px;
+    border: 1px solid transparent;
+    border-radius: 3px;
+    cursor: pointer;
+}
+.character-choices label:hover {
+    background: #bdcd9c0c;
+}
+.character-choices label.selected {
+    background: #bdcd9c15;
+    border-color: var(--green);
+}
+.character-choices label:focus-within {
+    outline: 2px solid var(--green);
+    outline-offset: 2px;
+}
+.character-choices input {
+    position: absolute;
+    opacity: 0;
+    width: 1px;
+    height: 1px;
+}
+.character-choices label > span:last-child {
+    font-size: 9px;
+    color: var(--cream);
+}
+.character-choices .character-portrait {
+    width: min(100%, 62px);
+}
+.character-picker:disabled {
+    opacity: 0.6;
+}
+.guest-character-note {
+    font-size: 10px;
+    color: var(--muted);
+    line-height: 1.7;
+    margin-top: 15px !important;
+}
+.guest-character-note a {
+    color: var(--green);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+.character-parade {
+    max-width: 1260px;
+    margin: 0 auto;
+    padding: 52px 28px 60px;
+    border-top: 1px solid #bdcd9c25;
+}
+.character-parade > div {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+}
+.character-parade h2 {
+    font-size: clamp(30px, 4vw, 44px);
+    margin: 7px 0 12px;
+}
+.character-parade p:not(.eyebrow) {
+    color: var(--muted);
+    font-size: 12px;
+}
+.character-parade ul {
+    padding: 0;
+    margin: 30px 0 0;
+    list-style: none;
+    display: grid;
+    grid-template-columns: repeat(8, minmax(0, 1fr));
+    gap: 18px;
+}
+.character-parade li {
+    text-align: center;
+}
+.character-parade .character-portrait {
+    width: 100%;
+    border-radius: 48% 48% 3px 3px;
+    transition: transform 0.25s;
+}
+.character-parade li:nth-child(even) {
+    padding-top: 15px;
+}
+.character-parade li:hover .character-portrait {
+    transform: translateY(-5px) rotate(-2deg);
+}
+.character-parade li > span:last-child {
+    display: block;
+    font-size: 10px;
+    margin-top: 10px;
+    color: var(--cream);
+}
+.ritual-goals {
+    border-collapse: collapse;
+    width: 100%;
+    max-width: 440px;
+    font-size: 12px;
+}
+.ritual-goals caption {
+    text-align: left;
+    color: var(--cream);
+    font-weight: 600;
+    padding-bottom: 12px;
+}
+.ritual-goals td,
+.ritual-goals th {
+    text-align: left;
+    padding: 7px 12px;
+    border-bottom: 1px solid var(--line);
+}
+.ritual-goals th {
+    color: var(--green);
+}
+.game-glossary dl {
+    margin: 0;
+    padding: 0 24px 24px;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 18px 28px;
+}
+.game-glossary dt {
+    color: var(--green);
+    font-size: 13px;
+    font-weight: 600;
+    margin-bottom: 4px;
+}
+.game-glossary dd {
+    margin: 0;
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.7;
+}
+.chanting .glossary-intro {
+    padding: 0 24px 20px;
+    font-size: 12px;
+    color: var(--muted);
+}
+.game-tools {
+    display: flex;
+    gap: 18px;
+    align-items: flex-start;
+    margin-bottom: 18px;
+}
+.game-tools .game-glossary {
+    flex: 1;
+    margin: 0;
+    background: #19292c;
+}
+.game-tools .game-glossary summary {
+    padding: 12px 16px;
+    font-size: 12px;
+}
+.sound-control {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    padding: 12px 14px;
+    color: var(--muted);
+    background: #19292c;
+    font-size: 11px !important;
+}
+.sound-control:hover {
+    color: var(--cream);
+    border-color: var(--green);
+}
+.table-panel {
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: radial-gradient(ellipse at center, #2c423751, #122125 75%);
+    margin-bottom: 22px;
+    overflow: hidden;
+}
+.table-topline {
+    padding: 16px 20px 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+.table-topline .eyebrow {
+    font-size: 9px;
+}
+.table-topline > span:last-child {
+    font-size: 10px;
+    color: var(--muted);
+}
+.card-table {
+    position: relative;
+    width: 100%;
+    max-width: 900px;
+    margin: auto;
+    height: clamp(330px, 44vw, 490px);
+}
+.table-canvas {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+}
+.table-canvas canvas {
+    display: block;
+}
+.table-seat {
+    position: absolute;
+    transform: translate(-50%, -50%);
+    display: flex;
+    align-items: center;
+    flex-direction: column;
+    width: 110px;
+    z-index: 1;
+}
+.table-seat .character-portrait {
+    width: 65px;
+    border-width: 2px;
+}
+.table-seat.is-me .character-portrait {
+    outline: 2px solid var(--green);
+    outline-offset: 3px;
+}
+.seat-name {
+    display: block;
+    max-width: 110px;
+    padding: 2px 5px;
+    margin-top: 5px;
+    background: #101d20ed;
+    border-radius: 2px;
+    color: var(--cream);
+    font-size: 10px;
+    text-align: center;
+    line-height: 1.5;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.seat-ready {
+    color: #172820;
+    background: var(--green);
+    font-size: 8px;
+    font-weight: 600;
+    padding: 2px 5px;
+    margin-top: 2px;
+    border-radius: 2px;
+}
+.seat-banished {
+    font-size: 9px;
+    color: var(--coral);
+}
+.table-seat.is-banished .character-portrait {
+    filter: grayscale(1);
+    opacity: 0.5;
+}
+.table-caption {
+    display: block;
+    border-top: 1px solid #bdcd9c14;
+    padding: 13px 20px;
+    text-align: center;
+    color: var(--muted);
+    font:
+        italic 16px 'Fraunces',
+        Georgia,
+        serif;
+}
+.table-caption > span {
+    display: block;
+    margin-top: 4px;
+    font:
+        11px 'DM Sans',
+        sans-serif;
+}
+.table-fallback {
+    position: absolute;
+    inset: 23% 12%;
+    border-radius: 50%;
+    border: 2px solid #76805c;
+    background: #254039;
+    display: grid;
+    place-items: center;
+    color: var(--green);
+    font-size: 40px;
+}
+.player-row .character-portrait {
+    width: 40px;
+}
+.discussion-badge {
+    max-width: 53px;
+    line-height: 1.35;
+    text-align: right;
+}
+.ritual-heading {
+    gap: 8px;
+}
+.ritual-heading > span {
+    white-space: nowrap;
+}
+.ritual-heading h2 {
+    font-size: 18px;
+}
+@media (min-width: 701px) and (max-width: 1000px) {
+    .card-table {
+        height: 450px;
+    }
+}
+@media (max-width: 700px) {
+    .character-parade {
+        padding: 38px 24px;
+    }
+    .character-parade ul {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 18px 12px;
+    }
+    .character-parade li:nth-child(even) {
+        padding-top: 0;
+    }
+    .game-glossary dl {
+        grid-template-columns: 1fr;
+    }
+    .table-topline {
+        flex-direction: column;
+        padding-top: 14px;
+        gap: 4px;
+    }
+    .table-seat {
+        width: 76px;
+    }
+    .table-seat .character-portrait {
+        width: 46px;
+    }
+    .seat-name {
+        max-width: 76px;
+        font-size: 9px;
+    }
+    .seat-ready {
+        font-size: 7px;
+        padding: 2px 3px;
+    }
+    .card-table {
+        height: 350px;
+    }
+    .table-caption {
+        font-size: 14px;
+    }
+    .game-tools {
+        gap: 8px;
+    }
+    .sound-control {
+        padding: 12px 9px;
+    }
+}
+@media (prefers-reduced-motion: reduce) {
+    .character-parade .character-portrait {
+        transition: none;
+    }
+    .character-parade li:hover .character-portrait {
+        transform: none;
+    }
+}

@@ -60,6 +60,8 @@ export interface Player {
     name: string;
     alive: boolean;
     ready: boolean;
+    character: string;
+    discussion_ready: boolean;
     role?: string;
     alignment?: string;
 }
@@ -81,6 +83,7 @@ export interface RoomState {
         id: string;
         name: string;
         alive: boolean;
+        character: string;
         role: string | null;
         alignment: 'cult' | 'town' | null;
         mission: { id: string; name: string; description: string } | null;
@@ -96,6 +99,25 @@ export interface RoomState {
         seconds: Record<string, number>;
     };
 }
+
+export interface Character {
+    id: string;
+    name: string;
+}
+export const characterIds = [
+    'mariner',
+    'botanist',
+    'lamplighter',
+    'archivist',
+    'baker',
+    'astronomer',
+    'ferryman',
+    'musician',
+];
+export const defaultCharacters: Character[] = characterIds.map((id) => ({
+    id,
+    name: `The ${id[0].toUpperCase()}${id.slice(1)}`,
+}));
 
 export const roles: Record<
     string,
