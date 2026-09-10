@@ -26,22 +26,22 @@ For phones on a local network, serve on `0.0.0.0`, set `APP_URL` and the Reverb/
 
 ## First-match rules (provisional)
 
-- **5–10 players**, with exactly one Veilweaver, one Acolyte, one Oracle, and the rest Townspeople. Two cultists know each other and receive the same randomly selected mission.
+- **3–10 players**: 3–4 players have **1 cultist**, 5–6 have **2**, 7–8 have **3**, and 9–10 have **4**. Exactly one cultist is the Veilweaver; any remaining cultists are Acolytes. There is always one Oracle, with the remaining town seats assigned to Townspeople. Cultists know all their teammates and receive the same randomly selected mission. The lone cultist in a 3–4-player match is the Veilweaver and can complete missions alone.
 - **25-second reveal → 45-second night → 90-second discussion → 45-second vote**, repeating night/discussion/vote. Reveal, night, and voting finish early when all living players submit. Missing night actions forfeit; missing votes abstain. Discussion always uses its full timer.
 - Each cultist’s night action chants. The Veilweaver can also veil another living player, reversing their apparent alignment for the Oracle that night. Investigations resolve after all veils, independent of submission order. Your actual role and mission are never altered. Oracle results are private and should be treated as fallible evidence.
 - **Concord:** all surviving cultists must chant; award one token to each. **Shadows:** award one per chanting cultist who was not investigated. **Patience:** award one per chanting cultist if the preceding vote did not banish a cultist (first night qualifies). A surviving lone cultist can still score.
-- The shared ritual requires `max(6, ceil(player count × 1.2))` tokens: 6 / 8 / 9 / 10 / 11 / 12 for 5 / 6 / 7 / 8 / 9 / 10 players. This allows roughly three to six successful nights when both cultists survive.
+- The shared ritual requires `max(6, ceil(player count × 1.2))` tokens: 6 / 6 / 6 / 8 / 9 / 10 / 11 / 12 for 3 / 4 / 5 / 6 / 7 / 8 / 9 / 10 players. With every cultist scoring, this takes six nights for 3–4 players, three for 5, 7, 9, or 10 players, and four for 6 or 8 players. These thresholds remain provisional as the expanded rosters are playtested.
 - One vote per living player; no self-votes. A unique plurality banishes its target. Abstention is an option that competes in the tally, and ties mean no banishment. A banished player’s allegiance stays hidden until victory.
 - Town wins immediately when all cultists are banished. Cult wins on completing the ritual, or if no townspeople remain. There is **no parity victory and no night kill** in this milestone: the ritual supplies the cult’s pressure.
 - Public text chat is available in the lobby, discussion, voting, and after victory. Banished players watch silently until the match ends. The host can then start a rematch, preserving seats and resetting all roles, missions, actions, messages, readiness, and investigation results.
 
-Tune the player limits, phase lengths, missions, and ritual multiplier in `config/game.php`. These values need playtesting; they are deliberately a small starting roster. Room rules use the server configuration, so deploy balance changes between gatherings.
+Tune the player limits, cultist counts by room size, phase lengths, missions, and ritual multiplier in `config/game.php`. These values need playtesting; they are deliberately a small starting roster. Room rules use the server configuration, so deploy balance changes between gatherings.
 
 ## Authority and hidden information
 
 `app/Game/MatchEngine.php` owns every rule. Room state is persisted as a JSON aggregate in a MySQL row. Reads that can resolve deadlines and all mutations take the same `SELECT ... FOR UPDATE` lock. Night/vote submissions are keyed by player; token awards are keyed by night and player. A phase ID rejects stale submissions, and a revision keeps clients from accepting older responses.
 
-The API builds an explicit personalized allowlist. The authoritative model hides its state when serialized. Other players’ roles, the selected mission, seat identity hashes, night targets, ballots, awards, and private investigations are never included in another player’s response. Only cultists see their partner and shared mission; final roles are public after victory. Responses use `Cache-Control: private, no-store`.
+The API builds an explicit personalized allowlist. The authoritative model hides its state when serialized. Other players’ roles, the selected mission, seat identity hashes, night targets, ballots, awards, and private investigations are never included in another player’s response. Only cultists see their teammates and shared mission; final roles are public after victory. Responses use `Cache-Control: private, no-store`.
 
 The guest-only broadcast authorization endpoint validates both the encrypted session seat and exact room channel. Reverb events contain **only a revision**, never game state. Client events are disabled. Echo invalidates the current view; authenticated HTTP fetches recover it. Periodic polling and reconnect/visibility refresh also recover missed events. Queue delays or Reverb downtime therefore do not prevent play.
 

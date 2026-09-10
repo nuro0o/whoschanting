@@ -901,7 +901,7 @@ onBeforeUnmount(() => {
                         <p>
                             {{
                                 state.phase === 'lobby'
-                                    ? 'Two cultists. One shared ritual. The threshold scales with the village.'
+                                    ? 'The cult grows with the village. One shared ritual. The threshold scales with the village.'
                                     : 'When the track fills, Cthulhu awakens and the cult wins. Time is a precious thing.'
                             }}
                         </p>

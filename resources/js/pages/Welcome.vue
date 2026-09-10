@@ -6,7 +6,7 @@ import VillageScene from '@/components/chanting/VillageScene.vue';
 import '../../css/chanting.css';
 withDefaults(
     defineProps<{ rules?: { min_players: number; max_players: number } }>(),
-    { rules: () => ({ min_players: 5, max_players: 10 }) },
+    { rules: () => ({ min_players: 3, max_players: 10 }) },
 );
 </script>
 <template>
@@ -95,8 +95,7 @@ withDefaults(
                         <h3>Invite the usual suspects.</h3>
                         <p>
                             Create a private room and share the code. Everyone
-                            gets a secret role. Two of you get a much darker
-                            agenda.
+                            gets a secret role. Some get a much darker agenda.
                         </p>
                     </article>
                     <article>
@@ -157,10 +156,13 @@ withDefaults(
                                 >First-edition rules, ready to evolve.</strong
                             >
                             {{ rules.min_players }}–{{ rules.max_players }}
-                            players, two cultists and one Oracle. Default phases
-                            last 25 seconds for the reveal, 45 for night, 90 for
-                            discussion and 45 for voting. These balance settings
-                            are provisional and configurable.
+                            players and one Oracle. There is 1 cultist with 3–4
+                            players, 2 with 5–6, 3 with 7–8, and 4 with 9–10.
+                            One cultist is the Veilweaver; the others are
+                            Acolytes. Default phases last 25 seconds for the
+                            reveal, 45 for night, 90 for discussion and 45 for
+                            voting. These balance settings are provisional and
+                            configurable.
                         </p>
                     </div>
                 </details>

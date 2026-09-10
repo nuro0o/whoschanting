@@ -153,14 +153,19 @@ class MatchEngine
             $this->ensure($s['phase'] === 'lobby' && $s['host_id'] === $id, 'Only the host can begin from the lobby.');
             $count = count($s['players']);
             $this->ensure($count >= config('game.min_players') && $count <= config('game.max_players'), 'Gather between '.config('game.min_players').' and '.config('game.max_players').' players.');
+            $cultistCount = config('game.cultists_by_player_count.'.$count);
+            $this->ensure(is_int($cultistCount) && $cultistCount >= 1 && $cultistCount < $count, 'No valid role roster is configured for this room size.');
             $this->ensure(count(array_filter($s['players'], fn (array $p): bool => ! $p['ready'])) === 0, 'Every player must be ready.');
             $ids = array_keys($s['players']);
             shuffle($ids);
             foreach ($ids as $index => $pid) {
-                $s['players'][$pid]['role'] = match ($index) {
-                    0 => 'veilweaver', 1 => 'acolyte', 2 => 'oracle', default => 'townsperson'
+                $s['players'][$pid]['role'] = match (true) {
+                    $index === 0 => 'veilweaver',
+                    $index < $cultistCount => 'acolyte',
+                    $index === $cultistCount => 'oracle',
+                    default => 'townsperson',
                 };
-                $s['players'][$pid]['alignment'] = $index < 2 ? 'cult' : 'town';
+                $s['players'][$pid]['alignment'] = $index < $cultistCount ? 'cult' : 'town';
             }
             $s['threshold'] = max(6, (int) ceil($count * config('game.tokens_per_player')));
             $missions = config('game.missions');

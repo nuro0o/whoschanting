@@ -112,7 +112,7 @@ export const roles: Record<
         name: 'The Acolyte',
         subtitle: 'Cult · keeper of the ritual',
         description:
-            'Chant each night to complete your shared mission. Keep your fellow cultist alive and your true intentions hidden.',
+            'Chant each night to complete your shared mission. Keep your fellow cultists alive and your true intentions hidden.',
         symbol: '✧',
     },
     oracle: {

@@ -36,7 +36,13 @@ const revealed = defineModel<boolean>({ default: false });
                 <p>{{ state.me.mission.description }}</p>
             </div>
             <div v-if="state.me.allies.length" class="private-separator">
-                <p class="eyebrow">YOUR FELLOW CULTIST</p>
+                <p class="eyebrow">
+                    {{
+                        state.me.allies.length === 1
+                            ? 'YOUR FELLOW CULTIST'
+                            : 'YOUR FELLOW CULTISTS'
+                    }}
+                </p>
                 <p v-for="ally in state.me.allies" :key="ally.id">
                     <strong>{{ ally.name }}</strong> ·
                     {{ roles[ally.role]?.name ?? ally.role }}

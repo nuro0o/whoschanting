@@ -8,6 +8,7 @@ use App\Models\GameRoom;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Validation\ValidationException;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 class GameTest extends TestCase
@@ -25,10 +26,10 @@ class GameTest extends TestCase
     }
 
     /** @return array{GameRoom, array<string, string>} */
-    private function match(string $mission = 'concord'): array
+    private function match(string $mission = 'concord', int $playerCount = 5): array
     {
         $room = $this->engine->create('secret-0', 'Player 0');
-        for ($i = 1; $i < 5; $i++) {
+        for ($i = 1; $i < $playerCount; $i++) {
             $this->engine->join($room->code, 'secret-'.$i, 'Player '.$i);
         }
         $identities = [];
@@ -70,6 +71,97 @@ class GameTest extends TestCase
         }
 
         return $roles;
+    }
+
+    /** @return array<string, array{int, int}> */
+    public static function rosterSizes(): array
+    {
+        return [
+            'three players' => [3, 1], 'four players' => [4, 1],
+            'five players' => [5, 2], 'six players' => [6, 2],
+            'seven players' => [7, 3], 'eight players' => [8, 3],
+            'nine players' => [9, 4], 'ten players' => [10, 4],
+        ];
+    }
+
+    #[DataProvider('rosterSizes')]
+    public function test_roster_sizes_private_teammates_and_shared_scoring(int $playerCount, int $cultistCount): void
+    {
+        [$room, $identities] = $this->match(playerCount: $playerCount);
+        $players = $room->fresh()->state['players'];
+        $cult = array_filter($players, fn (array $p): bool => $p['alignment'] === 'cult');
+        $this->assertCount($playerCount, $players);
+        $this->assertCount($cultistCount, $cult);
+        $roles = array_count_values(array_column($players, 'role'));
+        $this->assertSame(1, $roles['veilweaver']);
+        $this->assertSame($cultistCount - 1, $roles['acolyte'] ?? 0);
+        $this->assertSame(1, $roles['oracle']);
+        $this->assertSame($playerCount - $cultistCount - 1, $roles['townsperson']);
+        foreach ($identities as $id => $identity) {
+            $view = $this->engine->access($room->code, $identity);
+            foreach ($view['players'] as $public) {
+                $this->assertArrayNotHasKey('role', $public);
+                $this->assertArrayNotHasKey('alignment', $public);
+            }
+            if (isset($cult[$id])) {
+                $this->assertEqualsCanonicalizing(array_values(array_diff(array_keys($cult), [$id])), array_column($view['me']['allies'], 'id'));
+                $this->assertSame(config('game.missions.concord'), $view['me']['mission']);
+            } else {
+                $this->assertSame([], $view['me']['allies']);
+                $this->assertNull($view['me']['mission']);
+            }
+        }
+        $this->expire($room);
+        foreach (array_keys($cult) as $id) {
+            $this->act($room, $identities[$id], 'night');
+        }
+        $this->expire($room);
+        $this->assertSame($cultistCount, $room->state['tokens']);
+        $this->assertCount($cultistCount, $room->state['awards']);
+    }
+
+    public function test_three_player_town_can_win_by_banishing_the_lone_cultist(): void
+    {
+        [$room, $identities] = $this->match(playerCount: 3);
+        $cultist = $this->roles($room)['veilweaver'];
+        $this->expire($room);
+        $this->expire($room);
+        $this->expire($room);
+        $this->banish($room, $identities, $cultist);
+        $this->assertSame('town', $room->fresh()->state['winner']);
+        $this->assertSame('finished', $room->fresh()->state['phase']);
+    }
+
+    public function test_three_player_lone_cultist_can_complete_the_ritual(): void
+    {
+        [$room, $identities] = $this->match(playerCount: 3);
+        $cultist = $this->roles($room)['veilweaver'];
+        $this->expire($room);
+        for ($night = 1; $night <= 6; $night++) {
+            $this->act($room, $identities[$cultist], 'night');
+            $this->expire($room);
+            if ($night < 6) {
+                $this->expire($room);
+                $this->expire($room);
+            }
+        }
+        $this->assertSame('cult', $room->state['winner']);
+        $this->assertSame('finished', $room->state['phase']);
+        $this->assertSame(6, $room->state['tokens']);
+    }
+
+    public function test_two_players_cannot_start_and_an_eleventh_cannot_join(): void
+    {
+        $room = $this->engine->create('limit-0', 'Neighbor 0');
+        $this->engine->join($room->code, 'limit-1', 'Neighbor 1');
+        $this->act($room, 'limit-0', 'ready');
+        $this->act($room, 'limit-1', 'ready');
+        $this->assertRejected(fn () => $this->act($room, 'limit-0', 'start'));
+        for ($i = 2; $i < 10; $i++) {
+            $this->engine->join($room->code, 'limit-'.$i, 'Neighbor '.$i);
+        }
+        $this->assertRejected(fn () => $this->engine->join($room->code, 'limit-10', 'Neighbor 10'));
+        $this->assertCount(10, $room->fresh()->state['players']);
     }
 
     public function test_private_views_reveal_only_own_role_and_cult_allies(): void

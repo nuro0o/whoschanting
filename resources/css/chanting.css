@@ -1430,6 +1430,38 @@
         font-size: 34px;
     }
 }
+@media (max-width: 360px) {
+    .game-main {
+        padding-inline: 12px;
+    }
+    .action-panel {
+        padding-inline: 16px;
+    }
+    .invite-line {
+        flex-direction: column;
+    }
+    .invite-line code {
+        width: 100%;
+        padding: 12px 8px;
+        font-size: 18px;
+        letter-spacing: 3px;
+    }
+    .game-header .wordmark {
+        font-size: 18px;
+    }
+    .game-header .brand-eye {
+        display: none;
+    }
+    .room-header-meta,
+    .phase-heading {
+        flex-wrap: wrap;
+    }
+    .game-main h1,
+    .game-main h2,
+    .game-main .button {
+        overflow-wrap: anywhere;
+    }
+}
 @media (prefers-reduced-motion: reduce) {
     .chanting * {
         animation: none !important;
