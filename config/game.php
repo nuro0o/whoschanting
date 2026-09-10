@@ -1,7 +1,7 @@
 <?php
 
 return [
-    'rules_version' => 'eldritch-curses-v1',
+    'rules_version' => 'eldritch-curses-v2',
     'min_players' => (int) env('GAME_MIN_PLAYERS', 3),
     'max_players' => (int) env('GAME_MAX_PLAYERS', 10),
     'cultists_by_player_count' => [3 => 1, 4 => 1, 5 => 2, 6 => 2, 7 => 3, 8 => 3, 9 => 4, 10 => 4],

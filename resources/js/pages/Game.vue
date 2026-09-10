@@ -8,6 +8,11 @@ import {
     Eye,
     LoaderCircle,
     Moon,
+    HelpCircle,
+    MessageCircle,
+    Play,
+    LockKeyhole,
+    EyeOff,
     Send,
     ShieldCheck,
     Vote,
@@ -25,9 +30,10 @@ import {
 import RoomEntry from '@/components/chanting/RoomEntry.vue';
 import SecretRole from '@/components/chanting/SecretRole.vue';
 import RoomBriefing from '@/components/chanting/RoomBriefing.vue';
+import RoomEvents from '@/components/chanting/RoomEvents.vue';
+import RoomHelp from '@/components/chanting/RoomHelp.vue';
 import CharacterPicker from '@/components/chanting/CharacterPicker.vue';
 import CharacterPortrait from '@/components/chanting/CharacterPortrait.vue';
-import GameGlossary from '@/components/chanting/GameGlossary.vue';
 import CursePanel from '@/components/chanting/CursePanel.vue';
 import MatchRecap from '@/components/chanting/MatchRecap.vue';
 import CardTable from '@/components/chanting/CardTable.vue';
@@ -71,6 +77,95 @@ const actionSerial = ref(0);
 const revealed = ref(false);
 const message = ref('');
 const copied = ref(false);
+type RoomView = 'play' | 'role' | 'chat' | 'help';
+const activeView = ref<RoomView>('play');
+const roleRead = ref(false);
+const hintDismissed = ref(false);
+const readMessageIds = ref<Set<string>>(new Set());
+const readResultCount = ref(0);
+const secretRole = ref<InstanceType<typeof SecretRole>>();
+const chatVisible = ref(false);
+let chatObserver: IntersectionObserver | undefined;
+const unreadChat = computed(
+    () =>
+        state.value?.messages.filter(
+            (entry) =>
+                entry.name !== state.value?.me.name &&
+                !readMessageIds.value.has(entry.id),
+        ).length ?? 0,
+);
+const newResults = computed(() =>
+    revealed.value
+        ? Math.max(
+              0,
+              (state.value?.me.results.length ?? 0) - readResultCount.value,
+          )
+        : 0,
+);
+const phaseLabel = computed(
+    () =>
+        ({
+            lobby: 'Lobby',
+            reveal: 'Read your role',
+            night: 'Night actions',
+            discussion: 'Discussion',
+            voting: 'Voting',
+            finished: 'Match complete',
+        })[state.value?.phase ?? 'lobby'],
+);
+const showTargetHint = computed(
+    () => !hintDismissed.value && canSelectSeat.value,
+);
+function rememberHint() {
+    hintDismissed.value = true;
+    try {
+        localStorage.setItem('chanting-target-hint', 'seen');
+    } catch {
+        /* Storage may be unavailable. */
+    }
+}
+function readResults() {
+    readResultCount.value = state.value?.me.results.length ?? 0;
+}
+async function openResults() {
+    await navigate('role');
+    await secretRole.value?.showResults();
+}
+function markChatRead() {
+    if (
+        !chatVisible.value ||
+        document.visibilityState !== 'visible' ||
+        mistCursed.value ||
+        puzzleCursed.value ||
+        !chatList.value ||
+        chatList.value.scrollHeight -
+            chatList.value.scrollTop -
+            chatList.value.clientHeight >
+            90
+    )
+        return;
+    readMessageIds.value = new Set(
+        state.value?.messages.map((entry) => entry.id) ?? [],
+    );
+}
+async function navigate(view: RoomView, focus = true) {
+    activeView.value = view;
+    await nextTick();
+    if (focus) {
+        const destination = document.getElementById(`room-${view}`);
+        destination?.focus({ preventScroll: true });
+        destination?.scrollIntoView({ block: 'start' });
+    }
+}
+async function showRole() {
+    revealed.value = true;
+    await navigate('role');
+}
+async function showChat() {
+    await navigate('chat');
+    document.getElementById('chat-message')?.focus();
+}
+
 const chatList = ref<HTMLElement>();
 const now = ref(Date.now());
 let offset = 0;
@@ -346,19 +441,32 @@ async function copyInvite() {
     }
 }
 function onResume() {
-    if (document.visibilityState === 'visible') void refresh();
-}
-async function focusRoleToggle() {
-    await nextTick();
-    document
-        .getElementById('role-visibility-toggle')
-        ?.focus({ preventScroll: true });
+    if (document.visibilityState === 'visible') {
+        void refresh();
+        markChatRead();
+    }
 }
 async function revealRoleForAction() {
     revealed.value = true;
     await nextTick();
-    document.getElementById('private-role')?.focus();
+    document.getElementById('current-action')?.focus({ preventScroll: true });
 }
+watch([revealed, activeView], () => {
+    if (revealed.value && activeView.value === 'role') roleRead.value = true;
+});
+watch(chatList, (element) => {
+    chatObserver?.disconnect();
+    if (!element) return;
+    chatObserver = new IntersectionObserver(
+        ([entry]) => {
+            chatVisible.value = entry.isIntersecting;
+            markChatRead();
+        },
+        { threshold: 0.6 },
+    );
+    chatObserver.observe(element);
+});
+watch([mistCursed, puzzleCursed], () => markChatRead());
 watch(
     () => state.value?.me.curse?.id,
     () => {
@@ -369,13 +477,15 @@ watch(
     () => state.value?.phase_id,
     () => {
         target.value = null;
-        message.value = '';
-        if (state.value?.phase === 'lobby' || state.value?.phase === 'reveal')
+        if (state.value?.phase === 'lobby' || state.value?.phase === 'reveal') {
             revealed.value = false;
+            roleRead.value = false;
+            readResultCount.value = 0;
+        }
     },
 );
 watch(
-    () => state.value?.messages.length,
+    () => state.value?.messages.at(-1)?.id,
     async () => {
         const shouldScroll =
             !chatList.value ||
@@ -386,9 +496,16 @@ watch(
         await nextTick();
         if (shouldScroll && chatList.value)
             chatList.value.scrollTop = chatList.value.scrollHeight;
+        markChatRead();
     },
 );
 onMounted(() => {
+    try {
+        hintDismissed.value =
+            localStorage.getItem('chanting-target-hint') === 'seen';
+    } catch {
+        /* Optional preference. */
+    }
     void refresh();
     polling = setInterval(() => {
         void refresh();
@@ -404,6 +521,7 @@ onBeforeUnmount(() => {
     clearInterval(polling);
     clearInterval(clock);
     echo?.disconnect();
+    chatObserver?.disconnect();
     document.removeEventListener('visibilitychange', onResume);
     window.removeEventListener('online', onResume);
 });
@@ -469,10 +587,10 @@ onBeforeUnmount(() => {
                     <p class="eyebrow">
                         {{
                             state.phase === 'lobby'
-                                ? 'A PRIVATE GATHERING'
+                                ? 'LOBBY'
                                 : state.phase === 'finished'
-                                  ? 'THE FINAL CHAPTER'
-                                  : `${state.phase === 'night' ? 'NIGHT' : 'DAY'} ${state.day} / ${state.phase.toUpperCase()}`
+                                  ? 'MATCH COMPLETE'
+                                  : `${phaseLabel} · ${state.phase === 'night' ? 'Night' : 'Day'} ${state.day}`
                         }}
                     </p>
                     <h1>{{ heading[0] }}</h1>
@@ -508,7 +626,7 @@ onBeforeUnmount(() => {
                 for the next match.
             </p>
             <div class="game-tools">
-                <GameGlossary /><SoundControl
+                <SoundControl
                     :music="music"
                     :phase="state.phase"
                     :phase-id="state.phase_id"
@@ -521,612 +639,861 @@ onBeforeUnmount(() => {
                     :connected="!disconnected"
                 />
             </div>
-            <RoomBriefing
-                :state="state"
-                :pending="pending"
-                v-model="revealed"
-            />
-            <div class="play-stage">
-                <div
-                    class="action-stack"
-                    role="region"
-                    aria-label="Your next action"
+            <nav class="room-navigation" aria-label="Room sections">
+                <button
+                    id="nav-play"
+                    :class="{ active: activeView === 'play' }"
+                    :aria-current="activeView === 'play' ? 'page' : undefined"
+                    aria-controls="room-play"
+                    @click="navigate('play')"
                 >
-                    <SecretRole
+                    <Play :size="18" /><span>Play</span
+                    ><span
+                        v-if="
+                            state.me.alive &&
+                            !state.me.submitted &&
+                            ['night', 'voting'].includes(state.phase)
+                        "
+                        class="nav-action-dot"
+                        aria-label="Action needed"
+                    ></span>
+                </button>
+                <button
+                    id="nav-role"
+                    :class="{ active: activeView === 'role' }"
+                    :aria-current="activeView === 'role' ? 'page' : undefined"
+                    aria-controls="room-role"
+                    @click="navigate('role')"
+                >
+                    <LockKeyhole :size="18" /><span>My role</span
+                    ><span v-if="newResults" class="room-badge"
+                        >{{ newResults }} new</span
+                    >
+                </button>
+                <button
+                    id="nav-chat"
+                    :class="{ active: activeView === 'chat' }"
+                    :aria-current="activeView === 'chat' ? 'page' : undefined"
+                    aria-controls="room-chat"
+                    @click="navigate('chat')"
+                >
+                    <MessageCircle :size="18" /><span>Chat</span
+                    ><span
+                        v-if="unreadChat"
+                        class="room-badge"
+                        :aria-label="`${unreadChat} unread messages`"
+                        >{{ unreadChat > 99 ? '99+' : unreadChat }}</span
+                    >
+                </button>
+                <button
+                    id="nav-help"
+                    :class="{ active: activeView === 'help' }"
+                    :aria-current="activeView === 'help' ? 'page' : undefined"
+                    aria-controls="room-help"
+                    @click="navigate('help')"
+                >
+                    <HelpCircle :size="18" /><span>Help</span>
+                </button>
+            </nav>
+            <CursePanel
+                v-if="
+                    state.me.curse &&
+                    state.me.alive &&
+                    state.phase !== 'finished'
+                "
+                :curse="state.me.curse"
+                :time-label="timeLabel"
+                :phase-label="phaseLabel"
+                :disconnected="disconnected"
+                :pending="pending"
+                :error="curseError"
+                @solve="act('solve_curse', $event)"
+            />
+            <p
+                v-if="state.me.curse_notice && state.phase !== 'finished'"
+                class="curse-notice"
+                role="status"
+            >
+                {{ state.me.curse_notice }}
+            </p>
+
+            <div class="room-workspace" :data-view="activeView">
+                <div class="room-phase-context" aria-label="Current phase">
+                    <span
+                        >{{ phaseLabel
+                        }}<template
+                            v-if="!['lobby', 'finished'].includes(state.phase)"
+                        >
+                            · Day {{ state.day }}</template
+                        ></span
+                    >
+                    <span v-if="timeLabel"
+                        ><Clock3 :size="14" />{{
+                            seconds === 0 ? 'Resolving…' : `${timeLabel} left`
+                        }}</span
+                    >
+                </div>
+                <div
+                    id="room-play"
+                    class="room-play"
+                    role="region"
+                    tabindex="-1"
+                    aria-label="Play"
+                    v-show="activeView === 'play'"
+                >
+                    <div
                         v-if="
                             state.me.role &&
                             !['lobby', 'finished'].includes(state.phase)
                         "
-                        v-show="revealed"
-                        id="private-role"
-                        v-model="revealed"
+                        class="room-private-shortcut"
+                    >
+                        <span
+                            ><LockKeyhole :size="15" />{{
+                                revealed
+                                    ? (roles[state.me.role]?.name ??
+                                      'Your role')
+                                    : 'Your secrets are hidden'
+                            }}</span
+                        >
+                        <button
+                            id="role-visibility-toggle"
+                            class="quiet-link"
+                            @click="revealed ? (revealed = false) : showRole()"
+                        >
+                            <EyeOff v-if="revealed" :size="15" /><Eye
+                                v-else
+                                :size="15"
+                            />{{ revealed ? 'Hide secrets' : 'Reveal my role' }}
+                        </button>
+                        <button
+                            v-if="newResults"
+                            class="button new-result"
+                            @click="openResults"
+                        >
+                            {{ newResults }} new result{{
+                                newResults === 1 ? '' : 's'
+                            }}
+                        </button>
+                    </div>
+                    <RoomBriefing
                         :state="state"
-                        tabindex="-1"
-                        @hide="focusRoleToggle"
-                    />
-                    <CursePanel
-                        v-if="
-                            state.me.curse &&
-                            state.me.alive &&
-                            state.phase !== 'finished'
-                        "
-                        :curse="state.me.curse"
                         :pending="pending"
-                        :error="curseError"
-                        @solve="act('solve_curse', $event)"
-                    />
-                    <p
-                        v-if="
-                            state.me.curse_notice && state.phase !== 'finished'
-                        "
-                        class="curse-notice"
-                        role="status"
+                        :time-label="timeLabel"
                     >
-                        {{ state.me.curse_notice }}
-                    </p>
-                    <section
-                        v-if="state.phase === 'lobby'"
-                        class="game-panel action-panel"
-                    >
-                        <p class="eyebrow">THE CALM BEFORE THE CHANTING</p>
-                        <h2>Bring a few familiar faces.</h2>
-                        <p>
-                            Send your friends an invite. Once everyone is ready,
-                            the host can let the secrets begin.
-                        </p>
-                        <div v-if="lobbyRoster" class="lobby-rules">
-                            <p class="eyebrow">
-                                {{
-                                    lobbyRoster.small
-                                        ? 'SMALL GATHERING'
-                                        : 'TONIGHT’S GATHERING'
-                                }}
-                                · {{ state.players.length }} PLAYERS
-                            </p>
+                        <div
+                            v-if="showTargetHint"
+                            class="target-hint"
+                            role="note"
+                        >
                             <p>
                                 <strong
-                                    >{{ lobbyRoster.cultists }}
-                                    {{
-                                        lobbyRoster.cultists === 1
-                                            ? 'cultist'
-                                            : 'cultists'
-                                    }}, 1 Oracle, {{ lobbyRoster.townspeople }}
-                                    {{
-                                        lobbyRoster.townspeople === 1
-                                            ? 'townsperson'
-                                            : 'townspeople'
-                                    }}.</strong
+                                    >Select first. Confirm when ready.</strong
                                 >
-                                The ritual takes {{ lobbyRoster.steps }} steps.
+                                Tap a player here or at the table. Change your
+                                selection any time before confirming.
                             </p>
-                            <p v-if="lobbyRoster.small">
-                                The lone cultist adds one step each night they
-                                chant, even if investigated.
-                            </p>
-                            <p>
-                                With just one cultist and one town player left,
-                                the cult wins immediately.
-                            </p>
-                        </div>
-                        <div class="invite-line">
-                            <code>{{ code }}</code
-                            ><button
-                                class="button"
-                                @click="copyInvite"
-                                :aria-label="
-                                    copied
-                                        ? 'Invite copied'
-                                        : 'Copy invite link'
-                                "
-                            >
-                                <Check v-if="copied" :size="18" /><Copy
-                                    v-else
-                                    :size="18"
-                                />{{ copied ? 'Copied' : 'Invite' }}
+                            <button class="quiet-link" @click="rememberHint">
+                                Got it
                             </button>
                         </div>
-                        <CharacterPicker
-                            v-if="signedIn"
-                            :model-value="state.me.character"
-                            :characters="characters"
-                            :disabled="pending"
-                            @update:model-value="
-                                act('character', { character: $event })
-                            "
-                        />
-                        <p v-else class="small-help">
-                            Your character was chosen at random. Every look can
-                            have any secret role.
-                        </p>
-                        <p class="lobby-readiness" role="status">
-                            <strong
-                                >{{ readyCount }} of
-                                {{ state.players.length }} villagers
-                                ready.</strong
-                            >
-                            {{
-                                state.players.length < state.rules.min_players
-                                    ? `${state.rules.min_players - state.players.length} more needed to begin.`
-                                    : 'Everyone must be ready to begin.'
-                            }}
-                        </p>
-                        <button
-                            class="button"
-                            :class="{ primary: !myReady }"
-                            :disabled="pending"
-                            @click="act('ready')"
-                        >
-                            <Check :size="16" />{{
-                                myReady
-                                    ? 'Ready — click to unready'
-                                    : 'I’m ready for this'
-                            }}</button
-                        ><button
-                            v-if="host"
-                            class="button primary"
-                            :disabled="pending || !canStart"
-                            @click="act('start')"
-                        >
-                            Let the secrets begin <Moon :size="16" />
-                        </button>
-                        <p class="small-help">
-                            {{
-                                host
-                                    ? 'Everyone must be ready before you can start.'
-                                    : 'The host will start the match when everyone is ready.'
-                            }}
-                            Keep this browser’s cookies to return to your seat.
-                        </p>
-                    </section>
-                    <template v-if="state.phase === 'reveal'">
                         <section
-                            id="current-action"
-                            tabindex="-1"
+                            v-if="state.phase === 'lobby'"
                             class="game-panel action-panel"
                         >
-                            <h2>Keep it close.</h2>
+                            <p class="eyebrow">THE CALM BEFORE THE CHANTING</p>
+
                             <p>
-                                Your role and mission are always trustworthy.
-                                Take a moment to read them before the first
-                                night.
+                                Send your friends an invite. Once everyone is
+                                ready, the host can let the secrets begin.
                             </p>
-                            <div
-                                v-if="state.me.submitted"
-                                class="state-message"
-                            >
-                                <Check :size="17" />You’re ready. Waiting for
-                                the other villagers.
+                            <div v-if="lobbyRoster" class="lobby-rules">
+                                <p class="eyebrow">
+                                    {{
+                                        lobbyRoster.small
+                                            ? 'SMALL GATHERING'
+                                            : 'TONIGHT’S GATHERING'
+                                    }}
+                                    · {{ state.players.length }} PLAYERS
+                                </p>
+                                <p>
+                                    <strong
+                                        >{{ lobbyRoster.cultists }}
+                                        {{
+                                            lobbyRoster.cultists === 1
+                                                ? 'cultist'
+                                                : 'cultists'
+                                        }}, 1 Oracle,
+                                        {{ lobbyRoster.townspeople }}
+                                        {{
+                                            lobbyRoster.townspeople === 1
+                                                ? 'townsperson'
+                                                : 'townspeople'
+                                        }}.</strong
+                                    >
+                                    The ritual takes
+                                    {{ lobbyRoster.steps }} steps.
+                                </p>
+                                <p v-if="lobbyRoster.small">
+                                    The lone cultist adds one step each night
+                                    they chant, even if investigated.
+                                </p>
+                                <p>
+                                    With just one cultist and one town player
+                                    left, the cult wins immediately.
+                                </p>
                             </div>
-                            <button
-                                v-else
-                                class="button primary"
-                                :disabled="pending || !revealed"
-                                @click="act('ready')"
-                            >
-                                <ShieldCheck :size="17" />I know who I am
-                            </button>
-                        </section></template
-                    >
-                    <section
-                        v-if="state.phase === 'night'"
-                        class="game-panel action-panel"
-                        id="current-action"
-                        tabindex="-1"
-                    >
-                        <p class="eyebrow">
-                            <Moon :size="13" /> AFTER THE CANDLES GO OUT
-                        </p>
-                        <h2>
-                            {{
-                                !state.me.alive
-                                    ? 'A quiet night to watch.'
-                                    : !revealed
-                                      ? 'Your private night move.'
-                                      : state.me.role === 'oracle'
-                                        ? 'Look a little closer.'
-                                        : state.me.alignment === 'cult'
-                                          ? 'Something stirs below.'
-                                          : 'Keep a watchful eye.'
-                            }}
-                        </h2>
-                        <p v-if="!state.me.alive">
-                            The living are making their moves. Dawn will come
-                            soon.
-                        </p>
-                        <div
-                            v-else-if="!revealed && state.me.submitted"
-                            class="state-message"
-                        >
-                            <Check :size="17" />Your action is sealed. Wait for
-                            dawn.
-                        </div>
-                        <template v-else-if="!revealed">
-                            <p>
-                                Your night action stays hidden with your role.
-                                Reveal it when you are ready to make your move.
+                            <div class="invite-line">
+                                <code>{{ code }}</code
+                                ><button
+                                    class="button"
+                                    @click="copyInvite"
+                                    :aria-label="
+                                        copied
+                                            ? 'Invite copied'
+                                            : 'Copy invite link'
+                                    "
+                                >
+                                    <Check v-if="copied" :size="18" /><Copy
+                                        v-else
+                                        :size="18"
+                                    />{{ copied ? 'Copied' : 'Invite friends' }}
+                                </button>
+                            </div>
+                            <CharacterPicker
+                                v-if="signedIn"
+                                :model-value="state.me.character"
+                                :characters="characters"
+                                :disabled="pending"
+                                @update:model-value="
+                                    act('character', { character: $event })
+                                "
+                            />
+                            <p v-else class="small-help">
+                                Your character was chosen at random. Every look
+                                can have any secret role.
                             </p>
-                            <button
-                                class="button primary"
-                                @click="revealRoleForAction"
-                            >
-                                <Eye :size="16" />Reveal my role & action
-                            </button>
-                        </template>
-                        <template v-else
-                            ><p>
+                            <p class="lobby-readiness" role="status">
+                                <strong
+                                    >{{ readyCount }} of
+                                    {{ state.players.length }} villagers
+                                    ready.</strong
+                                >
                                 {{
-                                    state.me.role === 'oracle'
-                                        ? 'Choose a living player to investigate. Your private reading arrives at dawn.'
-                                        : state.me.role === 'veilweaver'
-                                          ? 'Choose someone to veil and curse, or chant without a target. Their alignment appears reversed tonight; a random curse takes hold at dawn.'
-                                          : state.me.role === 'acolyte'
-                                            ? 'Choose someone to curse, or chant without a target. A random curse takes hold at dawn. Your chant advances the ritual if your shared mission’s condition is met.'
-                                            : 'Stay alert. You have no secret ability, but your voice and your vote matter in the morning.'
+                                    state.players.length <
+                                    state.rules.min_players
+                                        ? `${state.rules.min_players - state.players.length} more needed to begin.`
+                                        : 'Everyone must be ready to begin.'
                                 }}
                             </p>
+                            <button
+                                class="button"
+                                :class="{ primary: !myReady }"
+                                :disabled="pending"
+                                @click="act('ready')"
+                            >
+                                <Check :size="16" />{{
+                                    myReady
+                                        ? 'Ready — click to unready'
+                                        : 'Ready'
+                                }}</button
+                            ><button
+                                v-if="host"
+                                class="button primary"
+                                :disabled="pending || !canStart"
+                                @click="act('start')"
+                            >
+                                Start game <Moon :size="16" />
+                            </button>
+                            <p class="small-help">
+                                {{
+                                    host
+                                        ? 'Everyone must be ready before you can start.'
+                                        : 'The host will start the match when everyone is ready.'
+                                }}
+                                Keep this browser’s cookies to return to your
+                                seat.
+                            </p>
+                        </section>
+                        <template v-if="state.phase === 'reveal'">
+                            <section
+                                id="current-action"
+                                tabindex="-1"
+                                class="game-panel action-panel"
+                            >
+                                <p>
+                                    Your private card explains your objective,
+                                    ability and team. Keep it away from curious
+                                    neighbors.
+                                </p>
+                                <button
+                                    v-if="!state.me.submitted"
+                                    class="button"
+                                    @click="showRole"
+                                >
+                                    <Eye :size="16" />{{
+                                        roleRead
+                                            ? 'Read my role again'
+                                            : 'Reveal my role'
+                                    }}
+                                </button>
+                                <div
+                                    v-if="state.me.submitted"
+                                    class="state-message"
+                                >
+                                    <Check :size="17" />You’re ready. Waiting
+                                    for the other villagers.
+                                </div>
+                                <button
+                                    v-else
+                                    class="button primary"
+                                    :disabled="pending || !roleRead"
+                                    @click="act('ready')"
+                                >
+                                    <ShieldCheck :size="17" />Ready for night
+                                </button>
+                            </section></template
+                        >
+                        <section
+                            v-if="state.phase === 'night'"
+                            class="game-panel action-panel"
+                            id="current-action"
+                            tabindex="-1"
+                        >
+                            <p class="eyebrow">
+                                <Moon :size="13" /> AFTER THE CANDLES GO OUT
+                            </p>
+                            <h2>
+                                {{
+                                    !state.me.alive
+                                        ? 'A quiet night to watch.'
+                                        : !revealed
+                                          ? 'Your private night move.'
+                                          : state.me.role === 'oracle'
+                                            ? 'Look a little closer.'
+                                            : state.me.alignment === 'cult'
+                                              ? 'Something stirs below.'
+                                              : 'Keep a watchful eye.'
+                                }}
+                            </h2>
+                            <p v-if="!state.me.alive">
+                                The living are making their moves. Dawn will
+                                come soon.
+                            </p>
                             <div
-                                v-if="state.me.submitted"
+                                v-else-if="!revealed && state.me.submitted"
                                 class="state-message"
                             >
                                 <Check :size="17" />Your action is sealed. Wait
                                 for dawn.
                             </div>
-                            <template v-else
-                                ><div
-                                    v-if="canChooseNightTarget"
-                                    class="target-list"
-                                    role="group"
-                                    aria-label="Night target"
-                                >
-                                    <button
-                                        v-for="player in targets"
-                                        :key="player.id"
-                                        class="target-button"
-                                        :class="{
-                                            selected: target === player.id,
-                                        }"
-                                        :aria-pressed="target === player.id"
-                                        :disabled="pending || puzzleCursed"
-                                        @click="target = player.id"
-                                    >
-                                        <Check
-                                            v-if="target === player.id"
-                                            :size="15"
-                                        /><Circle v-else :size="15" /><span>{{
-                                            player.name
-                                        }}</span></button
-                                    ><button
-                                        v-if="!requiresTarget"
-                                        class="target-button"
-                                        :class="{ selected: target === null }"
-                                        :aria-pressed="target === null"
-                                        :disabled="pending"
-                                        @click="target = null"
-                                    >
-                                        <Moon :size="15" /><span
-                                            >Chant without a target</span
-                                        >
-                                    </button>
-                                </div>
+                            <template v-else-if="!revealed">
+                                <p>
+                                    Your night action stays hidden with your
+                                    role. Reveal it when you are ready to make
+                                    your move.
+                                </p>
                                 <button
                                     class="button primary"
-                                    :disabled="
-                                        pending ||
-                                        (requiresTarget && !target) ||
-                                        (puzzleCursed && !!target)
-                                    "
-                                    :aria-describedby="
-                                        puzzleCursed
-                                            ? 'night-curse-help'
-                                            : undefined
-                                    "
-                                    @click="act('night', { target })"
+                                    @click="revealRoleForAction"
                                 >
-                                    {{ nightLabel }}<Check :size="16" />
+                                    <Eye :size="16" />Reveal my role & action
                                 </button>
-                                <p
-                                    v-if="puzzleCursed"
-                                    id="night-curse-help"
-                                    class="curse-action-help"
-                                >
-                                    Solve your curse above before confirming a
-                                    target.
+                            </template>
+                            <template v-else
+                                ><p>
                                     {{
-                                        requiresTarget
-                                            ? 'You can let this night pass without investigating.'
-                                            : 'You can still act without a target.'
+                                        state.me.role === 'oracle'
+                                            ? 'Choose a living player to investigate. Your private reading arrives at dawn.'
+                                            : state.me.role === 'veilweaver'
+                                              ? 'Choose someone to veil and curse, or chant without a target. Their alignment appears reversed tonight; a random curse takes hold at dawn.'
+                                              : state.me.role === 'acolyte'
+                                                ? 'Choose someone to curse, or chant without a target. A random curse takes hold at dawn. Your chant advances the ritual if your shared mission’s condition is met.'
+                                                : 'Stay alert. You have no secret ability, but your voice and your vote matter in the morning.'
                                     }}
                                 </p>
-                                <p class="small-help">
-                                    One final action per night. Missing the
-                                    deadline forfeits your action.
-                                </p></template
-                            ></template
-                        >
-                    </section>
-                    <section
-                        v-if="state.phase === 'discussion'"
-                        class="game-panel action-panel"
-                        id="current-action"
-                        tabindex="-1"
-                    >
-                        <p class="eyebrow">THE MORNING AFTER</p>
-                        <h2>Well, that was suspicious.</h2>
-                        <p>
-                            Compare stories in the village chat or talk with
-                            your friends on a call. Keep an eye on the ritual.
-                            Mark yourself ready when you have said your piece.
-                            Voting begins when everyone living is ready, or the
-                            timer ends.
-                        </p>
-                        <template v-if="state.me.alive"
-                            ><p
-                                v-if="state.me.submitted"
-                                class="state-message"
-                                role="status"
+                                <div
+                                    v-if="state.me.submitted"
+                                    class="state-message"
+                                >
+                                    <Check :size="17" />Your action is sealed.
+                                    Wait for dawn.
+                                </div>
+                                <template v-else
+                                    ><div
+                                        v-if="canChooseNightTarget"
+                                        class="target-list"
+                                        role="group"
+                                        aria-label="Night target"
+                                    >
+                                        <button
+                                            v-for="player in targets"
+                                            :key="player.id"
+                                            class="target-button"
+                                            :class="{
+                                                selected: target === player.id,
+                                            }"
+                                            :aria-pressed="target === player.id"
+                                            :disabled="
+                                                pending ||
+                                                puzzleCursed ||
+                                                mistCursed ||
+                                                disconnected
+                                            "
+                                            @click="target = player.id"
+                                        >
+                                            <Check
+                                                v-if="target === player.id"
+                                                :size="15"
+                                            /><Circle
+                                                v-else
+                                                :size="15"
+                                            /><span>{{
+                                                player.name
+                                            }}</span></button
+                                        ><button
+                                            v-if="!requiresTarget"
+                                            class="target-button"
+                                            :class="{
+                                                selected: target === null,
+                                            }"
+                                            :aria-pressed="target === null"
+                                            :disabled="pending"
+                                            @click="target = null"
+                                        >
+                                            <Moon :size="15" /><span
+                                                >Chant without a target</span
+                                            >
+                                        </button>
+                                    </div>
+                                    <button
+                                        class="button primary"
+                                        :disabled="
+                                            pending ||
+                                            mistCursed ||
+                                            puzzleCursed ||
+                                            disconnected ||
+                                            (requiresTarget && !target) ||
+                                            (puzzleCursed && !!target)
+                                        "
+                                        :aria-describedby="
+                                            puzzleCursed
+                                                ? 'night-curse-help'
+                                                : undefined
+                                        "
+                                        @click="act('night', { target })"
+                                    >
+                                        {{ nightLabel }}<Check :size="16" />
+                                    </button>
+                                    <p
+                                        v-if="puzzleCursed"
+                                        id="night-curse-help"
+                                        class="curse-action-help"
+                                    >
+                                        Complete the curse challenge to return
+                                        to your action. The phase timer keeps
+                                        running.
+                                    </p>
+                                    <p class="small-help">
+                                        One final action per night. Missing the
+                                        deadline forfeits your action.
+                                    </p></template
+                                ></template
                             >
-                                <Check :size="17" />You are ready for voting.
-                                The village can see your badge.
+                        </section>
+                        <section
+                            v-if="state.phase === 'discussion'"
+                            class="game-panel action-panel"
+                            id="current-action"
+                            tabindex="-1"
+                        >
+                            <p class="eyebrow">THE MORNING AFTER</p>
+
+                            <p>
+                                Compare stories in the village chat or talk with
+                                your friends on a call. Keep an eye on the
+                                ritual. Mark yourself ready when you have said
+                                your piece. Voting begins when everyone living
+                                is ready, or the timer ends.
+                            </p>
+                            <button class="button" @click="showChat">
+                                <MessageCircle :size="17" />Open village
+                                chat<span
+                                    v-if="unreadChat"
+                                    class="room-badge"
+                                    >{{ unreadChat }}</span
+                                >
+                            </button>
+                            <template v-if="state.me.alive"
+                                ><p
+                                    v-if="state.me.submitted"
+                                    class="state-message"
+                                    role="status"
+                                >
+                                    <Check :size="17" />You are ready for
+                                    voting. The village can see your badge.
+                                </p>
+                                <button
+                                    v-else
+                                    class="button primary"
+                                    :disabled="pending"
+                                    @click="act('discussion_ready')"
+                                >
+                                    <Check :size="17" />Ready for voting
+                                </button>
+                                <p class="small-help">
+                                    {{
+                                        state.players.filter(
+                                            (p) =>
+                                                p.alive && p.discussion_ready,
+                                        ).length
+                                    }}
+                                    of
+                                    {{
+                                        state.players.filter((p) => p.alive)
+                                            .length
+                                    }}
+                                    ready for voting. This choice is final.
+                                </p></template
+                            >
+                        </section>
+                        <section
+                            v-if="state.phase === 'voting'"
+                            class="game-panel action-panel"
+                            id="current-action"
+                            tabindex="-1"
+                        >
+                            <p class="eyebrow">
+                                <Vote :size="14" /> THE VILLAGE MUST DECIDE
+                            </p>
+
+                            <p v-if="!state.me.alive">
+                                The living are deciding who to banish. You can
+                                watch the result when the votes are counted.
+                            </p>
+                            <template v-else>
+                                <div
+                                    v-if="state.me.submitted"
+                                    class="state-message"
+                                >
+                                    <Check :size="17" />Your vote is sealed. The
+                                    village will know the result shortly.
+                                </div>
+                                <template v-else
+                                    ><div
+                                        class="target-list"
+                                        role="group"
+                                        aria-label="Vote to banish"
+                                    >
+                                        <button
+                                            v-for="player in targets"
+                                            :key="player.id"
+                                            class="target-button"
+                                            :class="{
+                                                selected: target === player.id,
+                                            }"
+                                            :aria-pressed="target === player.id"
+                                            :disabled="
+                                                pending ||
+                                                puzzleCursed ||
+                                                mistCursed ||
+                                                disconnected
+                                            "
+                                            @click="target = player.id"
+                                        >
+                                            <Check
+                                                v-if="target === player.id"
+                                                :size="15"
+                                            /><Circle
+                                                v-else
+                                                :size="15"
+                                            /><span>{{
+                                                player.name
+                                            }}</span></button
+                                        ><button
+                                            class="target-button"
+                                            :class="{
+                                                selected: target === null,
+                                            }"
+                                            :aria-pressed="target === null"
+                                            :disabled="pending"
+                                            @click="target = null"
+                                        >
+                                            <Circle :size="15" /><span
+                                                >Abstain</span
+                                            >
+                                        </button>
+                                    </div>
+                                    <button
+                                        class="button coral"
+                                        :disabled="
+                                            pending ||
+                                            puzzleCursed ||
+                                            mistCursed ||
+                                            disconnected
+                                        "
+                                        :aria-describedby="
+                                            puzzleCursed
+                                                ? 'vote-curse-help'
+                                                : undefined
+                                        "
+                                        @click="act('vote', { target })"
+                                    >
+                                        {{
+                                            target
+                                                ? `Confirm vote: ${targets.find((p) => p.id === target)?.name}`
+                                                : 'Confirm abstention'
+                                        }}<Vote :size="16" />
+                                    </button>
+                                    <p
+                                        v-if="puzzleCursed"
+                                        id="vote-curse-help"
+                                        class="curse-action-help"
+                                    >
+                                        Complete the curse challenge to return
+                                        to your vote.
+                                    </p>
+                                    <p class="small-help">
+                                        You cannot change a submitted vote.
+                                        Missing the deadline counts as
+                                        abstention. Most votes banishes a
+                                        player; ties or abstention winning
+                                        banish nobody.
+                                    </p></template
+                                ></template
+                            >
+                        </section>
+                        <section
+                            v-if="state.phase === 'finished'"
+                            class="game-panel action-panel victory-panel"
+                            :class="{ 'cult-win': state.winner === 'cult' }"
+                        >
+                            <div class="victory-sigil" aria-hidden="true">
+                                {{ state.winner === 'cult' ? '◈' : '✦' }}
+                            </div>
+                            <p class="eyebrow" style="justify-content: center">
+                                {{
+                                    state.winner === 'cult'
+                                        ? 'THE CULT PREVAILS'
+                                        : 'THE TOWN PREVAILS'
+                                }}
+                            </p>
+                            <h2>
+                                {{
+                                    state.winner === 'cult'
+                                        ? 'The sea answers back.'
+                                        : 'A new dawn. For now.'
+                                }}
+                            </h2>
+                            <p>{{ state.win_reason }}</p>
+                            <p>
+                                Every role is now face-up around the table. Time
+                                for a few explanations.
                             </p>
                             <button
-                                v-else
+                                v-if="host"
                                 class="button primary"
                                 :disabled="pending"
-                                @click="act('discussion_ready')"
+                                @click="act('rematch')"
                             >
-                                <Check :size="17" />I’m done discussing
+                                Play again
                             </button>
-                            <p class="small-help">
-                                {{
-                                    state.players.filter(
-                                        (p) => p.alive && p.discussion_ready,
-                                    ).length
-                                }}
-                                of
-                                {{
-                                    state.players.filter((p) => p.alive).length
-                                }}
-                                ready for voting. This choice is final.
-                            </p></template
-                        >
-                    </section>
-                    <section
-                        v-if="state.phase === 'voting'"
-                        class="game-panel action-panel"
-                        id="current-action"
-                        tabindex="-1"
-                    >
-                        <p class="eyebrow">
-                            <Vote :size="14" /> THE VILLAGE MUST DECIDE
-                        </p>
-                        <h2>Point a finger.</h2>
-                        <p v-if="!state.me.alive">
-                            The living are deciding who to banish. You can watch
-                            the result when the votes are counted.
-                        </p>
-                        <template v-else
-                            ><p>
-                                The player with the most votes is banished.
-                                Ties, or abstention winning the vote, mean no
-                                banishment.
+                            <p v-else class="small-help">
+                                Your host can start a new gathering. Your seat
+                                is already saved.
                             </p>
-                            <div
-                                v-if="state.me.submitted"
-                                class="state-message"
-                            >
-                                <Check :size="17" />Your vote is sealed. The
-                                village will know the result shortly.
-                            </div>
-                            <template v-else
-                                ><div
-                                    class="target-list"
-                                    role="group"
-                                    aria-label="Vote to banish"
-                                >
-                                    <button
-                                        v-for="player in targets"
-                                        :key="player.id"
-                                        class="target-button"
-                                        :class="{
-                                            selected: target === player.id,
-                                        }"
-                                        :aria-pressed="target === player.id"
-                                        :disabled="pending || puzzleCursed"
-                                        @click="target = player.id"
-                                    >
-                                        <Check
-                                            v-if="target === player.id"
-                                            :size="15"
-                                        /><Circle v-else :size="15" /><span>{{
-                                            player.name
-                                        }}</span></button
-                                    ><button
-                                        class="target-button"
-                                        :class="{ selected: target === null }"
-                                        :aria-pressed="target === null"
-                                        :disabled="pending"
-                                        @click="target = null"
-                                    >
-                                        <Circle :size="15" /><span
-                                            >Abstain</span
-                                        >
-                                    </button>
-                                </div>
-                                <button
-                                    class="button coral"
-                                    :disabled="
-                                        pending || (puzzleCursed && !!target)
-                                    "
-                                    :aria-describedby="
-                                        puzzleCursed
-                                            ? 'vote-curse-help'
-                                            : undefined
-                                    "
-                                    @click="act('vote', { target })"
-                                >
-                                    {{
-                                        target
-                                            ? `Vote to banish ${targets.find((p) => p.id === target)?.name}`
-                                            : 'Confirm abstention'
-                                    }}<Vote :size="16" />
-                                </button>
-                                <p
-                                    v-if="puzzleCursed"
-                                    id="vote-curse-help"
-                                    class="curse-action-help"
-                                >
-                                    Solve your curse above before confirming a
-                                    target, or choose Abstain.
-                                </p>
-                                <p class="small-help">
-                                    You cannot change a submitted vote. Missing
-                                    the deadline counts as abstention.
-                                </p></template
-                            ></template
-                        >
-                    </section>
-                    <section
-                        v-if="state.phase === 'finished'"
-                        class="game-panel action-panel victory-panel"
-                        :class="{ 'cult-win': state.winner === 'cult' }"
-                    >
-                        <div class="victory-sigil" aria-hidden="true">
-                            {{ state.winner === 'cult' ? '◈' : '✦' }}
-                        </div>
-                        <p class="eyebrow" style="justify-content: center">
-                            {{
-                                state.winner === 'cult'
-                                    ? 'THE CULT PREVAILS'
-                                    : 'THE TOWN PREVAILS'
-                            }}
-                        </p>
-                        <h2>
-                            {{
-                                state.winner === 'cult'
-                                    ? 'The sea answers back.'
-                                    : 'A new dawn. For now.'
-                            }}
-                        </h2>
-                        <p>{{ state.win_reason }}</p>
-                        <p>
-                            Every role is now face-up around the table. Time for
-                            a few explanations.
-                        </p>
-                        <button
-                            v-if="host"
-                            class="button primary"
-                            :disabled="pending"
-                            @click="act('rematch')"
-                        >
-                            One more suspicious evening
-                        </button>
-                        <p v-else class="small-help">
-                            Your host can start a new gathering. Your seat is
-                            already saved.
-                        </p>
-                    </section>
-                </div>
-                <CardTable
-                    :class="{ 'is-mist-cursed': mistCursed }"
-                    :players="state.players"
-                    :phase="state.phase"
-                    :phase-id="state.phase_id"
-                    :me-id="state.me.id"
-                    :submitted="state.me.submitted"
-                    :action-serial="actionSerial"
-                    :ritual-tokens="state.ritual.tokens"
-                    :ritual-threshold="
-                        state.phase === 'lobby'
-                            ? (lobbyRoster?.steps ?? 0)
-                            : state.ritual.threshold
-                    "
-                    :winner="state.winner"
-                    :selected-target="
-                        state.phase === 'night' && !revealed ? null : target
-                    "
-                    :can-select="canSelectSeat"
-                    @select="selectSeat"
-                />
-            </div>
-            <div
-                class="match-layout"
-                :class="{ 'is-lobby': state.phase === 'lobby' }"
-            >
-                <section class="game-panel roster-panel">
-                    <div class="panel-title">
-                        <h2>The villagers</h2>
-                        <span
-                            >{{ state.players.length }} /
-                            {{ state.rules.max_players }}</span
-                        >
-                    </div>
-                    <ul class="player-list">
-                        <li
-                            v-for="player in state.players"
-                            :key="player.id"
-                            class="player-row"
-                            :class="{
-                                'is-me': player.id === state.me.id,
-                                'is-dead': !player.alive,
-                            }"
-                        >
-                            <CharacterPortrait
-                                :character="player.character"
-                                decorative
-                            /><span class="player-name"
-                                >{{ player.name
-                                }}<small
-                                    >{{
-                                        player.id === state.me.id
-                                            ? 'You'
-                                            : player.id === state.host_id
-                                              ? 'Host'
-                                              : !player.alive
-                                                ? 'Banished'
-                                                : 'Villager'
-                                    }}<template
-                                        v-if="
-                                            state.phase === 'finished' &&
-                                            player.role
-                                        "
-                                    >
-                                        ·
-                                        {{
-                                            roles[player.role]?.name ??
-                                            player.role
-                                        }}</template
-                                    ></small
-                                ></span
-                            ><span
-                                v-if="state.phase === 'lobby'"
-                                class="player-status"
-                                >{{ player.ready ? 'Ready' : 'Waiting' }}</span
-                            >
-                            <span
-                                v-else-if="
-                                    state.phase === 'discussion' &&
-                                    player.alive &&
-                                    player.discussion_ready
-                                "
-                                class="player-status discussion-badge"
-                                >Ready for voting</span
-                            >
-                        </li>
-                    </ul>
-                    <p class="roster-footnote">
-                        {{
+                        </section>
+                    </RoomBriefing>
+                    <CardTable
+                        :class="{ 'is-mist-cursed': mistCursed }"
+                        :players="state.players"
+                        :phase="state.phase"
+                        :phase-id="state.phase_id"
+                        :me-id="state.me.id"
+                        :submitted="state.me.submitted"
+                        :action-serial="actionSerial"
+                        :ritual-tokens="state.ritual.tokens"
+                        :ritual-threshold="
                             state.phase === 'lobby'
-                                ? `${readyCount} ready · ${state.rules.min_players} needed to begin`
-                                : `${state.players.filter((p) => p.alive).length} villagers remain`
-                        }}
-                    </p>
-                </section>
-                <div class="main-stack">
+                                ? (lobbyRoster?.steps ?? 0)
+                                : state.ritual.threshold
+                        "
+                        :winner="state.winner"
+                        :selected-target="
+                            state.phase === 'night' && !revealed ? null : target
+                        "
+                        :can-select="canSelectSeat"
+                        @select="selectSeat"
+                    />
+
+                    <RoomEvents :log="state.log" />
                     <MatchRecap
                         v-if="state.phase === 'finished' && state.recap"
                         :recap="state.recap"
                         :players="state.players"
                     />
+
+                    <div class="room-village-details">
+                        <section class="game-panel roster-panel">
+                            <div class="panel-title">
+                                <h2>The villagers</h2>
+                                <span
+                                    >{{ state.players.length }} /
+                                    {{ state.rules.max_players }}</span
+                                >
+                            </div>
+                            <ul class="player-list">
+                                <li
+                                    v-for="player in state.players"
+                                    :key="player.id"
+                                    class="player-row"
+                                    :class="{
+                                        'is-me': player.id === state.me.id,
+                                        'is-dead': !player.alive,
+                                    }"
+                                >
+                                    <CharacterPortrait
+                                        :character="player.character"
+                                        decorative
+                                    /><span class="player-name"
+                                        >{{ player.name
+                                        }}<small
+                                            >{{
+                                                player.id === state.me.id
+                                                    ? 'You'
+                                                    : player.id ===
+                                                        state.host_id
+                                                      ? 'Host'
+                                                      : !player.alive
+                                                        ? 'Banished'
+                                                        : 'Villager'
+                                            }}<template
+                                                v-if="
+                                                    state.phase ===
+                                                        'finished' &&
+                                                    player.role
+                                                "
+                                            >
+                                                ·
+                                                {{
+                                                    roles[player.role]?.name ??
+                                                    player.role
+                                                }}</template
+                                            ></small
+                                        ></span
+                                    ><span
+                                        v-if="state.phase === 'lobby'"
+                                        class="player-status"
+                                        >{{
+                                            player.ready ? 'Ready' : 'Waiting'
+                                        }}</span
+                                    >
+                                    <span
+                                        v-else-if="
+                                            state.phase === 'discussion' &&
+                                            player.alive &&
+                                            player.discussion_ready
+                                        "
+                                        class="player-status discussion-badge"
+                                        >Ready for voting</span
+                                    >
+                                </li>
+                            </ul>
+                            <p class="roster-footnote">
+                                {{
+                                    state.phase === 'lobby'
+                                        ? `${readyCount} ready · ${state.rules.min_players} needed to begin`
+                                        : `${state.players.filter((p) => p.alive).length} villagers remain`
+                                }}
+                            </p>
+                        </section>
+                        <section class="game-panel ritual-panel">
+                            <div class="ritual-heading">
+                                <h2>
+                                    {{
+                                        state.phase === 'finished'
+                                            ? 'Final ritual progress'
+                                            : 'Ritual progress'
+                                    }}
+                                </h2>
+                                <span
+                                    v-if="
+                                        state.phase !== 'lobby' &&
+                                        state.ritual.threshold > 0
+                                    "
+                                    >{{ state.ritual.tokens }}
+                                    <small
+                                        >/
+                                        {{ state.ritual.threshold }}
+                                        steps</small
+                                    ></span
+                                >
+                            </div>
+                            <p
+                                v-if="state.phase === 'lobby'"
+                                class="ritual-pregame"
+                            >
+                                {{
+                                    lobbyRoster
+                                        ? `${lobbyRoster.steps} steps with ${state.players.length} players.`
+                                        : `Gather at least ${state.rules.min_players} players to see the ritual goal.`
+                                }}
+                            </p>
+                            <div
+                                v-if="
+                                    state.phase !== 'lobby' &&
+                                    state.ritual.threshold > 0
+                                "
+                                class="ritual-tokens"
+                                role="progressbar"
+                                aria-label="Cult ritual progress in steps"
+                                :aria-valuenow="state.ritual.tokens"
+                                :aria-valuemin="0"
+                                :aria-valuemax="state.ritual.threshold"
+                            >
+                                <span
+                                    v-for="token in state.ritual.threshold"
+                                    :key="token"
+                                    class="ritual-token"
+                                    :class="{
+                                        filled: token <= state.ritual.tokens,
+                                    }"
+                                ></span>
+                            </div>
+                            <p>
+                                {{
+                                    state.phase === 'lobby'
+                                        ? 'The goal adjusts as friends join. Fill the track and the cult wins.'
+                                        : state.phase === 'finished'
+                                          ? `${state.ritual.tokens} of ${state.ritual.threshold} ritual steps were completed. ${state.ritual.tokens >= state.ritual.threshold ? 'The ritual reached its goal.' : 'The match ended before the ritual was complete.'}`
+                                          : `Each filled mark is one step closer. ${Math.max(0, state.ritual.threshold - state.ritual.tokens)} more steps complete the ritual and the cult wins.`
+                                }}
+                            </p>
+                            <p
+                                v-if="
+                                    !['lobby', 'finished'].includes(state.phase)
+                                "
+                                class="ritual-curse-level"
+                            >
+                                <strong
+                                    >Curse level {{ state.ritual.level }} /
+                                    3</strong
+                                >
+                                {{
+                                    state.ritual.level === 3
+                                        ? 'Misdirection can now turn a chosen target against you.'
+                                        : 'As the ritual advances, curses become harder. Misdirection awakens at level 3.'
+                                }}
+                            </p>
+                        </section>
+                    </div>
+                </div>
+                <aside
+                    id="room-chat"
+                    class="room-chat"
+                    tabindex="-1"
+                    aria-label="Village chat"
+                >
                     <section class="game-panel chat-panel">
                         <div class="panel-title">
                             <h2>Village chat</h2>
@@ -1138,10 +1505,11 @@ onBeforeUnmount(() => {
                             role="status"
                         >
                             A curse tangles the village’s words. Complete the
-                            focus challenge above to read clearly again.
+                            focus challenge to read clearly again.
                         </p>
                         <div
                             ref="chatList"
+                            @scroll.passive="markChatRead"
                             class="chat-messages"
                             role="log"
                             aria-label="Village messages"
@@ -1196,97 +1564,80 @@ onBeforeUnmount(() => {
                             </p>
                         </form>
                     </section>
-                </div>
-                <aside
-                    class="side-stack"
-                    aria-label="Ritual and private information"
+                </aside>
+                <section
+                    id="room-role"
+                    class="room-role-view"
+                    v-show="activeView === 'role'"
+                    tabindex="-1"
+                    aria-label="My role"
                 >
-                    <section class="game-panel ritual-panel">
-                        <div class="ritual-heading">
-                            <h2>
-                                {{
-                                    state.phase === 'finished'
-                                        ? 'Ritual achieved'
-                                        : 'The gathering'
-                                }}
-                            </h2>
-                            <span
-                                v-if="
-                                    state.phase !== 'lobby' &&
-                                    state.ritual.threshold > 0
-                                "
-                                >{{ state.ritual.tokens }}
-                                <small
-                                    >/ {{ state.ritual.threshold }} steps</small
-                                ></span
-                            >
-                        </div>
-                        <p
-                            v-if="state.phase === 'lobby'"
-                            class="ritual-pregame"
-                        >
+                    <SecretRole
+                        v-if="
+                            state.me.role &&
+                            !['lobby', 'finished'].includes(state.phase)
+                        "
+                        id="private-role"
+                        ref="secretRole"
+                        v-model="revealed"
+                        :state="state"
+                        :active="
+                            activeView === 'role' &&
+                            !puzzleCursed &&
+                            !mistCursed
+                        "
+                        :new-results="newResults"
+                        @results-read="readResults"
+                    />
+                    <div v-else class="game-panel room-empty">
+                        <h2>
                             {{
-                                lobbyRoster
-                                    ? `${lobbyRoster.steps} steps with ${state.players.length} players.`
-                                    : `Gather at least ${state.rules.min_players} players to see the ritual goal.`
+                                state.phase === 'finished'
+                                    ? 'The secrets are out'
+                                    : 'Your role is waiting'
                             }}
-                        </p>
-                        <div
-                            v-if="
-                                state.phase !== 'lobby' &&
-                                state.ritual.threshold > 0
-                            "
-                            class="ritual-tokens"
-                            role="progressbar"
-                            aria-label="Cult ritual progress in steps"
-                            :aria-valuenow="state.ritual.tokens"
-                            :aria-valuemin="0"
-                            :aria-valuemax="state.ritual.threshold"
-                        >
-                            <span
-                                v-for="token in state.ritual.threshold"
-                                :key="token"
-                                class="ritual-token"
-                                :class="{
-                                    filled: token <= state.ritual.tokens,
-                                }"
-                            ></span>
-                        </div>
+                        </h2>
                         <p>
                             {{
-                                state.phase === 'lobby'
-                                    ? 'The goal adjusts as friends join. Fill the track and the cult wins.'
-                                    : state.phase === 'finished'
-                                      ? `${state.ritual.tokens} of ${state.ritual.threshold} ritual steps were completed. ${state.ritual.tokens >= state.ritual.threshold ? 'The ritual reached its goal.' : 'The match ended before the ritual was complete.'}`
-                                      : `Each filled mark is one step closer. ${Math.max(0, state.ritual.threshold - state.ritual.tokens)} more steps complete the ritual and the cult wins.`
+                                state.phase === 'finished'
+                                    ? 'Every role is now revealed in Play. Review the table and match recap.'
+                                    : 'When the host starts the game, your private role will appear here.'
                             }}
                         </p>
-                        <p
-                            v-if="!['lobby', 'finished'].includes(state.phase)"
-                            class="ritual-curse-level"
-                        >
-                            <strong
-                                >Curse level {{ state.ritual.level }} /
-                                3</strong
-                            >
-                            {{
-                                state.ritual.level === 3
-                                    ? 'Misdirection can now turn a chosen target against you.'
-                                    : 'As the ritual advances, curses become harder. Misdirection awakens at level 3.'
-                            }}
-                        </p>
-                    </section>
-                </aside>
+                    </div>
+                    <button
+                        class="button primary return-to-play"
+                        @click="navigate('play')"
+                    >
+                        {{
+                            state.phase === 'reveal' && !state.me.submitted
+                                ? 'Back to Play to get ready'
+                                : 'Back to Play'
+                        }}<Play :size="16" />
+                    </button>
+                </section>
+                <section
+                    id="room-help"
+                    class="room-help-view"
+                    v-show="activeView === 'help'"
+                    tabindex="-1"
+                    aria-label="Room help"
+                >
+                    <RoomHelp
+                        :state="state"
+                        @play="navigate('play')"
+                        @reopen-hint="
+                            hintDismissed = false;
+                            navigate('play');
+                        "
+                    />
+                </section>
             </div>
             <p class="game-bottom-note">
                 Your seat stays with this browser. Refresh freely. ·
-                <a
-                    href="/#how-to-play"
-                    target="_blank"
-                    rel="noopener"
-                    class="quiet-link"
-                    >Read the rules</a
-                >
+                <button class="quiet-link" @click="navigate('help')">
+                    Rules & help
+                </button>
             </p>
         </main>
     </div>

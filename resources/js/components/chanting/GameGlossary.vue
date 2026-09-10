@@ -46,11 +46,11 @@ const terms = [
     ],
     [
         'Puzzle curse',
-        'Solve a fresh cipher, ordering puzzle, missing pattern, arithmetic puzzle, odd-one-out, or reversal. Until solved, you cannot target a player at night or in a vote. Untargeted actions and abstention remain available.',
+        'Solve a fresh cipher, ordering puzzle, missing pattern, arithmetic puzzle, odd-one-out, or reversal. The challenge opens in a modal. Solve it to return to the room; the phase timer continues while you work.',
     ],
     [
         'Mind mist',
-        'Blurs the village scenery and turns chat into gibberish. Complete the ordered focus challenge to restore your view and read chat again. Action controls and the timer stay clear.',
+        'Blurs the village scenery and turns chat into gibberish. Complete the ordered focus challenge to restore your view and read chat again. The focus challenge opens in a modal. Complete it to return to the room; the phase timer continues.',
     ],
     [
         'Misdirection',
@@ -88,7 +88,7 @@ const terms = [
 </script>
 <template>
     <details class="game-glossary rules-details">
-        <summary>Help <span aria-hidden="true">+</span></summary>
+        <summary>Glossary <span aria-hidden="true">+</span></summary>
         <p class="glossary-intro">Strange words. Simple meanings.</p>
         <dl tabindex="0" aria-label="Village dictionary definitions">
             <div v-for="[term, meaning] in terms" :key="term">

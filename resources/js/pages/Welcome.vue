@@ -192,9 +192,9 @@ withDefaults(
                         <p>
                             <strong>Curses wake at dawn.</strong> The Veilweaver
                             curses the player they veil; Acolytes may choose a
-                            curse target while chanting. A random puzzle can
-                            block targeted actions, or mind mist can blur the
-                            village and scramble chat until solved. At ritual
+                            curse target while chanting. Puzzle and mind mist
+                            curses lock you in a challenge until solved or
+                            expired, while the game keeps moving. At ritual
                             level 3, from two-thirds progress, misdirection can
                             redirect the next chosen target once. Every curse
                             fades at the following dawn.

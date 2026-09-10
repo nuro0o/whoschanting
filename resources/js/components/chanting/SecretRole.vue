@@ -1,33 +1,86 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue';
+import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { Eye, EyeOff, LockKeyhole } from '@lucide/vue';
 import { roles, type RoomState } from '@/lib/chanting';
-defineProps<{ state: RoomState }>();
-const emit = defineEmits<{ hide: [] }>();
+const props = defineProps<{
+    state: RoomState;
+    active: boolean;
+    newResults: number;
+}>();
+const emit = defineEmits<{ hide: []; 'results-read': [] }>();
 const revealed = defineModel<boolean>({ default: false });
+const resultsOpen = ref(false);
+const resultsElement = ref<HTMLElement>();
+const resultsVisible = ref(false);
+const revealButton = ref<HTMLButtonElement>();
+let resultsObserver: IntersectionObserver | undefined;
+watch(resultsElement, (element) => {
+    resultsObserver?.disconnect();
+    resultsVisible.value = false;
+    if (!element) return;
+    resultsObserver = new IntersectionObserver(
+        ([entry]) => {
+            resultsVisible.value = entry.isIntersecting;
+        },
+        { threshold: 0.25 },
+    );
+    resultsObserver.observe(element);
+});
+watch(
+    [resultsVisible, () => props.active, () => props.state.me.results.length],
+    () => {
+        acknowledgeResults();
+    },
+    { flush: 'post' },
+);
+function acknowledgeResults() {
+    if (
+        resultsVisible.value &&
+        props.active &&
+        revealed.value &&
+        document.visibilityState === 'visible'
+    )
+        emit('results-read');
+}
 const justRevealed = ref(false);
 watch(revealed, (visible) => {
     justRevealed.value = visible;
+    if (!visible) resultsOpen.value = false;
 });
 function revealRole() {
     justRevealed.value = true;
     revealed.value = true;
 }
-function hideRole() {
+async function hideRole() {
     revealed.value = false;
     emit('hide');
+    await nextTick();
+    revealButton.value?.focus({ preventScroll: true });
 }
+async function showResults() {
+    resultsOpen.value = true;
+    await nextTick();
+    resultsElement.value?.focus();
+}
+defineExpose({ showResults });
+onMounted(() =>
+    document.addEventListener('visibilitychange', acknowledgeResults),
+);
+onBeforeUnmount(() => {
+    resultsObserver?.disconnect();
+    document.removeEventListener('visibilitychange', acknowledgeResults);
+});
 </script>
 <template>
     <section class="game-panel role-panel" aria-label="Your private role">
         <div v-if="!revealed" class="role-cover">
             <span class="role-sigil" aria-hidden="true">◈</span>
-            <h2>A secret to keep.</h2>
+            <h2>Your private role</h2>
             <p>
                 Your role is for your eyes only. Make sure no curious neighbors
                 are looking.
             </p>
-            <button class="button" @click="revealRole">
+            <button ref="revealButton" class="button" @click="revealRole">
                 <Eye :size="15" /> Reveal my role
             </button>
         </div>
@@ -51,6 +104,7 @@ function hideRole() {
                 {{ roles[state.me.role ?? '']?.subtitle }}
             </p>
             <div class="role-objective">
+                <p class="eyebrow">YOUR OBJECTIVE</p>
                 <strong>{{
                     state.me.alignment === 'cult'
                         ? 'Your team: Cult'
@@ -64,9 +118,26 @@ function hideRole() {
                     }}
                 </p>
             </div>
-            <div
+            <button
                 v-if="state.me.results.length"
+                class="button investigation-toggle"
+                :aria-expanded="resultsOpen"
+                aria-controls="role-investigations"
+                @click="resultsOpen = !resultsOpen"
+            >
+                {{
+                    resultsOpen ? 'Hide investigations' : 'Read investigations'
+                }}
+                <span v-if="newResults" class="room-badge"
+                    >{{ newResults }} new result{{
+                        newResults === 1 ? '' : 's'
+                    }}</span
+                >
+            </button>
+            <div
+                v-if="resultsOpen && state.me.results.length"
                 id="role-investigations"
+                ref="resultsElement"
                 class="private-separator role-results"
                 tabindex="-1"
             >
@@ -88,11 +159,11 @@ function hideRole() {
                     tell the truth.
                 </p>
             </div>
-            <details class="role-details" :open="state.phase === 'reveal'">
-                <summary>Your ability & private notes</summary>
+            <div class="role-details">
+                <p class="eyebrow">TONIGHT’S ABILITY</p>
                 <p>{{ roles[state.me.role ?? '']?.description }}</p>
                 <div v-if="state.me.mission" class="private-separator">
-                    <p class="eyebrow">YOUR SHARED MISSION</p>
+                    <p class="eyebrow">YOUR MISSION</p>
                     <strong>{{ state.me.mission.name }}</strong>
                     <p>{{ state.me.mission.description }}</p>
                 </div>
@@ -100,8 +171,8 @@ function hideRole() {
                     <p class="eyebrow">
                         {{
                             state.me.allies.length === 1
-                                ? 'YOUR FELLOW CULTIST'
-                                : 'YOUR FELLOW CULTISTS'
+                                ? 'YOUR TEAMMATE'
+                                : 'YOUR TEAMMATES'
                         }}
                     </p>
                     <p v-for="ally in state.me.allies" :key="ally.id">
@@ -109,7 +180,7 @@ function hideRole() {
                         {{ roles[ally.role]?.name ?? ally.role }}
                     </p>
                 </div>
-            </details>
+            </div>
         </div>
     </section>
 </template>

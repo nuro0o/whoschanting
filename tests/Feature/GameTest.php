@@ -380,9 +380,12 @@ class GameTest extends TestCase
     private function banish(GameRoom $room, array $identities, string $target): void
     {
         foreach ($room->fresh()->state['players'] as $id => $player) {
-            if ($player['alive']) {
+            if ($player['alive'] && ! in_array($player['curse']['type'] ?? null, ['puzzle', 'mist'], true)) {
                 $this->act($room, $identities[$id], 'vote', ['target' => $id === $target ? null : $target]);
             }
+        }
+        if ($room->fresh()->state['phase'] === 'voting') {
+            $this->expire($room);
         }
     }
 
@@ -653,6 +656,8 @@ class GameTest extends TestCase
         $this->assertDatabaseCount('game_matches', 0);
         $this->expire($room);
         // An explicit abstention and missing votes are distinct in the final recap.
+        $curse = $room->fresh()->state['players'][$roles['townsperson']]['curse'];
+        $this->act($room, $identities[$roles['townsperson']], 'solve_curse', ['curse_id' => $curse['id'], 'answer' => $curse['solution']]);
         $this->act($room, $identities[$roles['townsperson']], 'vote');
         $this->expire($room);
         $this->expire($room);
@@ -798,7 +803,7 @@ class GameTest extends TestCase
         $this->expire($room);
         $curse = $this->afflict($room, $roles['oracle'], 'puzzle');
         $oracle = $identities[$roles['oracle']];
-        $this->act($room, $oracle, 'discussion_ready');
+        $this->assertRejected(fn () => $this->act($room, $oracle, 'discussion_ready'));
         $payload = ['type' => 'solve_curse', 'phase_id' => $room->fresh()->state['phase_id'], 'curse_id' => $curse['id'], 'answer' => $curse['solution']];
         $this->withSession(['chanting.identity' => $identities[$roles['townsperson']]])
             ->postJson('/rooms/'.$room->code.'/actions', $payload)->assertUnprocessable();
@@ -822,11 +827,12 @@ class GameTest extends TestCase
         $roles = $this->roles($room);
         $this->expire($room);
         $this->expire($room);
+        $this->act($room, $identities[$roles['oracle']], 'discussion_ready');
         $curse = $this->afflict($room, $roles['oracle'], 'mist');
         $body = 'The village heard chanting near the lighthouse.';
         $normal = $this->act($room, $identities[$roles['acolyte']], 'chat', ['body' => $body]);
         $this->assertSame($body, $normal['messages'][0]['body']);
-        $view = $this->act($room, $identities[$roles['oracle']], 'discussion_ready');
+        $view = $this->engine->access($room->code, $identities[$roles['oracle']]);
         $this->assertNotSame($body, $view['messages'][0]['body']);
         $this->assertSame($body, $room->fresh()->state['messages'][0]['body']);
         $this->assertSame($view['messages'], $this->engine->access($room->code, $identities[$roles['oracle']])['messages']);
@@ -834,6 +840,30 @@ class GameTest extends TestCase
         $this->assertNull($solved['me']['curse']);
         $this->assertTrue($solved['me']['submitted']);
         $this->assertSame($body, $solved['messages'][0]['body']);
+    }
+
+    public function test_puzzle_and_mist_lock_room_actions_until_solved_without_stopping_deadlines(): void
+    {
+        foreach (['puzzle', 'mist'] as $type) {
+            [$room, $identities] = $this->match();
+            $roles = $this->roles($room);
+            $this->expire($room);
+            $this->expire($room);
+            $curse = $this->afflict($room, $roles['townsperson'], $type);
+            $identity = $identities[$roles['townsperson']];
+            $deadline = $room->fresh()->deadline;
+            $this->assertRejected(fn () => $this->act($room, $identity, 'chat', ['body' => 'Bypass the dialog']));
+            $this->assertRejected(fn () => $this->act($room, $identity, 'discussion_ready'));
+            $this->assertEquals($deadline, $room->fresh()->deadline);
+            $this->expire($room);
+            $this->assertSame('voting', $room->state['phase']);
+            $this->assertRejected(fn () => $this->act($room, $identity, 'vote'));
+            $this->assertRejected(fn () => $this->act($room, $identity, 'vote', ['target' => $roles['oracle']]));
+            $this->expire($room);
+            $this->assertRejected(fn () => $this->act($room, $identity, 'night'));
+            $this->act($room, $identity, 'solve_curse', ['curse_id' => $curse['id'], 'answer' => $curse['solution']]);
+            $this->assertTrue($this->act($room, $identity, 'night')['me']['submitted']);
+        }
     }
 
     public function test_misdirection_changes_the_authoritative_vote_once_but_never_abstention(): void

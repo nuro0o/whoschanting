@@ -146,6 +146,10 @@ class MatchEngine
     {
         $p = $s['players'][$id];
         $type = $a['type'];
+        if ($p['alive'] && in_array($s['phase'], ['discussion', 'voting', 'night'], true)
+            && in_array($p['curse']['type'] ?? null, ['puzzle', 'mist'], true)) {
+            $this->ensure($type === 'solve_curse', 'Break your curse before returning to the village. It also fades at the next dawn.');
+        }
         if ($type === 'character') {
             $this->ensure($s['phase'] === 'lobby', 'Choose your character before the match begins.');
             $this->ensure(in_array($a['character'] ?? null, array_column(config('game.characters'), 'id'), true), 'Choose a character from the village.');
@@ -252,7 +256,6 @@ class MatchEngine
         $chosenTarget = $target;
         if ($target !== null && in_array($type, ['night', 'vote'], true)) {
             $curseType = $p['curse']['type'] ?? null;
-            $this->ensure($curseType !== 'puzzle', 'Break the puzzle curse before choosing a target, or abstain.');
             if ($curseType === 'misdirection') {
                 $alternatives = array_keys(array_filter($s['players'], fn (array $player): bool => $player['alive'] && $player['id'] !== $id && $player['id'] !== $target));
                 if ($alternatives !== []) {
