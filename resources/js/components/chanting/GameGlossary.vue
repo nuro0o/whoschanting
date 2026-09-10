@@ -88,9 +88,9 @@ const terms = [
 </script>
 <template>
     <details class="game-glossary rules-details">
-        <summary>Village dictionary <span aria-hidden="true">+</span></summary>
+        <summary>Help <span aria-hidden="true">+</span></summary>
         <p class="glossary-intro">Strange words. Simple meanings.</p>
-        <dl>
+        <dl tabindex="0" aria-label="Village dictionary definitions">
             <div v-for="[term, meaning] in terms" :key="term">
                 <dt>{{ term }}</dt>
                 <dd>{{ meaning }}</dd>

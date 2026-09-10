@@ -123,11 +123,9 @@
     letter-spacing: 1.5px;
 }
 .landing-hero {
-    max-width: 1440px;
-    margin: auto;
     position: relative;
     min-height: 765px;
-    padding: 58px 6% 64px;
+    padding: 58px max(6%, calc((100% - 1440px) / 2 + 6%)) 64px;
     overflow: hidden;
 }
 .hero-content {
@@ -185,10 +183,16 @@
 }
 .hero-art {
     position: absolute;
-    left: 33%;
-    right: -8%;
+    left: 0;
+    right: 0;
     top: -10px;
     bottom: 0;
+    background: radial-gradient(
+        ellipse at 78% 38%,
+        #36545466,
+        #1c343540 48%,
+        var(--ink) 82%
+    );
 }
 .village-scene {
     position: relative;
@@ -207,7 +211,7 @@
     inset: 0;
     pointer-events: none;
     background:
-        linear-gradient(90deg, var(--ink) 0%, #101d20cf 9%, transparent 40%),
+        linear-gradient(90deg, var(--ink) 0%, #101d20cf 35%, transparent 65%),
         linear-gradient(
             0deg,
             var(--ink),
@@ -1057,10 +1061,20 @@
     color: var(--coral);
 }
 
-@media (min-width: 1441px) {
-    .hero-art {
+@media (min-width: 701px) {
+    .hero-art .village-scene img {
+        position: absolute;
+        top: 0;
         right: 0;
+        width: auto;
+        max-width: none;
+        height: 100%;
+        object-fit: contain;
+        object-position: right top;
+        mask-image: linear-gradient(90deg, transparent, #000 24%);
     }
+}
+@media (min-width: 1441px) {
     .landing-hero {
         min-height: 805px;
     }
@@ -1106,10 +1120,6 @@
     }
     .phase-heading h1 {
         font-size: 35px;
-    }
-    .hero-art {
-        left: 26%;
-        right: -25%;
     }
     .hero-content {
         max-width: 450px;
@@ -2291,5 +2301,1032 @@
     .curse-controls .curse-submit {
         margin-left: 0;
         flex-grow: 1;
+    }
+}
+
+/* Candlelit gathering: the table and the next decision share the stage. */
+.game-page {
+    transition: background-color 900ms ease;
+}
+.game-page[data-phase='night'] {
+    background-color: #101d24;
+}
+.game-page[data-phase='discussion'],
+.game-page[data-winner='town'] {
+    background-color: #1b2929;
+}
+.game-page[data-winner='cult'] {
+    background-color: #142824;
+}
+.game-main {
+    max-width: 1320px;
+    padding-top: 25px;
+}
+.phase-heading {
+    margin-bottom: 14px;
+    align-items: center;
+}
+.phase-heading h1 {
+    font-size: clamp(26px, 2.6vw, 37px);
+    margin-top: 7px;
+}
+.phase-heading p:last-child {
+    margin-top: 7px;
+}
+.phase-clock.is-urgent {
+    color: #efb39c;
+}
+.game-tools {
+    justify-content: flex-end;
+    gap: 9px;
+    margin-bottom: 14px;
+    position: relative;
+    z-index: 5;
+}
+.game-tools .game-glossary {
+    flex: 0 0 auto;
+    border-radius: 3px;
+    position: relative;
+    overflow: visible;
+    background: #17272a;
+}
+.game-tools .game-glossary summary {
+    min-height: 42px;
+    padding: 10px 14px;
+    gap: 14px;
+    font-size: 12px;
+}
+.game-tools .game-glossary[open] {
+    width: min(540px, calc(100vw - 32px));
+    position: absolute;
+    right: 0;
+    top: 0;
+    z-index: 6;
+    box-shadow: 0 18px 50px #060e10b3;
+}
+.game-tools .game-glossary dl {
+    max-height: min(58vh, 500px);
+    overflow-y: auto;
+    padding: 0 18px 18px;
+}
+.game-tools .glossary-intro {
+    padding: 0 18px 14px;
+}
+.play-stage {
+    display: grid;
+    grid-template-columns: minmax(0, 1.52fr) minmax(320px, 1fr);
+    align-items: start;
+    gap: 20px;
+    margin-bottom: 20px;
+}
+.action-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    min-width: 0;
+}
+.action-stack .action-panel {
+    padding: 25px;
+    box-shadow: 0 8px 24px #07121426;
+    border-top: 2px solid #91a27a;
+}
+.game-page[data-phase='voting'] .action-stack .action-panel {
+    border-top-color: var(--coral);
+    background: #2b302ce8;
+}
+.game-page[data-phase='night'] .action-stack .action-panel {
+    background: #18292fe8;
+}
+.action-stack .action-panel h2 {
+    font-size: 28px;
+}
+.action-stack .action-panel > .eyebrow {
+    margin-top: 0;
+}
+.action-stack .target-list {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.action-stack .target-button {
+    min-width: 0;
+    min-height: 44px;
+}
+.action-stack .target-button span {
+    overflow-wrap: anywhere;
+}
+.action-stack .target-button:last-child:nth-child(odd) {
+    grid-column: 1 / -1;
+}
+.match-layout {
+    grid-template-columns: minmax(200px, 0.85fr) minmax(0, 1.5fr) minmax(
+            250px,
+            1fr
+        );
+    gap: 20px;
+}
+.table-panel {
+    margin: 0;
+    position: relative;
+    border-color: #57614a66;
+    background: radial-gradient(ellipse at 50% 40%, #3a42332b, #132326 78%);
+    box-shadow:
+        0 10px 35px #07121433,
+        inset 0 1px #e2d6ab0d;
+}
+.table-topline {
+    padding: 17px 19px 0;
+    flex-direction: row;
+}
+.table-topline > span:last-child {
+    font-size: 10px;
+}
+.card-table {
+    height: 380px;
+    isolation: isolate;
+}
+.table-surface {
+    position: absolute;
+    inset: 18% 7%;
+    border-radius: 50%;
+    transform: rotate(-2deg);
+    border: 8px solid #514b36;
+    background:
+        repeating-linear-gradient(
+            3deg,
+            #d8bf7310 0px,
+            #d8bf7300 2px,
+            #111f201f 3px,
+            transparent 6px,
+            transparent 11px
+        ),
+        radial-gradient(ellipse, #3e4937, #25372d 72%);
+    box-shadow:
+        0 11px 0 #272b23,
+        0 15px 0 #131f1e,
+        0 22px 25px #07101180,
+        inset 0 0 20px #17241fd9,
+        inset 0 0 0 2px #b8a77735;
+    transition:
+        background-color 900ms,
+        box-shadow 900ms;
+}
+.table-inlay {
+    position: absolute;
+    inset: 10px;
+    border-radius: 50%;
+    border: 1px solid #c9c09c42;
+    box-shadow: inset 0 0 0 4px #23382c70;
+}
+.table-atmosphere {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: radial-gradient(ellipse at 50% 12%, #f9c36b0a, transparent 60%);
+    transition: background 900ms;
+}
+.table-panel[data-phase='night'] .table-atmosphere {
+    background:
+        radial-gradient(ellipse at 35% 80%, #99bfd415, transparent 65%),
+        linear-gradient(0deg, #a4cfdf0a, transparent 45%);
+}
+.table-panel[data-phase='night'] .table-surface {
+    filter: saturate(0.65) brightness(0.85);
+}
+.table-panel[data-phase='discussion'] .table-atmosphere,
+.table-panel[data-winner='town'] .table-atmosphere {
+    background: radial-gradient(ellipse at 50% 0%, #edb87620, transparent 75%);
+}
+.table-panel[data-phase='voting'] .table-surface {
+    border-color: #66523b;
+}
+.table-panel[data-winner='cult'] .table-surface {
+    box-shadow:
+        0 11px 0 #272b23,
+        0 15px 0 #131f1e,
+        0 22px 25px #07101180,
+        inset 0 0 40px #8bad7240,
+        0 0 50px #70977020;
+}
+.table-ritual {
+    --ring-size: 112px;
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: var(--ring-size);
+    height: var(--ring-size);
+    color: #e3dec2;
+    pointer-events: none;
+}
+.ritual-ring {
+    position: absolute;
+    inset: 0;
+    border: 1px solid #c7cc9938;
+    border-radius: 50%;
+    outline: 1px solid #c7cc991a;
+    outline-offset: 7px;
+}
+.ritual-rune {
+    position: absolute;
+    left: calc(50% - 9px);
+    top: calc(50% - 12px);
+    width: 18px;
+    height: 24px;
+    background: #2b3b2f;
+    color: #879578;
+    font:
+        21px Georgia,
+        serif;
+    text-align: center;
+    line-height: 24px;
+    transition:
+        color 700ms,
+        text-shadow 700ms;
+}
+.ritual-rune.is-lit {
+    color: #e6efb4;
+    text-shadow:
+        0 0 7px #cee696a6,
+        0 0 17px #b9d98970;
+}
+.ritual-center-icon {
+    color: #c9c492;
+    margin-bottom: 3px;
+    opacity: 0.9;
+}
+.table-ritual strong {
+    font:
+        30px 'Fraunces',
+        Georgia,
+        serif;
+    line-height: 1;
+}
+.table-ritual strong small {
+    font-size: 17px;
+    color: #b7c1a9;
+}
+.ritual-center-label {
+    font-size: 8px;
+    margin-top: 7px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: #ccd0b7;
+}
+.table-seat {
+    width: 106px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--cream);
+    cursor: default;
+    font: inherit;
+    text-decoration: none;
+    transition: filter 250ms;
+}
+.table-seat .character-portrait {
+    width: 61px;
+    border-radius: 20px 20px 7px 7px;
+    border: 2px solid #c2b794;
+    box-shadow: 0 4px 8px #06121075;
+    transition:
+        transform 180ms,
+        border-color 180ms,
+        filter 400ms;
+}
+.card-table.is-small .character-portrait {
+    width: 72px;
+}
+.seat-card {
+    position: absolute;
+    top: -5px;
+    width: 68px;
+    height: 78px;
+    background: #c1b692;
+    border: 1px solid #e1d6b0;
+    border-radius: 3px;
+    transform: rotate(-7deg);
+    z-index: -1;
+    opacity: 0.8;
+    box-shadow: 3px 6px 7px #08130f66;
+}
+.is-small .seat-card {
+    width: 79px;
+    height: 89px;
+}
+.table-seat:nth-child(even) .seat-card {
+    transform: rotate(6deg);
+}
+.table-seat.is-selectable {
+    cursor: pointer;
+}
+.table-seat.is-selectable:hover .character-portrait {
+    transform: translateY(-3px);
+    border-color: #e7eccb;
+}
+.table-seat.is-selectable:focus-visible {
+    outline: 2px solid #e7eccb;
+    outline-offset: 6px;
+    border-radius: 4px;
+}
+.table-seat.is-me .character-portrait {
+    outline: 1px solid #b7c994;
+    outline-offset: 3px;
+}
+.table-seat.is-selected .character-portrait {
+    border-color: #f1c49f;
+    outline: 2px solid #f1c49f;
+    outline-offset: 3px;
+}
+.seat-selected-mark {
+    position: absolute;
+    right: 10px;
+    top: -8px;
+    display: grid;
+    place-items: center;
+    width: 23px;
+    height: 23px;
+    border-radius: 50%;
+    color: #23352d;
+    background: #f1c49f;
+    box-shadow: 0 2px 4px #08141080;
+}
+.seat-name {
+    max-width: 110px;
+    font-size: 11px;
+    padding: 3px 7px;
+    background: #0f1e21f5;
+    border: 1px solid #7b866131;
+    margin-top: 7px;
+}
+.seat-name small {
+    color: #b6c797;
+    margin-left: 5px;
+    font-size: 9px;
+}
+.seat-candle {
+    position: absolute;
+    top: 42px;
+    right: 3px;
+    width: 7px;
+    height: 18px;
+    border-radius: 2px 2px 1px 1px;
+    background: linear-gradient(90deg, #82734b, #e3d6a8 55%, #afa176);
+    box-shadow: 0 3px 0 3px #2e3328;
+}
+.seat-candle i {
+    position: absolute;
+    width: 6px;
+    height: 11px;
+    top: -13px;
+    left: 1px;
+    border-radius: 70% 30% 55% 45%;
+    background: #f4dfa4;
+    box-shadow:
+        0 0 9px 3px #e9ac5e66,
+        0 0 30px 10px #e9ac5e19;
+    transform: rotate(10deg);
+}
+.table-seat.is-banished .seat-candle i {
+    opacity: 0;
+}
+.table-seat.is-banished .seat-card {
+    opacity: 0.3;
+}
+.seat-seal {
+    position: absolute;
+    top: 45px;
+    left: 8px;
+    width: 27px;
+    height: 27px;
+    display: grid;
+    place-items: center;
+    color: #f3d6be;
+    background: #985b47;
+    border: 3px double #c4896a;
+    border-radius: 47% 53% 42% 58%;
+    box-shadow: 0 3px 5px #0b17178c;
+}
+.seat-final-role {
+    color: #d6e4b4;
+    background: #263c32;
+    font-size: 10px;
+    padding: 2px 6px;
+    border-radius: 2px;
+    margin-top: 2px;
+}
+.seat-final-role.is-cult {
+    color: #ffd0ba;
+    background: #513b31;
+}
+.table-caption {
+    font-size: 15px;
+    padding: 13px 14px;
+    color: #bbc5b8;
+}
+.is-crowded .table-seat {
+    width: 83px;
+}
+.is-crowded .table-seat .character-portrait {
+    width: 52px;
+}
+.is-crowded .seat-card {
+    width: 59px;
+    height: 65px;
+}
+.is-crowded .seat-name {
+    max-width: 83px;
+    font-size: 10px;
+}
+.is-crowded .seat-candle {
+    right: 1px;
+    top: 34px;
+}
+.phase-arriving .table-atmosphere {
+    animation: phase-settle 900ms ease-out both;
+}
+.ritual-rune.is-new {
+    animation: rune-awaken 1000ms ease-out both;
+}
+.seal-arriving {
+    animation: seal-settle 350ms ease-out both;
+}
+.role-revealing {
+    transform-origin: left center;
+    animation: role-unfold 400ms ease-out both;
+}
+.is-extinguishing .seat-candle::after {
+    content: '';
+    position: absolute;
+    width: 7px;
+    height: 20px;
+    top: -20px;
+    border-left: 2px solid #b8c6b980;
+    border-radius: 50%;
+    animation: candle-smoke 1400ms ease-out both;
+}
+@keyframes phase-settle {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+@keyframes rune-awaken {
+    from {
+        opacity: 0.4;
+        text-shadow: none;
+    }
+    to {
+        opacity: 1;
+        text-shadow:
+            0 0 7px #cee696a6,
+            0 0 17px #b9d98970;
+    }
+}
+@keyframes seal-settle {
+    from {
+        opacity: 0;
+        transform: scale(1.5) rotate(-12deg);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1) rotate(0);
+    }
+}
+@keyframes role-unfold {
+    from {
+        opacity: 0.3;
+        transform: perspective(800px) rotateY(-12deg);
+    }
+    to {
+        opacity: 1;
+        transform: perspective(800px) rotateY(0);
+    }
+}
+@keyframes candle-smoke {
+    from {
+        opacity: 0.7;
+        transform: translate(0, 0);
+    }
+    to {
+        opacity: 0;
+        transform: translate(5px, -15px);
+    }
+}
+@media (max-width: 1000px) {
+    .play-stage {
+        grid-template-columns: minmax(0, 1.2fr) minmax(310px, 1fr);
+        gap: 15px;
+    }
+    .match-layout {
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    }
+    .match-layout .side-stack {
+        grid-column: 1 / -1;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+    }
+    .card-table {
+        height: 365px;
+    }
+    .table-topline {
+        padding-inline: 12px;
+    }
+    .table-topline > span:last-child {
+        font-size: 9px;
+    }
+    .table-seat {
+        width: 88px;
+    }
+    .seat-name {
+        max-width: 88px;
+    }
+    .is-crowded .table-seat {
+        width: 64px;
+    }
+    .is-crowded .seat-name {
+        max-width: 64px;
+        font-size: 9px;
+    }
+    .is-crowded .seat-candle {
+        right: -1px;
+    }
+}
+@media (max-width: 760px) {
+    .game-main {
+        padding: 20px 16px 30px;
+    }
+    .phase-heading {
+        gap: 12px;
+        margin-bottom: 12px;
+    }
+    .phase-heading h1 {
+        font-size: 27px;
+    }
+    .phase-heading .eyebrow {
+        font-size: 10px;
+        letter-spacing: 1.5px;
+    }
+    .phase-heading p:last-child {
+        font-size: 12px;
+        line-height: 1.5;
+    }
+    .phase-clock {
+        padding-left: 12px;
+        gap: 7px;
+    }
+    .phase-clock span {
+        font-size: 9px;
+    }
+    .phase-clock strong {
+        font-size: 23px;
+    }
+    .game-tools {
+        margin-bottom: 12px;
+    }
+    .play-stage {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 14px;
+    }
+    .card-table {
+        height: 300px;
+    }
+    .card-table.is-crowded {
+        height: 320px;
+    }
+    .table-topline {
+        padding: 13px 13px 0;
+    }
+    .table-topline .eyebrow {
+        font-size: 8px;
+    }
+    .table-topline > span:last-child {
+        font-size: 9px;
+    }
+    .table-caption {
+        padding: 10px;
+        font-size: 14px;
+    }
+    .table-ritual {
+        --ring-size: 94px;
+    }
+    .table-ritual strong {
+        font-size: 26px;
+    }
+    .ritual-center-label {
+        font-size: 7px;
+    }
+    .table-seat {
+        width: 78px;
+    }
+    .table-seat .character-portrait {
+        width: 49px;
+    }
+    .card-table.is-small .character-portrait {
+        width: 58px;
+    }
+    .seat-card {
+        width: 56px;
+        height: 63px;
+    }
+    .is-small .seat-card {
+        width: 66px;
+        height: 73px;
+    }
+    .seat-name {
+        max-width: 78px;
+        font-size: 10px;
+        padding: 2px 4px;
+        margin-top: 5px;
+    }
+    .seat-name small {
+        font-size: 8px;
+        margin-left: 3px;
+    }
+    .seat-candle {
+        right: 0;
+        top: 31px;
+        height: 15px;
+    }
+    .seat-seal {
+        left: 0;
+        top: 33px;
+        width: 24px;
+        height: 24px;
+    }
+    .seat-selected-mark {
+        right: 0;
+    }
+    .seat-ready {
+        font-size: 9px;
+    }
+    .is-crowded .table-seat {
+        width: 54px;
+    }
+    .is-crowded .table-seat .character-portrait {
+        width: 39px;
+    }
+    .is-crowded .seat-card {
+        width: 45px;
+        height: 51px;
+    }
+    .is-crowded .seat-name {
+        max-width: 54px;
+        font-size: 9px;
+        padding: 2px;
+    }
+    .is-crowded .seat-name small {
+        display: block;
+        margin: 0;
+    }
+    .is-crowded .seat-candle {
+        width: 5px;
+        right: -1px;
+        top: 22px;
+        height: 12px;
+    }
+    .is-crowded .seat-candle i {
+        width: 4px;
+        height: 8px;
+        top: -10px;
+    }
+    .is-crowded .seat-final-role {
+        font-size: 8px;
+        padding-inline: 2px;
+    }
+    .is-crowded .seat-seal {
+        left: -3px;
+        top: 25px;
+        width: 21px;
+        height: 21px;
+    }
+    .action-stack .action-panel {
+        padding: 22px;
+    }
+    .action-stack .action-panel h2 {
+        font-size: 26px;
+    }
+    .match-layout,
+    .match-layout.is-lobby {
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+    }
+    .match-layout > * {
+        width: 100%;
+    }
+    .match-layout .main-stack,
+    .match-layout.is-lobby .main-stack {
+        display: flex;
+        order: 0;
+    }
+    .match-layout .side-stack {
+        display: flex;
+        order: 1;
+    }
+    .match-layout .side-stack .role-panel {
+        order: -1;
+    }
+    .match-layout .roster-panel {
+        order: 2;
+    }
+}
+@media (prefers-reduced-motion: reduce) {
+    .game-page,
+    .table-seat,
+    .table-seat .character-portrait,
+    .table-surface,
+    .table-atmosphere,
+    .ritual-rune {
+        transition: none;
+    }
+    .phase-arriving .table-atmosphere,
+    .ritual-rune.is-new,
+    .seal-arriving,
+    .role-revealing,
+    .is-extinguishing .seat-candle::after {
+        animation: none;
+    }
+    .is-extinguishing .seat-candle::after {
+        display: none;
+    }
+}
+
+/* Keep roles, the next move, and public news together above the table. */
+.room-briefing {
+    margin-bottom: 18px;
+    overflow: hidden;
+    border: 1px solid #62705a;
+    border-top: 3px solid var(--green);
+    border-radius: 5px;
+    background: #1c2e2ce8;
+}
+.briefing-personal {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+}
+.briefing-role {
+    display: flex;
+    align-items: center;
+    gap: 13px;
+    padding: 18px 20px;
+}
+.briefing-icon {
+    display: grid;
+    place-items: center;
+    flex: 0 0 40px;
+    width: 40px;
+    height: 46px;
+    color: var(--green);
+    background: #bdcd9c12;
+    border: 1px solid #bdcd9c44;
+    border-radius: 16px 16px 4px 4px;
+}
+.briefing-role-copy {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-width: 0;
+}
+.briefing-role-copy > strong,
+.briefing-next > strong {
+    font-size: 17px;
+    font-weight: 600;
+    line-height: 1.4;
+}
+.briefing-role-copy > span,
+.briefing-next > p:not(.eyebrow) {
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.5;
+    margin-top: 3px;
+}
+.room-briefing .eyebrow {
+    font-size: 10px;
+    letter-spacing: 1.2px;
+    margin-bottom: 4px;
+}
+.briefing-reveal {
+    min-height: 44px;
+    flex-shrink: 0;
+    padding: 10px 13px;
+    font-size: 12px !important;
+}
+.briefing-next {
+    border-left: 1px solid var(--line);
+    padding: 15px 20px;
+}
+.briefing-link {
+    display: inline-flex;
+    align-items: center;
+    align-self: flex-start;
+    gap: 5px;
+    min-height: 32px;
+    color: var(--green);
+    font-size: 12px;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    margin-right: 14px;
+}
+.briefing-link:hover {
+    color: var(--cream);
+}
+.briefing-events {
+    border-top: 1px solid var(--line);
+    padding: 13px 20px 0;
+    background: #101d2038;
+}
+.briefing-events-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 6px 12px;
+}
+.briefing-events-heading h2 {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+}
+.briefing-events-heading > span {
+    color: var(--muted);
+    font-size: 11px;
+}
+.latest-events {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 7px 24px;
+    list-style: none;
+    padding: 0;
+    margin: 9px 0 4px;
+}
+.latest-events li {
+    font-size: 13px;
+    line-height: 1.6;
+    overflow-wrap: anywhere;
+    padding-left: 12px;
+    border-left: 2px solid #bdcd9c70;
+}
+.latest-events li + li {
+    color: var(--muted);
+    border-color: var(--line);
+}
+.briefing-empty {
+    color: var(--muted);
+    font-size: 13px;
+    padding: 10px 0 14px;
+}
+.event-history > summary {
+    color: var(--green);
+    font-size: 12px;
+    padding: 9px 0 12px;
+    min-height: 40px;
+    width: fit-content;
+}
+.event-history > summary > span {
+    color: var(--muted);
+    margin-left: 8px;
+}
+.event-history[open] > summary {
+    margin-bottom: 4px;
+}
+.event-history .events-list {
+    padding: 14px 0;
+    border-top: 1px solid var(--line);
+    margin-bottom: 12px;
+    max-height: 300px;
+    overscroll-behavior: contain;
+}
+.game-page .event-history .events-list li {
+    color: var(--cream);
+    font-size: 13px;
+    overflow-wrap: anywhere;
+}
+.play-stage > .action-stack {
+    grid-column: 2;
+    grid-row: 1;
+}
+.play-stage > .table-panel {
+    grid-column: 1;
+    grid-row: 1;
+}
+.role-private-heading {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+}
+.role-private-heading .eyebrow {
+    margin: 0;
+    font-size: 10px;
+}
+.role-private-heading .hide-role {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 36px;
+    margin: 0;
+    color: var(--cream);
+    font-size: 12px !important;
+}
+.role-private h2 {
+    margin-top: 3px;
+}
+.game-page .role-private .role-subtitle {
+    font-size: 12px;
+}
+.role-objective {
+    margin-top: 14px;
+    padding: 12px 14px;
+    background: #0e1f1b70;
+    border-left: 2px solid var(--green);
+}
+.role-objective strong {
+    font-size: 13px;
+}
+.game-page .role-objective p {
+    font-size: 13px;
+    line-height: 1.6;
+    margin-top: 4px;
+    color: var(--cream);
+}
+.role-details {
+    margin-top: 12px;
+}
+.role-details > summary {
+    min-height: 40px;
+    padding-block: 9px;
+    color: var(--green);
+    font-size: 13px;
+}
+.game-page .role-details p,
+.game-page .role-results p,
+.game-page .role-results .investigation-list {
+    font-size: 13px;
+}
+.role-results {
+    scroll-margin-top: 20px;
+}
+#private-role,
+#current-action {
+    scroll-margin-top: 20px;
+}
+@media (max-width: 1000px) {
+    .briefing-role {
+        flex-wrap: wrap;
+        gap: 10px;
+        padding: 15px;
+    }
+    .briefing-icon {
+        display: none;
+    }
+    .briefing-next {
+        padding: 15px;
+    }
+}
+@media (max-width: 760px) {
+    .briefing-personal {
+        grid-template-columns: 1fr;
+    }
+    .briefing-role {
+        padding: 12px 14px;
+    }
+    .briefing-role-copy > strong,
+    .briefing-next > strong {
+        font-size: 15px;
+    }
+    .briefing-role-copy > span {
+        display: none;
+    }
+    .briefing-reveal {
+        padding-inline: 10px;
+    }
+    .briefing-next {
+        border-left: 0;
+        border-top: 1px solid var(--line);
+        padding: 10px 14px 5px;
+    }
+    .briefing-events {
+        padding: 11px 14px 0;
+    }
+    .latest-events {
+        grid-template-columns: 1fr;
+        gap: 7px;
+    }
+    .play-stage > .action-stack,
+    .play-stage > .table-panel {
+        grid-column: 1;
+        grid-row: auto;
+    }
+    .action-stack .role-private {
+        padding: 16px;
     }
 }

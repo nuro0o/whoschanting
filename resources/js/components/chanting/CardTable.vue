@@ -1,247 +1,277 @@
-<script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import type { Player, RoomState } from '@/lib/chanting';
+﻿<script setup lang="ts">
+import { computed, onBeforeUnmount, ref, watch } from 'vue';
+import { Check, Flame, LockKeyhole } from '@lucide/vue';
+import { roles, type Player, type RoomState } from '@/lib/chanting';
 import CharacterPortrait from './CharacterPortrait.vue';
 
-// Only public seats and this player's submission enter the scene. No roles,
-// targets, investigations, missions, or other players' private actions.
+// The table uses public seats and ritual progress. A selection and wax seal are
+// local to this browser; final roles are read only from public player fields.
 const props = defineProps<{
-    players: Pick<
-        Player,
-        'id' | 'name' | 'character' | 'alive' | 'ready' | 'discussion_ready'
-    >[];
+    players: Player[];
     phase: RoomState['phase'];
     phaseId: number;
     meId: string;
     submitted: boolean;
+    actionSerial: number;
+    ritualTokens: number;
+    ritualThreshold: number;
+    winner: 'town' | 'cult' | null;
+    selectedTarget: string | null;
+    canSelect: boolean;
 }>();
-const canvas = ref<HTMLElement>();
-const available = ref(false);
-const failed = ref(false);
-let disposed = false;
-let game: import('phaser').Game | undefined;
-let scene: { draw: (animate: boolean) => void } | undefined;
-let motion: MediaQueryList | undefined;
-const reduced = ref(false);
-const seatStyle = (index: number) => {
-    const angle =
-        (index / Math.max(1, props.players.length)) * Math.PI * 2 - Math.PI / 2;
-    return {
-        left: `${50 + Math.cos(angle) * 40}%`,
-        top: `${50 + Math.sin(angle) * 38}%`,
-    };
-};
-const caption = computed(
-    () =>
-        ({
-            lobby: 'A place for every alibi.',
-            reveal: 'Your secret is in your role card below.',
-            night: 'Cards down. Secrets kept.',
-            discussion: 'Stories on the table.',
-            voting: 'One choice. Sealed until the count.',
-            finished: 'The cards are on the table.',
-        })[props.phase],
-);
-function motionChanged() {
-    reduced.value = motion?.matches ?? false;
-    scene?.draw(false);
+const emit = defineEmits<{ select: [id: string] }>();
+const phaseChanging = ref(false);
+const newlyLit = ref<number[]>([]);
+const extinguished = ref<string[]>([]);
+const sealRecent = ref(false);
+const timers = new Set<ReturnType<typeof setTimeout>>();
+function later(callback: () => void, delay: number) {
+    const timer = setTimeout(() => {
+        timers.delete(timer);
+        callback();
+    }, delay);
+    timers.add(timer);
 }
+const crowded = computed(() => props.players.length > 6);
+function seatStyle(index: number) {
+    const count = props.players.length;
+    if (crowded.value) {
+        const topCount = Math.ceil(count / 2);
+        const rowCount = index < topCount ? topCount : count - topCount;
+        const col = index < topCount ? index : count - index - 1;
+        return {
+            left: `${10 + (col * 80) / Math.max(1, rowCount - 1)}%`,
+            top: index < topCount ? '20%' : '80%',
+        };
+    }
+    if (count === 3)
+        return [
+            { left: '50%', top: '17%' },
+            { left: '81%', top: '76%' },
+            { left: '19%', top: '76%' },
+        ][index];
+    const angle = (index / Math.max(1, count)) * Math.PI * 2 - Math.PI / 2;
+    return {
+        left: `${50 + Math.cos(angle) * 36}%`,
+        top: `${50 + Math.sin(angle) * 34}%`,
+    };
+}
+function selectable(player: Player) {
+    return props.canSelect && player.alive && player.id !== props.meId;
+}
+function seatLabel(player: Player) {
+    const identity = `${player.name}${player.id === props.meId ? ', you' : ''}`;
+    if (props.phase === 'finished' && player.role)
+        return `${identity}, ${roles[player.role]?.name ?? player.role}${player.alive ? '' : ', banished'}`;
+    return `${identity}${!player.alive ? ', banished' : ''}${selectable(player) ? ', select as target' : ''}`;
+}
+const caption = computed(() =>
+    props.canSelect
+        ? 'Choose a seat, then confirm your choice.'
+        : {
+              lobby: 'A place for every alibi.',
+              reveal: 'Your secret awaits in your private role card.',
+              night: 'Cards down. Secrets kept.',
+              discussion: 'Stories on the table.',
+              voting: 'One choice. Sealed until the count.',
+              finished: 'Every secret has a face.',
+          }[props.phase],
+);
+const ritualLabel = computed(() =>
+    props.phase === 'lobby'
+        ? 'Ritual goal'
+        : props.phase === 'finished'
+          ? 'Steps achieved'
+          : 'Ritual steps',
+);
+watch(
+    () => props.phaseId,
+    (next, previous) => {
+        if (next === previous) return;
+        phaseChanging.value = true;
+        later(() => {
+            phaseChanging.value = false;
+        }, 900);
+    },
+);
+watch(
+    () => props.ritualTokens,
+    (next, previous) => {
+        newlyLit.value =
+            next > previous
+                ? Array.from(
+                      { length: next - previous },
+                      (_, i) => previous + i + 1,
+                  )
+                : [];
+        later(() => {
+            newlyLit.value = [];
+        }, 1000);
+    },
+);
 watch(
     () =>
-        [
-            props.phaseId,
-            props.submitted,
-            props.players
-                .map(
-                    (p) =>
-                        `${p.id}:${p.alive}:${p.ready}:${p.discussion_ready}`,
-                )
-                .join('|'),
-        ].join('/'),
-    () => scene?.draw(!reduced.value),
+        props.players.map((player) => ({ id: player.id, alive: player.alive })),
+    (next, previous) => {
+        const ids = next
+            .filter(
+                (player) =>
+                    !player.alive &&
+                    previous.some((old) => old.id === player.id && old.alive),
+            )
+            .map((player) => player.id);
+        if (!ids.length) return;
+        extinguished.value = ids;
+        later(() => {
+            extinguished.value = [];
+        }, 1400);
+    },
 );
-onMounted(async () => {
-    motion = window.matchMedia('(prefers-reduced-motion: reduce)');
-    motionChanged();
-    motion.addEventListener('change', motionChanged);
-    try {
-        const Phaser = await import('phaser');
-        if (disposed || !canvas.value) return;
-        class TableScene extends Phaser.Scene {
-            previousPhase = -1;
-            previousSubmitted = false;
-            create() {
-                scene = { draw: (animate: boolean) => this.draw(animate) };
-                available.value = true;
-                this.draw(!reduced.value);
-            }
-            draw(animate: boolean) {
-                this.tweens.killAll();
-                this.children.removeAll(true);
-                const changed = this.previousPhase !== props.phaseId;
-                const sealed =
-                    !changed && props.submitted && !this.previousSubmitted;
-                this.previousPhase = props.phaseId;
-                this.previousSubmitted = props.submitted;
-                const ink = this.add.graphics();
-                ink.fillStyle(0x080f11, 0.3);
-                ink.fillEllipse(450, 272, 670, 302);
-                ink.fillStyle(props.phase === 'night' ? 0x152c2c : 0x254039);
-                ink.fillEllipse(450, 250, 660, 290);
-                ink.lineStyle(2, 0x76805c, 0.7);
-                ink.strokeEllipse(450, 250, 660, 290);
-                ink.lineStyle(1, 0x76805c, 0.3);
-                ink.strokeEllipse(450, 250, 630, 266);
-                ink.lineStyle(1, 0xbdcd9c, 0.22);
-                ink.strokeCircle(450, 250, 49);
-                ink.strokeCircle(450, 250, 38);
-                this.add
-                    .text(450, 250, props.phase === 'night' ? '☾' : '✧', {
-                        fontFamily: 'Georgia',
-                        fontSize: '43px',
-                        color: '#bdcd9c',
-                    })
-                    .setOrigin(0.5)
-                    .setAlpha(0.7);
-                props.players.forEach((player, index) => {
-                    const angle =
-                        (index / Math.max(1, props.players.length)) *
-                            Math.PI *
-                            2 -
-                        Math.PI / 2;
-                    const x = 450 + Math.cos(angle) * 242;
-                    const y = 250 + Math.sin(angle) * 91;
-                    const card = this.add.container(x, y);
-                    const back = this.add.graphics();
-                    back.fillStyle(0x080f11, 0.4);
-                    back.fillRoundedRect(-23, -30, 49, 66, 4);
-                    back.fillStyle(0xe4dec5);
-                    back.fillRoundedRect(-24, -34, 48, 64, 3);
-                    back.fillStyle(0x233c37);
-                    back.fillRoundedRect(-20, -30, 40, 56, 2);
-                    back.lineStyle(1, 0xbdcd9c, 0.65);
-                    back.strokeRoundedRect(-16, -26, 32, 48, 1);
-                    const glyph = this.add
-                        .text(0, -1, '✧', {
-                            fontFamily: 'Georgia',
-                            fontSize: '24px',
-                            color: '#bdcd9c',
-                        })
-                        .setOrigin(0.5);
-                    card.add([back, glyph]);
-                    card.setAngle(Math.sin(angle) * 7);
-                    card.setAlpha(player.alive ? 1 : 0.3);
-                    if (
-                        player.id === props.meId &&
-                        props.submitted &&
-                        ['night', 'voting'].includes(props.phase)
-                    ) {
-                        const wax = this.add.circle(0, 14, 9, 0xb77861);
-                        card.add(wax);
-                        if (sealed && animate)
-                            this.tweens.add({
-                                targets: card,
-                                x: 450,
-                                y: 300,
-                                angle: 0,
-                                duration: 420,
-                                ease: 'Cubic.Out',
-                            });
-                        else card.setPosition(450, 300).setAngle(0);
-                    } else if (changed && animate) {
-                        card.setPosition(450, 250).setScale(0.65).setAlpha(0);
-                        this.tweens.add({
-                            targets: card,
-                            x,
-                            y,
-                            scale: 1,
-                            alpha: player.alive ? 1 : 0.3,
-                            duration: 650,
-                            delay: index * 65,
-                            ease: 'Cubic.Out',
-                        });
-                    }
-                });
-            }
-        }
-        game = new Phaser.Game({
-            type: Phaser.CANVAS,
-            parent: canvas.value,
-            width: 900,
-            height: 500,
-            transparent: true,
-            scene: TableScene,
-            audio: { noAudio: true },
-            banner: false,
-            scale: {
-                mode: Phaser.Scale.FIT,
-                autoCenter: Phaser.Scale.CENTER_BOTH,
-            },
-            fps: { target: 30, forceSetTimeOut: true },
-        });
-    } catch {
-        failed.value = true;
-    }
-});
+watch(
+    () => props.actionSerial,
+    (next, previous) => {
+        if (next <= previous) return;
+        sealRecent.value = true;
+        later(() => {
+            sealRecent.value = false;
+        }, 1200);
+    },
+);
 onBeforeUnmount(() => {
-    disposed = true;
-    motion?.removeEventListener('change', motionChanged);
-    scene = undefined;
-    game?.destroy(true);
+    timers.forEach(clearTimeout);
 });
 </script>
+
 <template>
-    <section class="table-panel" aria-label="The village card table">
+    <section
+        class="table-panel"
+        :class="{ 'phase-arriving': phaseChanging }"
+        :data-phase="phase"
+        :data-winner="winner"
+        aria-label="The village card table"
+    >
         <div class="table-topline">
-            <span class="eyebrow">THE VILLAGE TABLE</span
-            ><span>Faces are cosmetic. Secrets stay secret.</span>
+            <span class="eyebrow">THE VILLAGE TABLE</span>
+            <span
+                >{{ players.filter((player) => player.alive).length }} seated in
+                the light</span
+            >
         </div>
-        <div class="card-table" :class="{ 'is-night': phase === 'night' }">
-            <div v-if="!available" class="table-fallback" aria-hidden="true">
-                <span>✧</span>
+        <div
+            class="card-table"
+            :class="{
+                'is-night': phase === 'night',
+                'is-small': players.length <= 4,
+                'is-crowded': crowded,
+            }"
+        >
+            <div class="table-surface" aria-hidden="true">
+                <div class="table-inlay"></div>
             </div>
-            <div ref="canvas" class="table-canvas" aria-hidden="true"></div>
+            <div class="table-atmosphere" aria-hidden="true"></div>
             <div
+                class="table-ritual"
+                :class="{ 'ritual-awakening': newlyLit.length > 0 }"
+                role="img"
+                :aria-label="`${ritualTokens} of ${ritualThreshold} ritual steps${phase === 'finished' ? ' achieved' : ''}`"
+            >
+                <div class="ritual-ring" aria-hidden="true">
+                    <span
+                        v-for="step in ritualThreshold"
+                        :key="step"
+                        class="ritual-rune"
+                        :class="{
+                            'is-lit': step <= ritualTokens,
+                            'is-new': newlyLit.includes(step),
+                        }"
+                        :style="{
+                            transform: `rotate(${((step - 1) / ritualThreshold) * 360}deg) translateY(calc(var(--ring-size) / -2))`,
+                        }"
+                        >ᛟ</span
+                    >
+                </div>
+                <span class="ritual-center-icon" aria-hidden="true"
+                    ><Flame :size="19"
+                /></span>
+                <strong
+                    >{{
+                        phase === 'lobby'
+                            ? ritualThreshold || '—'
+                            : ritualTokens
+                    }}<small v-if="phase !== 'lobby'">
+                        / {{ ritualThreshold }}</small
+                    ></strong
+                >
+                <span class="ritual-center-label">{{ ritualLabel }}</span>
+            </div>
+            <component
+                :is="selectable(player) ? 'button' : 'div'"
                 v-for="(player, index) in players"
                 :key="player.id"
                 class="table-seat"
                 :class="{
                     'is-me': player.id === meId,
                     'is-banished': !player.alive,
+                    'is-selectable': selectable(player),
+                    'is-selected': selectedTarget === player.id && canSelect,
+                    'is-extinguishing': extinguished.includes(player.id),
+                    'is-face-up': phase === 'finished',
                 }"
                 :style="seatStyle(index)"
-                aria-hidden="true"
+                :type="selectable(player) ? 'button' : undefined"
+                :role="selectable(player) ? undefined : 'group'"
+                :aria-label="seatLabel(player)"
+                :aria-pressed="
+                    selectable(player)
+                        ? selectedTarget === player.id
+                        : undefined
+                "
+                @click="selectable(player) && emit('select', player.id)"
             >
+                <span class="seat-card" aria-hidden="true"></span>
                 <CharacterPortrait :character="player.character" decorative />
-                <span class="seat-name"
-                    >{{ player.name
-                    }}{{ player.id === meId ? ' · You' : '' }}</span
-                >
+                <span class="seat-candle" aria-hidden="true"><i></i></span>
                 <span
                     v-if="
-                        phase === 'discussion' &&
-                        player.alive &&
-                        player.discussion_ready
+                        player.id === meId &&
+                        (sealRecent ||
+                            (submitted && ['night', 'voting'].includes(phase)))
                     "
-                    class="seat-ready"
-                    >Ready for voting</span
+                    class="seat-seal"
+                    :class="{ 'seal-arriving': sealRecent }"
+                    role="img"
+                    aria-label="Your action is sealed"
+                    ><LockKeyhole :size="12"
+                /></span>
+                <span
+                    v-if="selectedTarget === player.id && canSelect"
+                    class="seat-selected-mark"
+                    aria-hidden="true"
+                    ><Check :size="13"
+                /></span>
+                <span class="seat-name" :title="player.name"
+                    >{{ player.name
+                    }}<small v-if="player.id === meId">You</small></span
                 >
                 <span
-                    v-else-if="phase === 'lobby' && player.ready"
-                    class="seat-ready"
-                    >Ready</span
+                    v-if="phase === 'finished' && player.role"
+                    class="seat-final-role"
+                    :class="{ 'is-cult': player.alignment === 'cult' }"
+                    >{{ roles[player.role]?.name ?? player.role }}</span
                 >
                 <span v-else-if="!player.alive" class="seat-banished"
                     >Banished</span
                 >
-            </div>
+                <span
+                    v-else-if="
+                        (phase === 'discussion' && player.discussion_ready) ||
+                        (phase === 'lobby' && player.ready)
+                    "
+                    class="seat-ready"
+                    >Ready</span
+                >
+            </component>
         </div>
-        <p class="table-caption">
-            {{ caption
-            }}<span v-if="failed">
-                The animated table is unavailable; all controls remain
-                below.</span
-            >
-        </p>
+        <p class="table-caption">{{ caption }}</p>
     </section>
 </template>

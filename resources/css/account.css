@@ -163,7 +163,8 @@
     position: absolute;
     right: 0;
     top: 0;
-    width: 100%;
+    width: 76%;
+    max-width: 740px;
     height: 100%;
     object-fit: cover;
     object-position: 50% 12%;
@@ -735,6 +736,7 @@
         min-height: 235px;
     }
     .ledger-arrival-art {
+        width: 100%;
         object-position: 56% 25%;
     }
     .ledger-arrival::after {

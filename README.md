@@ -1,6 +1,6 @@
 # Who’s Chanting?
 
-A private-room social deduction game built with Laravel 13, Vue 3, TypeScript, Reverb + Echo, MySQL, and a lazy-loaded Phaser card table. No account is required: an encrypted Laravel session owns your seat.
+A private-room social deduction game built with Laravel 13, Vue 3, TypeScript, Reverb + Echo, MySQL, and a responsive village card table. No account is required: an encrypted Laravel session owns your seat.
 
 ## Run locally
 
@@ -30,9 +30,11 @@ Accounts must verify their email before entering the game or choosing a characte
 
 Run `php artisan migrate` on existing installations to add welcome-email delivery tracking, and keep `php artisan queue:work --tries=3` running. Configure `MAIL_MAILER=smtp`, `MAIL_HOST`, `MAIL_PORT`, `MAIL_SCHEME`, `MAIL_USERNAME`, `MAIL_PASSWORD`, and a provider-approved `MAIL_FROM_ADDRESS` for inbox delivery. Set `APP_URL` to the public HTTPS site so signed links point to the correct host. The default `MAIL_MAILER=log` is for local previews and does **not** deliver email. After deployment, refresh cached configuration and restart queue workers. The welcome job retries failures and skips accounts that already received their welcome.
 
-Eight illustrated villagers are available as cosmetic portraits. Guests receive a random character; signed-in players can select any character when creating or joining a room, and change it in the lobby. Account choices are remembered within the browser session. Portraits stay with the seat through reconnects and rematches and never indicate a role or team. Older rooms receive a stable fallback portrait.
+Illustrated villagers are available as cosmetic portraits. Guests receive a random character; signed-in players can select any character when creating or joining a room, and change it in the lobby. Account choices are remembered within the browser session. Portraits stay with the seat through reconnects and rematches and never indicate a role or team. Older rooms receive a stable fallback portrait.
 
-The game includes a Phaser card table, an in-game glossary, and optional synthesized sound effects. Sound is enabled with a user gesture and can be muted. Reduced-motion preferences are respected; HTML controls remain available independently of the canvas.
+The game pairs the table and current action in a responsive play area, with a compact layout on phones. Select an eligible seat to choose a target, then confirm using the action controls; seat selection never submits an action. Existing target buttons and curse restrictions remain available. The table shows public ritual progress, phase lighting, candles, and sealed cards. Roles turn face-up only after victory. Help contains the in-game glossary. Reduced-motion preferences suppress decorative motion.
+
+Optional procedural audio adds coastal ambience and short cues for phases, sealed actions, ritual progress, and victory. Effects and ambience have separate saved volume controls. Sound requires a user gesture, even when an enabled preference was saved previously. Background tabs are silent, and discussion ambience is quieter. A gentle deadline reminder is limited to players who still need to act. Audio cues use public game events and the player's own submission; they never encode a secret role or target.
 
 ## First-match rules (provisional)
 
@@ -84,9 +86,12 @@ CSRF protection, session blocking, input validation, and request throttles apply
 ```sh
 npm run check
 npm run types:check
+npm run test:audio
 npm run build
 composer test
 ```
+
+`npm run test:audio` covers cue deduplication, deadline reminders, preference validation, independent volume controls, and audio lifecycle/cleanup with a mock audio context. It runs as part of `composer ci:check`. Browser checks should also cover first-click activation, mute, background-tab suspension, mobile sound settings, and keyboard seat selection.
 
 PHPUnit uses a separate in-memory SQLite database by default. `tests/Feature/GameTest.php` covers hidden information, guest recovery, channel authorization, abilities in either direction, mission scoring, duplicate/stale actions, deadlines, ties and abstentions, both winners, dead-player restrictions, and rematches. MySQL should also be exercised before production because SQLite does not implement row-level locks. To run the suite on MySQL, create an **empty dedicated test database** and set process environment variables `DB_CONNECTION=mysql`, `DB_HOST`, `DB_PORT`, `DB_DATABASE`, `DB_USERNAME`, `DB_PASSWORD`, and `DB_URL` (empty) before running `php artisan test`; never point RefreshDatabase tests at real game data.
 
