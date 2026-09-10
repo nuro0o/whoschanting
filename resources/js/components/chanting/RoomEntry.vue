@@ -1,15 +1,29 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
 import { usePage } from '@inertiajs/vue3';
-import { ArrowRight, KeyRound, LoaderCircle, Plus } from '@lucide/vue';
-import { defaultCharacters, roomRequest, type Character } from '@/lib/chanting';
+import {
+    ArrowRight,
+    ChevronDown,
+    KeyRound,
+    LoaderCircle,
+    Plus,
+} from '@lucide/vue';
+import {
+    defaultCharacters,
+    RoomError,
+    roomRequest,
+    type Character,
+} from '@/lib/chanting';
 import CharacterPicker from './CharacterPicker.vue';
+import CharacterPortrait from './CharacterPortrait.vue';
 
 const props = withDefaults(
     defineProps<{
         initialCode?: string;
         characters?: Character[];
         preferredCharacter?: string | null;
+        initialName?: string;
+        compactCharacters?: boolean;
     }>(),
     { characters: () => defaultCharacters },
 );
@@ -19,7 +33,10 @@ const character = ref(
     props.preferredCharacter || props.characters[0]?.id || 'mariner',
 );
 const mode = ref(props.initialCode ? 'join' : 'create');
-const name = ref('');
+const name = ref((props.initialName ?? '').slice(0, 24));
+const selectedCharacter = computed(() =>
+    props.characters.find((item) => item.id === character.value),
+);
 const code = ref(props.initialCode ?? '');
 const pending = ref(false);
 const error = ref('');
@@ -40,9 +57,13 @@ async function enter() {
         window.location.assign(`/rooms/${encodeURIComponent(data.code)}`);
     } catch (cause) {
         error.value =
-            cause instanceof Error
-                ? cause.message
-                : 'Something went wrong. Try again.';
+            mode.value === 'join' &&
+            cause instanceof RoomError &&
+            cause.status === 404
+                ? 'No room found with that code. Check the code and try again.'
+                : cause instanceof Error
+                  ? cause.message
+                  : 'Something went wrong. Try again.';
         pending.value = false;
     }
 }
@@ -58,6 +79,7 @@ async function enter() {
         >
             <button
                 type="button"
+                :disabled="pending"
                 :class="{ selected: mode === 'create' }"
                 :aria-pressed="mode === 'create'"
                 @click="
@@ -69,6 +91,7 @@ async function enter() {
             </button>
             <button
                 type="button"
+                :disabled="pending"
                 :class="{ selected: mode === 'join' }"
                 :aria-pressed="mode === 'join'"
                 @click="
@@ -105,8 +128,28 @@ async function enter() {
                     :disabled="pending || !!initialCode"
                 />
             </template>
+            <details
+                v-if="signedIn && compactCharacters"
+                class="entry-character-disclosure"
+            >
+                <summary>
+                    <CharacterPortrait :character="character" decorative /><span
+                        ><small>Your character</small
+                        ><strong>{{
+                            selectedCharacter?.name ?? 'Choose a villager'
+                        }}</strong></span
+                    ><span class="entry-character-change"
+                        >Change <ChevronDown :size="14"
+                    /></span>
+                </summary>
+                <CharacterPicker
+                    v-model="character"
+                    :characters="characters"
+                    :disabled="pending"
+                />
+            </details>
             <CharacterPicker
-                v-if="signedIn"
+                v-else-if="signedIn"
                 v-model="character"
                 :characters="characters"
                 :disabled="pending"
@@ -124,8 +167,10 @@ async function enter() {
                     pending || !name.trim() || (mode === 'join' && !code.trim())
                 "
             >
-                <LoaderCircle v-if="pending" :size="18" class="spin" /><template
-                    v-else
+                <template v-if="pending"
+                    ><span role="status">Entering the village…</span
+                    ><LoaderCircle :size="18" class="spin" /></template
+                ><template v-else
                     >{{
                         mode === 'create'
                             ? 'Gather your suspects'
@@ -134,7 +179,11 @@ async function enter() {
                 /></template>
             </button>
             <p class="entry-note">
-                Play as a guest. Bring friends. Keep secrets.
+                {{
+                    signedIn
+                        ? 'Private rooms. Familiar faces. Unfamiliar motives.'
+                        : 'Play as a guest. Bring friends. Keep secrets.'
+                }}
             </p>
         </form>
     </section>

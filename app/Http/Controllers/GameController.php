@@ -11,6 +11,7 @@ use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
+use Laravel\Fortify\Features;
 
 class GameController extends Controller
 {
@@ -19,6 +20,18 @@ class GameController extends Controller
     public function home(Request $request): Response
     {
         return Inertia::render('Welcome', ['rules' => $this->engine->rules(), ...$this->characterProps($request)]);
+    }
+
+    public function dashboard(Request $request): Response
+    {
+        return Inertia::render('Dashboard', [
+            'rules' => $this->engine->rules(),
+            ...$this->characterProps($request),
+            'twoFactorEnabled' => $request->user()->hasEnabledTwoFactorAuthentication(),
+            'passkeyCount' => Features::canManagePasskeys() ? $request->user()->passkeys()->count() : 0,
+            'canManageTwoFactor' => Features::canManageTwoFactorAuthentication(),
+            'canManagePasskeys' => Features::canManagePasskeys(),
+        ]);
     }
 
     public function show(Request $request, string $code): Response

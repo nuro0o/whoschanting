@@ -35,8 +35,6 @@ defineOptions({
 <template>
     <Head title="Security settings" />
 
-    <h1 class="sr-only">Security settings</h1>
-
     <div class="space-y-6">
         <Heading
             variant="small"
@@ -56,7 +54,7 @@ defineOptions({
                 'current_password',
             ]"
             class="space-y-6"
-            v-slot="{ errors, processing }"
+            v-slot="{ errors, processing, recentlySuccessful }"
         >
             <div class="grid gap-2">
                 <Label for="current_password">Current password</Label>
@@ -101,8 +99,15 @@ defineOptions({
                     :disabled="processing"
                     data-test="update-password-button"
                 >
-                    Save
+                    {{ processing ? 'Saving…' : 'Save password' }}
                 </Button>
+                <p
+                    v-if="recentlySuccessful"
+                    class="account-save-status"
+                    role="status"
+                >
+                    Password updated.
+                </p>
             </div>
         </Form>
     </div>

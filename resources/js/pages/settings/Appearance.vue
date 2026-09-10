@@ -19,14 +19,17 @@ defineOptions({
 <template>
     <Head title="Appearance settings" />
 
-    <h1 class="sr-only">Appearance settings</h1>
-
     <div class="space-y-6">
         <Heading
             variant="small"
-            title="Appearance settings"
-            description="Update the appearance settings for your account"
+            title="Choose your light"
+            description="A parchment ledger by day. Deep coastal ink by night."
         />
         <AppearanceTabs />
+        <p class="appearance-explanation">
+            Your choice is saved automatically for account pages. System follows
+            your device’s light or dark setting. The village and game keep their
+            nighttime atmosphere.
+        </p>
     </div>
 </template>

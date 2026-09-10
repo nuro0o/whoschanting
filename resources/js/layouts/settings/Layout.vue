@@ -1,71 +1,73 @@
-<script setup lang="ts">
-import { Link } from '@inertiajs/vue3';
-import Heading from '@/components/Heading.vue';
-import { Button } from '@/components/ui/button';
-import { Separator } from '@/components/ui/separator';
-import { useCurrentUrl } from '@/composables/useCurrentUrl';
-import { toUrl } from '@/lib/utils';
-import { edit as editAppearance } from '@/routes/appearance';
-import { edit as editProfile } from '@/routes/profile';
-import { edit as editSecurity } from '@/routes/security';
-import type { NavItem } from '@/types';
-
-const sidebarNavItems: NavItem[] = [
-    {
-        title: 'Profile',
-        href: editProfile(),
-    },
-    {
-        title: 'Security',
-        href: editSecurity(),
-    },
-    {
-        title: 'Appearance',
-        href: editAppearance(),
-    },
-];
-
-const { isCurrentOrParentUrl } = useCurrentUrl();
+﻿<script setup lang="ts">
+import { Link, usePage } from '@inertiajs/vue3';
+import { ArrowLeft, ArrowRight } from '@lucide/vue';
+import { computed } from 'vue';
+const page = usePage();
+const section = computed(() => {
+    if (page.url.startsWith('/settings/security'))
+        return {
+            title: 'Keep your secrets.',
+            label: 'Security',
+            description:
+                'Protect your account, from your password to your next sign-in.',
+        };
+    if (page.url.startsWith('/settings/appearance'))
+        return {
+            title: 'Set the atmosphere.',
+            label: 'Appearance',
+            description:
+                'A little lamplight, or a little darkness. Make the ledger yours.',
+        };
+    return {
+        title: 'Your name in the book.',
+        label: 'Profile',
+        description:
+            'The details that make your place in the village your own.',
+    };
+});
 </script>
 
 <template>
-    <div class="px-4 py-6">
-        <Heading
-            title="Settings"
-            description="Manage your profile and account settings"
-        />
-
-        <div class="flex flex-col lg:flex-row lg:space-x-12">
-            <aside class="w-full max-w-xl lg:w-48">
-                <nav
-                    class="flex flex-col space-y-1 space-x-0"
-                    aria-label="Settings"
-                >
-                    <Button
-                        v-for="item in sidebarNavItems"
-                        :key="toUrl(item.href)"
-                        variant="ghost"
-                        :class="[
-                            'w-full justify-start',
-                            { 'bg-muted': isCurrentOrParentUrl(item.href) },
-                        ]"
-                        as-child
-                    >
-                        <Link :href="item.href">
-                            <component :is="item.icon" class="h-4 w-4" />
-                            {{ item.title }}
-                        </Link>
-                    </Button>
-                </nav>
-            </aside>
-
-            <Separator class="my-6 lg:hidden" />
-
-            <div class="flex-1 md:max-w-2xl">
-                <section class="max-w-xl space-y-12">
-                    <slot />
-                </section>
+    <div class="account-settings">
+        <header class="account-page-heading">
+            <div>
+                <p class="account-kicker">
+                    Your account <span aria-hidden="true">/</span>
+                    {{ section.label }}
+                </p>
+                <h1>{{ section.title }}</h1>
+                <p class="account-heading-description">
+                    {{ section.description }}
+                </p>
             </div>
+        </header>
+        <div class="account-settings-columns">
+            <section
+                class="account-settings-form"
+                :aria-label="section.label + ' settings'"
+            >
+                <slot />
+            </section>
+            <aside class="account-settings-aside">
+                <img
+                    src="/assets/chanting/verify-email-ferryman.png"
+                    alt="The Ferryman offers a hand from his boat."
+                />
+                <div>
+                    <p class="account-kicker">You belong here</p>
+                    <h2>The boat is waiting.</h2>
+                    <p>
+                        Your next crossing is only a room away. Bring a few
+                        familiar faces.
+                    </p>
+                    <Link href="/dashboard" class="account-text-link"
+                        >Return to the ledger <ArrowRight :size="15"
+                    /></Link>
+                </div>
+            </aside>
         </div>
+        <Link href="/dashboard" class="account-settings-back"
+            ><ArrowLeft :size="15" /> Back to the village ledger</Link
+        >
     </div>
 </template>

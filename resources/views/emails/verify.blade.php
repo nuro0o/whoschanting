@@ -1,5 +1,5 @@
 @extends('emails.layout', [
-    'heroImage' => 'assets/chanting/verify-email-ferryman.png',
+    'heroImage' => 'assets/chanting/verify-email-ferryman.jpg',
     'heroAlt' => 'A hooded Ferryman with glowing eyes offers you a hand aboard his boat beside the village dock.',
 ])
 

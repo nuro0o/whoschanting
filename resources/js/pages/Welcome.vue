@@ -41,7 +41,7 @@ withDefaults(
                 /></a>
                 <a
                     v-if="$page.props.auth.user"
-                    href="/settings/profile"
+                    href="/dashboard"
                     class="quiet-link"
                     >My account</a
                 >

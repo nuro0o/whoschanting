@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Monitor, Moon, Sun } from '@lucide/vue';
+import { Check, Monitor, Moon, Sun } from '@lucide/vue';
 import { useAppearance } from '@/composables/useAppearance';
 
 const { appearance, updateAppearance } = useAppearance();
@@ -13,21 +13,29 @@ const tabs = [
 
 <template>
     <div
-        class="inline-flex gap-1 rounded-lg bg-neutral-100 p-1 dark:bg-neutral-800"
+        class="appearance-options"
+        role="group"
+        aria-label="Account appearance"
     >
         <button
             v-for="{ value, Icon, label } in tabs"
             :key="value"
+            type="button"
+            :aria-pressed="appearance === value"
             @click="updateAppearance(value)"
-            :class="[
-                'flex items-center rounded-md px-3.5 py-1.5 transition-colors',
-                appearance === value
-                    ? 'bg-white shadow-xs dark:bg-neutral-700 dark:text-neutral-100'
-                    : 'text-neutral-500 hover:bg-neutral-200/60 hover:text-black dark:text-neutral-400 dark:hover:bg-neutral-700/60',
-            ]"
+            class="appearance-option"
+            :class="{ 'is-selected': appearance === value }"
         >
-            <component :is="Icon" class="-ml-1 h-4 w-4" />
-            <span class="ml-1.5 text-sm">{{ label }}</span>
+            <span
+                class="appearance-preview"
+                :class="'appearance-preview--' + value"
+                aria-hidden="true"
+                ><i></i><b></b
+            ></span>
+            <span class="appearance-option-label"
+                ><component :is="Icon" :size="14" /><span>{{ label }}</span
+                ><Check v-if="appearance === value" :size="13"
+            /></span>
         </button>
     </div>
 </template>

@@ -1,5 +1,5 @@
 @extends('emails.layout', [
-    'heroImage' => 'assets/chanting/welcome-email-ferryman.png',
+    'heroImage' => 'assets/chanting/welcome-email-ferryman.jpg',
     'heroAlt' => 'From your seat aboard the boat, the hooded Ferryman rows you toward the lantern-lit village.',
 ])
 

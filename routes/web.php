@@ -17,7 +17,7 @@ Route::middleware([PrivateGameResponse::class, EnsureVerifiedAccount::class])->g
 });
 
 Route::middleware(['auth', 'verified'])->group(function () {
-    Route::inertia('dashboard', 'Dashboard')->name('dashboard');
+    Route::get('dashboard', [GameController::class, 'dashboard'])->middleware(PrivateGameResponse::class)->name('dashboard');
 });
 
 require __DIR__.'/settings.php';

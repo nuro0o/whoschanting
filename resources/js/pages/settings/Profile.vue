@@ -30,8 +30,6 @@ const user = computed(() => page.props.auth.user);
 <template>
     <Head title="Profile settings" />
 
-    <h1 class="sr-only">Profile settings</h1>
-
     <div class="flex flex-col space-y-6">
         <Heading
             variant="small"
@@ -42,7 +40,7 @@ const user = computed(() => page.props.auth.user);
         <Form
             v-bind="ProfileController.update.form()"
             class="space-y-6"
-            v-slot="{ errors, processing }"
+            v-slot="{ errors, processing, recentlySuccessful }"
         >
             <div class="grid gap-2">
                 <Label for="name">Name</Label>
@@ -94,9 +92,18 @@ const user = computed(() => page.props.auth.user);
             </div>
 
             <div class="flex items-center gap-4">
-                <Button :disabled="processing" data-test="update-profile-button"
-                    >Save</Button
+                <Button
+                    :disabled="processing"
+                    data-test="update-profile-button"
+                    >{{ processing ? 'Saving…' : 'Save profile' }}</Button
                 >
+                <p
+                    v-if="recentlySuccessful"
+                    class="account-save-status"
+                    role="status"
+                >
+                    Profile saved.
+                </p>
             </div>
         </Form>
     </div>
