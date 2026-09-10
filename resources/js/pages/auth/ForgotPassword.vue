@@ -11,8 +11,9 @@ import { email } from '@/routes/password';
 
 defineOptions({
     layout: {
-        title: 'Forgot password',
-        description: 'Enter your email to receive a password reset link',
+        title: 'Lost your way?',
+        description:
+            'It happens to the best of us. We’ll email you a link to reset your password.',
     },
 });
 
@@ -24,10 +25,7 @@ defineProps<{
 <template>
     <Head title="Forgot password" />
 
-    <div
-        v-if="status"
-        class="mb-4 text-center text-sm font-medium text-green-600"
-    >
+    <div v-if="status" class="auth-status" role="status">
         {{ status }}
     </div>
 
@@ -39,7 +37,8 @@ defineProps<{
                     id="email"
                     type="email"
                     name="email"
-                    autocomplete="off"
+                    autocomplete="email"
+                    required
                     autofocus
                     placeholder="email@example.com"
                 />

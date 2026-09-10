@@ -110,6 +110,12 @@
 .quiet-link:hover {
     color: var(--green);
 }
+.account-signup {
+    border: 1px solid var(--green);
+    border-radius: 4px;
+    padding: 10px 14px;
+    color: var(--green);
+}
 .edition-label {
     color: #9bab9f;
     font-size: 9px;
@@ -1129,6 +1135,18 @@
     }
 }
 @media (max-width: 700px) {
+    .home-page .site-header {
+        height: auto;
+        min-height: 77px;
+        flex-wrap: wrap;
+        gap: 16px;
+        padding-block: 18px;
+    }
+    .home-page .site-header nav {
+        width: 100%;
+        gap: 12px;
+        justify-content: space-between;
+    }
     .site-header {
         height: 77px;
         padding: 0 6%;

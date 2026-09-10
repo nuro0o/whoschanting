@@ -37,10 +37,20 @@ withDefaults(
             >
             <nav aria-label="Main navigation">
                 <a href="#how-to-play" class="quiet-link"
-                    >How to play <ArrowDown :size="14" /></a
-                ><span class="edition-label"
-                    >A LITTLE PARANOIA. A LOT OF FRIENDS.</span
+                    >How to play <ArrowDown :size="14"
+                /></a>
+                <a
+                    v-if="$page.props.auth.user"
+                    href="/settings/profile"
+                    class="quiet-link"
+                    >My account</a
                 >
+                <template v-else>
+                    <a href="/login" class="quiet-link">Sign in</a>
+                    <a href="/register" class="quiet-link account-signup"
+                        >Create account</a
+                    >
+                </template>
             </nav>
         </header>
         <main>

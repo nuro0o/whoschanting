@@ -15,8 +15,8 @@ import PasskeyVerify from '@/components/PasskeyVerify.vue';
 
 defineOptions({
     layout: {
-        title: 'Log in to your account',
-        description: 'Enter your email and password below to log in',
+        title: 'Welcome back.',
+        description: 'The village missed you. Sign in and find your friends.',
     },
 });
 
@@ -27,12 +27,9 @@ defineProps<{
 </script>
 
 <template>
-    <Head title="Log in" />
+    <Head title="Sign in" />
 
-    <div
-        v-if="status"
-        class="mb-4 text-center text-sm font-medium text-green-600"
-    >
+    <div v-if="status" class="auth-status" role="status">
         {{ status }}
     </div>
 
@@ -53,11 +50,16 @@ defineProps<{
                     name="email"
                     required
                     autofocus
-                    :tabindex="1"
                     autocomplete="email"
                     placeholder="email@example.com"
+                    :aria-invalid="Boolean(errors.email)"
+                    :aria-describedby="errors.email ? 'email-error' : undefined"
                 />
-                <InputError :message="errors.email" />
+                <InputError
+                    id="email-error"
+                    :message="errors.email"
+                    role="alert"
+                />
             </div>
 
             <div class="grid gap-2">
@@ -67,7 +69,6 @@ defineProps<{
                         v-if="canResetPassword"
                         :href="request()"
                         class="text-sm"
-                        :tabindex="5"
                     >
                         Forgot your password?
                     </TextLink>
@@ -76,16 +77,23 @@ defineProps<{
                     id="password"
                     name="password"
                     required
-                    :tabindex="2"
                     autocomplete="current-password"
                     placeholder="Password"
+                    :aria-invalid="Boolean(errors.password)"
+                    :aria-describedby="
+                        errors.password ? 'password-error' : undefined
+                    "
                 />
-                <InputError :message="errors.password" />
+                <InputError
+                    id="password-error"
+                    :message="errors.password"
+                    role="alert"
+                />
             </div>
 
             <div class="flex items-center justify-between">
                 <Label for="remember" class="flex items-center space-x-3">
-                    <Checkbox id="remember" name="remember" :tabindex="3" />
+                    <Checkbox id="remember" name="remember" />
                     <span>Remember me</span>
                 </Label>
             </div>
@@ -93,18 +101,17 @@ defineProps<{
             <Button
                 type="submit"
                 class="mt-4 w-full"
-                :tabindex="4"
                 :disabled="processing"
                 data-test="login-button"
             >
                 <Spinner v-if="processing" />
-                Log in
+                {{ processing ? 'Signing in…' : 'Sign in' }}
             </Button>
         </div>
 
-        <div class="text-muted-foreground text-center text-sm">
+        <div class="auth-switch">
             Don't have an account?
-            <TextLink :href="register()" :tabindex="5">Sign up</TextLink>
+            <TextLink :href="register()">Create account</TextLink>
         </div>
     </Form>
 </template>

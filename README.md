@@ -26,6 +26,10 @@ For phones on a local network, serve on `0.0.0.0`, set `APP_URL` and the Reverb/
 
 ## Characters and presentation
 
+Accounts must verify their email before entering the game or choosing a character. Guests can still play without registering. Registration queues a signed, expiring verification email; resend is rate limited. After the first successful verification, a separate welcome email introduces character choice and room play. Both emails include embedded artwork and plain-text alternatives. Changing an account's email revokes verification and queues a new link. Profile editing remains available so an unverified user can correct their address.
+
+Run `php artisan migrate` on existing installations to add welcome-email delivery tracking, and keep `php artisan queue:work --tries=3` running. Configure `MAIL_MAILER=smtp`, `MAIL_HOST`, `MAIL_PORT`, `MAIL_SCHEME`, `MAIL_USERNAME`, `MAIL_PASSWORD`, and a provider-approved `MAIL_FROM_ADDRESS` for inbox delivery. Set `APP_URL` to the public HTTPS site so signed links point to the correct host. The default `MAIL_MAILER=log` is for local previews and does **not** deliver email. After deployment, refresh cached configuration and restart queue workers. The welcome job retries failures and skips accounts that already received their welcome.
+
 Eight illustrated villagers are available as cosmetic portraits. Guests receive a random character; signed-in players can select any character when creating or joining a room, and change it in the lobby. Account choices are remembered within the browser session. Portraits stay with the seat through reconnects and rematches and never indicate a role or team. Older rooms receive a stable fallback portrait.
 
 The game includes a Phaser card table, an in-game glossary, and optional synthesized sound effects. Sound is enabled with a user gesture and can be muted. Reduced-motion preferences are respected; HTML controls remain available independently of the canvas.

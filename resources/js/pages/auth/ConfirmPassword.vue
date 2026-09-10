@@ -14,9 +14,9 @@ import PasskeyVerify from '@/components/PasskeyVerify.vue';
 
 defineOptions({
     layout: {
-        title: 'Confirm password',
+        title: 'Just checking it’s you.',
         description:
-            'This is a secure area of the application. Please confirm your password before continuing.',
+            'Confirm your password before changing something important.',
     },
 });
 </script>
@@ -41,7 +41,7 @@ defineOptions({
     >
         <div class="space-y-6">
             <div class="grid gap-2">
-                <Label htmlFor="password">Password</Label>
+                <Label for="password">Password</Label>
                 <PasswordInput
                     id="password"
                     name="password"
