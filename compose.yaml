@@ -1,0 +1,19 @@
+services:
+    mysql:
+        image: mysql:8.4
+        ports:
+            - '127.0.0.1:3307:3306'
+        environment:
+            MYSQL_DATABASE: whoschanting
+            MYSQL_USER: chanting
+            MYSQL_PASSWORD: chanting-local
+            MYSQL_ROOT_PASSWORD: chanting-root-local
+        volumes:
+            - chanting-mysql:/var/lib/mysql
+        healthcheck:
+            test: ['CMD', 'mysqladmin', 'ping', '-h', 'localhost']
+            interval: 5s
+            timeout: 5s
+            retries: 20
+volumes:
+    chanting-mysql:
