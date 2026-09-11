@@ -97,7 +97,7 @@ function randomize() {
                         role="img"
                         aria-label="Live reflection of your custom villager"
                     >
-                        <CreatedCharacter :recipe="recipe" />
+                        <CreatedCharacter :recipe="recipe" mode="mirror" />
                         <span
                             :key="ripple"
                             class="mirror-ripple"

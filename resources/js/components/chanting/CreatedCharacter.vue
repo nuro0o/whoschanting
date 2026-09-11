@@ -1,82 +1,18 @@
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, useId } from 'vue';
 import { defaultCreator, type CreatorRecipe } from '@/lib/creator';
-const props = defineProps<{ recipe?: CreatorRecipe | null }>();
+import {
+    creatorLayers,
+    creatorChest,
+    creatorViews,
+    type CreatorView,
+} from '@/lib/creatorLayout';
+const props = withDefaults(
+    defineProps<{ recipe?: CreatorRecipe | null; mode?: CreatorView }>(),
+    { mode: 'portrait' },
+);
+const identity = useId();
 const appearance = computed(() => ({ ...defaultCreator, ...props.recipe }));
-type Part = {
-    crop: [number, number, number, number];
-    position: [number, number, number, number];
-};
-const portraitParts: Record<
-    string,
-    { file: string; width: number; height: number; parts: Record<string, Part> }
-> = {
-    face: {
-        file: 'faces',
-        width: 1122,
-        height: 1402,
-        parts: {
-            harbor: { crop: [124, 130, 343, 512], position: [32, 18, 36, 45] },
-            weathered: {
-                crop: [654, 130, 346, 513],
-                position: [32, 18, 36, 45],
-            },
-            keen: { crop: [126, 791, 338, 507], position: [32, 18, 36, 45] },
-            round: { crop: [644, 791, 366, 509], position: [31, 18, 38, 45] },
-        },
-    },
-    outfit: {
-        file: 'outfits',
-        width: 1122,
-        height: 1402,
-        parts: {
-            mariner: { crop: [17, 356, 547, 438], position: [5, 45, 90, 58] },
-            scholar: { crop: [558, 352, 545, 442], position: [5, 45, 90, 58] },
-            waistcoat: { crop: [14, 890, 550, 481], position: [5, 45, 90, 58] },
-            ritual: { crop: [558, 844, 563, 527], position: [5, 45, 90, 58] },
-        },
-    },
-    hair: {
-        file: 'hair',
-        width: 1536,
-        height: 1024,
-        parts: {
-            cropped: { crop: [75, 37, 371, 327], position: [29, 15, 42, 27] },
-            waves: { crop: [515, 37, 488, 475], position: [26, 15, 48, 44] },
-            curls: { crop: [1060, 32, 435, 399], position: [27, 14, 46, 34] },
-            braid: { crop: [91, 515, 367, 509], position: [31, 15, 38, 46] },
-            swept: { crop: [549, 528, 414, 347], position: [28, 14, 44, 29] },
-        },
-    },
-    hat: {
-        file: 'hats',
-        width: 1536,
-        height: 1024,
-        parts: {
-            watchcap: { crop: [549, 94, 411, 307], position: [29, 11, 42, 20] },
-            widebrim: {
-                crop: [984, 144, 544, 274],
-                position: [21, 10, 58, 23],
-            },
-            tricorn: { crop: [4, 567, 538, 249], position: [22, 12, 56, 20] },
-            hood: { crop: [540, 510, 465, 508], position: [23, 12, 54, 48] },
-            antlers: { crop: [1058, 528, 453, 406], position: [25, 3, 50, 35] },
-        },
-    },
-    detail: {
-        file: 'details',
-        width: 1254,
-        height: 1254,
-        parts: {
-            spectacles: {
-                crop: [658, 200, 573, 203],
-                position: [36, 32, 28, 8],
-            },
-            earring: { crop: [160, 753, 307, 355], position: [65, 40, 4, 5] },
-            brooch: { crop: [745, 665, 389, 500], position: [62, 63, 7, 8] },
-        },
-    },
-};
 const colorFilters: Record<string, Record<string, string>> = {
     face: {
         porcelain:
@@ -98,51 +34,98 @@ const colorFilters: Record<string, Record<string, string>> = {
         ochre: 'sepia(.95) saturate(1.6) brightness(.92)',
     },
 };
-const layers = computed(() => {
-    const recipe = appearance.value;
-    const cropped = (
-        ['face', 'outfit', 'hair', 'hat', 'detail'] as const
-    ).flatMap((field) => {
-        const atlas = portraitParts[field];
-        const part = atlas.parts[recipe[field]];
-        if (!part) return [];
-        const [x, y, width, height] = part.crop;
-        const [left, top, displayWidth, displayHeight] = part.position;
-        const color =
-            field === 'face'
-                ? recipe.skin
-                : field === 'hair'
-                  ? recipe.hair_color
-                  : recipe.outfit_color;
-        return [
-            {
-                field,
-                value: recipe[field],
-                style: {
-                    left: `${left}%`,
-                    top: `${top}%`,
-                    width: `${displayWidth}%`,
-                    height: `${displayHeight}%`,
-                    backgroundImage: `url(/assets/chanting/creator/${atlas.file}.png)`,
-                    backgroundSize: `${(atlas.width / width) * 100}% ${(atlas.height / height) * 100}%`,
-                    backgroundPosition: `${(x / (atlas.width - width)) * 100}% ${(y / (atlas.height - height)) * 100}%`,
-                    filter: colorFilters[field]?.[color],
-                },
-            },
-        ];
-    });
-    return cropped;
+
+const layers = computed(() => creatorLayers(appearance.value));
+const face = computed(
+    () => layers.value.find((layer) => layer.field === 'face')!.crop,
+);
+const chest = computed(() => creatorChest(appearance.value));
+const viewBox = computed(() => {
+    const view = creatorViews[props.mode];
+    return `${view.x} ${view.y} ${view.width} ${view.height}`;
 });
+function filter(field: string) {
+    const recipe = appearance.value;
+    const color =
+        field === 'face'
+            ? recipe.skin
+            : field === 'hair'
+              ? recipe.hair_color
+              : recipe.outfit_color;
+    return colorFilters[field]?.[color];
+}
 </script>
 <template>
     <span class="created-character" aria-hidden="true">
-        <span
-            v-for="layer in layers"
-            :key="layer.field"
-            class="created-character-layer"
-            :class="`creator-layer-${layer.field} creator-part-${layer.value}`"
-            :style="layer.style"
-        ></span>
+        <svg
+            class="created-character-artboard"
+            :viewBox="viewBox"
+            preserveAspectRatio="xMidYMid meet"
+        >
+            <defs>
+                <linearGradient
+                    :id="`${identity}-neck-fade`"
+                    gradientUnits="userSpaceOnUse"
+                    :x1="face.x"
+                    :y1="face.y + face.height * 0.8"
+                    :x2="face.x"
+                    :y2="face.y + face.height"
+                >
+                    <stop offset="0" stop-color="white" />
+                    <stop offset="1" stop-color="black" />
+                </linearGradient>
+                <mask
+                    :id="`${identity}-neck-mask`"
+                    maskUnits="userSpaceOnUse"
+                    :x="face.x"
+                    :y="face.y"
+                    :width="face.width"
+                    :height="face.height"
+                >
+                    <rect v-bind="face" :fill="`url(#${identity}-neck-fade)`" />
+                </mask>
+                <clipPath :id="`${identity}-chest`">
+                    <path d="M174 244 H226 L238 266 V352 H162 V266Z" />
+                </clipPath>
+            </defs>
+            <g :clip-path="`url(#${identity}-chest)`">
+                <svg
+                    v-bind="chest.destination"
+                    :viewBox="chest.crop.join(' ')"
+                    preserveAspectRatio="xMidYMid slice"
+                    overflow="hidden"
+                    :style="{ filter: filter('face') }"
+                >
+                    <image
+                        href="/assets/chanting/creator/faces.png"
+                        width="1122"
+                        height="1402"
+                    />
+                </svg>
+            </g>
+            <svg
+                v-for="layer in layers"
+                :key="layer.field"
+                class="created-character-layer"
+                :class="`creator-layer-${layer.field} creator-part-${layer.value}`"
+                v-bind="layer.destination"
+                :viewBox="`${layer.crop.x} ${layer.crop.y} ${layer.crop.width} ${layer.crop.height}`"
+                preserveAspectRatio="xMidYMid meet"
+                overflow="hidden"
+                :style="{ filter: filter(layer.field) }"
+            >
+                <image
+                    :mask="
+                        layer.field === 'face'
+                            ? `url(#${identity}-neck-mask)`
+                            : undefined
+                    "
+                    :href="`/assets/chanting/creator/${layer.file}.png`"
+                    :width="layer.atlas.width"
+                    :height="layer.atlas.height"
+                />
+            </svg>
+        </svg>
     </span>
 </template>
 <style scoped>
@@ -153,8 +136,10 @@ const layers = computed(() => {
     overflow: hidden;
     border-radius: inherit;
 }
-.created-character-layer {
-    position: absolute;
-    background-repeat: no-repeat;
+.created-character-artboard {
+    display: block;
+    width: 100%;
+    height: 100%;
+    overflow: visible;
 }
 </style>
