@@ -27,11 +27,7 @@ let music: PhaseMusic | null = null;
 let activated = false;
 let disposed = false;
 const label = computed(() =>
-    active.value
-        ? 'Sound on'
-        : preferences.value.enabled
-          ? 'Enable sound'
-          : 'Sound off',
+    preferences.value.enabled ? 'Sound on' : 'Sound off',
 );
 
 function save() {
@@ -78,16 +74,28 @@ async function enable() {
     } else {
         syncMusic(false);
         if (!document.hidden)
-            issue.value = 'Sound could not start. Tap to try again.';
+            issue.value =
+                'Sound could not start. Turn sound off and on to try again.';
     }
 }
 function toggle() {
-    if (active.value) {
+    if (preferences.value.enabled) {
         preferences.value.enabled = false;
         activated = false;
         engine?.close();
+        issue.value = '';
+        musicIssue.value = '';
         save();
-    } else void enable();
+    } else {
+        preferences.value.enabled = true;
+        save();
+        void enable();
+    }
+}
+function startOnInteraction(event: Event) {
+    // Let the sound button handle its own gesture, including muting before playback.
+    if ((event.target as Element | null)?.closest?.('.sound-control')) return;
+    if (preferences.value.enabled && !active.value) void enable();
 }
 function visibilityChanged() {
     tracker.update({ ...props }, false);
@@ -111,7 +119,7 @@ onMounted(() => {
             localStorage.getItem('chanting-sound'),
         );
     } catch {
-        /* Sound starts off when preferences cannot be read. */
+        /* Keep the default when browser privacy settings block storage. */
     }
     engine = new CoastalAudio((running) => {
         active.value = running && !document.hidden;
@@ -123,6 +131,8 @@ onMounted(() => {
     tracker.update({ ...props }, false);
     document.addEventListener('visibilitychange', visibilityChanged);
     document.addEventListener('pointerdown', closeSettings);
+    document.addEventListener('click', startOnInteraction);
+    document.addEventListener('keydown', startOnInteraction);
 });
 watch(
     () => ({ ...props }),
@@ -143,6 +153,8 @@ onBeforeUnmount(() => {
     disposed = true;
     document.removeEventListener('visibilitychange', visibilityChanged);
     document.removeEventListener('pointerdown', closeSettings);
+    document.removeEventListener('click', startOnInteraction);
+    document.removeEventListener('keydown', startOnInteraction);
     engine?.close();
     music?.close();
     music = null;
@@ -154,11 +166,11 @@ onBeforeUnmount(() => {
     <div class="coastal-sound">
         <button
             class="sound-control"
-            :aria-pressed="active"
+            :aria-pressed="preferences.enabled"
             :disabled="busy"
             @click="toggle"
         >
-            <Volume2 v-if="active" :size="15" aria-hidden="true" />
+            <Volume2 v-if="preferences.enabled" :size="15" aria-hidden="true" />
             <VolumeX v-else :size="15" aria-hidden="true" />
             {{ busy ? 'Starting sound...' : label }}
         </button>
@@ -228,7 +240,11 @@ onBeforeUnmount(() => {
                     Preview effects
                 </button>
                 <p v-else class="sound-settings-note">
-                    Tap the sound button to listen.
+                    {{
+                        preferences.enabled
+                            ? 'Sound starts when you interact with the game.'
+                            : 'Turn sound on to listen.'
+                    }}
                 </p>
             </div>
         </details>

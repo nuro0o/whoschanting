@@ -186,7 +186,7 @@ class GameTest extends TestCase
         $this->expire($room);
         $this->expire($room);
         $recap = $this->engine->access($room->code, 'secret-0')['recap'];
-        $this->assertSame('spatial-curses-v1', $recap['rules_version']);
+        $this->assertSame('curse-seals-v1', $recap['rules_version']);
         $actions = array_column($recap['rounds'][0]['night']['actions'], null, 'player_id');
         $this->assertTrue($actions[$r['warden']]['prevented_curse']);
         $this->assertTrue($actions[$r['lamplighter']]['visited']);
@@ -1253,8 +1253,9 @@ class GameTest extends TestCase
         $this->assertDatabaseCount('game_matches', 0);
         $this->expire($room);
         // An explicit abstention and missing votes are distinct in the final recap.
-        $curse = $room->fresh()->state['players'][$roles['townsperson']]['curse'];
-        $this->act($room, $identities[$roles['townsperson']], 'solve_curse', ['curse_id' => $curse['id'], 'answer' => $curse['solution']]);
+        while ($curse = $room->fresh()->state['players'][$roles['townsperson']]['curse']) {
+            $this->act($room, $identities[$roles['townsperson']], 'solve_curse', ['curse_id' => $curse['id'], 'answer' => $curse['solution']]);
+        }
         $this->act($room, $identities[$roles['townsperson']], 'vote');
         $this->expire($room);
         $this->expire($room);
@@ -1523,6 +1524,52 @@ class GameTest extends TestCase
             $this->assertRejected(fn () => $this->act($room, $identity, 'night'));
             $this->act($room, $identity, 'solve_curse', ['curse_id' => $curse['id'], 'answer' => $curse['solution']]);
             $this->assertTrue($this->act($room, $identity, 'night')['me']['submitted']);
+        }
+    }
+
+    public function test_curse_seals_persist_and_only_the_last_seal_releases_the_player(): void
+    {
+        foreach (['puzzle', 'mist'] as $type) {
+            foreach ([1 => 0, 2 => 2, 3 => 4] as $level => $tokens) {
+                [$room, $identities] = $this->match();
+                $roles = $this->roles($room);
+                $this->expire($room);
+                $this->expire($room);
+                $id = $roles['oracle'];
+                $curse = app(CurseEngine::class)->create($tokens, 6, $room->state['day'], $type);
+                $state = $room->fresh()->state;
+                $state['players'][$id]['curse'] = $curse;
+                $room->update(['state' => $state]);
+                $deadline = $room->fresh()->deadline;
+                for ($stage = 1; $stage <= 4 - $level; $stage++) {
+                    $this->assertRejected(fn () => $this->act($room, $identities[$id], 'discussion_ready'));
+                    $payload = ['type' => 'solve_curse', 'phase_id' => $room->fresh()->state['phase_id'],
+                        'curse_id' => $curse['id'], 'answer' => $curse['solution']];
+                    $this->withSession(['chanting.identity' => $identities[$roles['townsperson']]])
+                        ->postJson('/rooms/'.$room->code.'/actions', $payload)->assertUnprocessable();
+                    $this->withSession(['chanting.identity' => $identities[$id]])
+                        ->postJson('/rooms/'.$room->code.'/actions', [...$payload, 'answer' => [(string) Str::uuid()]])->assertUnprocessable();
+                    $this->assertEquals($curse, $room->fresh()->state['players'][$id]['curse']);
+                    $response = $this->postJson('/rooms/'.$room->code.'/actions', $payload)->assertOk();
+                    $this->postJson('/rooms/'.$room->code.'/actions', $payload)->assertUnprocessable();
+                    $view = $this->engine->access($room->code, $identities[$id]);
+                    $this->assertEquals($deadline, $room->fresh()->deadline);
+                    if ($stage === 4 - $level) {
+                        $response->assertJsonPath('me.curse', null);
+                        $this->assertNull($view['me']['curse']);
+                    } else {
+                        $response->assertJsonPath('me.curse.stage', $stage + 1)->assertJsonPath('me.curse.stages', 4 - $level);
+                        $this->assertSame($stage + 1, $view['me']['curse']['stage']);
+                        $this->assertSame($level, $view['me']['curse']['level']);
+                        $this->assertArrayNotHasKey('solution', $view['me']['curse']);
+                        $next = $room->fresh()->state['players'][$id]['curse'];
+                        $this->assertNotSame($curse['id'], $next['id']);
+                        $this->assertSame($curse['day'], $next['day']);
+                        $curse = $next;
+                    }
+                }
+                $this->act($room, $identities[$id], 'discussion_ready');
+            }
         }
     }
 

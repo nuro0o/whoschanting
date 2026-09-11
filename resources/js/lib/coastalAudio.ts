@@ -9,7 +9,7 @@ export interface SoundPreferences {
 
 export const soundStorageKey = 'chanting-audio-v1';
 export const defaultSoundPreferences: SoundPreferences = {
-    enabled: false,
+    enabled: true,
     effects: 45,
     ambience: 25,
     music: 25,
@@ -19,7 +19,10 @@ export function parseSoundPreferences(
     stored: string | null,
     legacy: string | null = null,
 ): SoundPreferences {
-    const fallback = { ...defaultSoundPreferences, enabled: legacy === 'on' };
+    const fallback = {
+        ...defaultSoundPreferences,
+        enabled: legacy === 'off' ? false : defaultSoundPreferences.enabled,
+    };
     if (!stored) return fallback;
     try {
         const value: unknown = JSON.parse(stored);

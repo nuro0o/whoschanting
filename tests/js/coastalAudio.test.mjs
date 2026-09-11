@@ -300,9 +300,19 @@ const state = (changes = {}) => ({
     ...changes,
 });
 
-await test('preferences validate stored data and migrate the old opt-in', () => {
+await test('preferences default to sound on, preserve mute, and validate stored data', () => {
     assert.deepEqual(parseSoundPreferences(null), defaultSoundPreferences);
+    assert.equal(parseSoundPreferences(null).enabled, true);
     assert.equal(parseSoundPreferences(null, 'on').enabled, true);
+    assert.equal(parseSoundPreferences(null, 'off').enabled, false);
+    assert.equal(
+        parseSoundPreferences('{"enabled":false}', 'on').enabled,
+        false,
+    );
+    assert.equal(
+        parseSoundPreferences('{"enabled":true}', 'off').enabled,
+        true,
+    );
     assert.deepEqual(parseSoundPreferences('{bad'), defaultSoundPreferences);
     assert.deepEqual(parseSoundPreferences('null'), defaultSoundPreferences);
     assert.deepEqual(

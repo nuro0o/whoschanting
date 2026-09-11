@@ -1,5 +1,5 @@
 ﻿<script setup lang="ts">
-import { computed, ref, watch } from 'vue';
+import { computed, nextTick, ref, watch } from 'vue';
 import { LoaderCircle, LockKeyhole, Undo2 } from '@lucide/vue';
 import {
     DialogContent,
@@ -10,7 +10,11 @@ import {
     DialogTitle,
 } from 'reka-ui';
 import type { Curse } from '@/lib/chanting';
-import { ringDirection, ringTurn } from '@/lib/cursePuzzleState';
+import {
+    isNextCurseSeal,
+    ringDirection,
+    ringTurn,
+} from '@/lib/cursePuzzleState';
 import CursePuzzleScene from './CursePuzzleScene.vue';
 import RitualWarning from './RitualWarning.vue';
 
@@ -34,6 +38,16 @@ const challenge = computed(() => props.curse.challenge);
 const isRings = computed(() => challenge.value?.scene?.kind === 'rings');
 const blocking = computed(() => props.curse.type !== 'misdirection');
 const open = computed(() => blocking.value || optionalOpen.value);
+const curseName = computed(() =>
+    props.curse.type === 'puzzle'
+        ? 'Soul Bind'
+        : props.curse.type === 'mist'
+          ? 'Mind Mist'
+          : 'Misdirection',
+);
+const stage = computed(() => props.curse.stage ?? 1);
+const stages = computed(() => props.curse.stages ?? 1);
+const hasNextSeal = computed(() => stage.value < stages.value);
 const complete = computed(
     () =>
         !!challenge.value &&
@@ -50,11 +64,34 @@ const title = computed(() =>
 );
 let previousFocus: HTMLElement | null = null;
 watch(
-    () => `${props.curse.id}:${JSON.stringify(props.curse.challenge)}`,
-    () => {
+    () => ({
+        id: props.curse.id,
+        type: props.curse.type,
+        day: props.curse.day,
+        level: props.curse.level,
+        stage: props.curse.stage,
+        stages: props.curse.stages,
+        challengeKey: JSON.stringify(props.curse.challenge),
+    }),
+    async (current, previous) => {
+        if (
+            current.id === previous.id &&
+            current.stage === previous.stage &&
+            current.challengeKey === previous.challengeKey
+        )
+            return;
+        const advanced = isNextCurseSeal(previous, current);
         answer.value = [];
         history.value = [];
-        optionalOpen.value = false;
+        if (!advanced) optionalOpen.value = false;
+        if (advanced && open.value) {
+            await nextTick();
+            if (props.curse.id !== current.id) return;
+            introduction.value
+                ?.closest('.curse-dialog')
+                ?.scrollTo({ top: 0, behavior: 'instant' });
+            introduction.value?.focus({ preventScroll: true });
+        }
     },
 );
 function choose(id: string) {
@@ -159,13 +196,24 @@ function restoreFocus(event: Event) {
                 <div class="curse-dialog-context">
                     <span
                         ><LockKeyhole :size="14" aria-hidden="true" />
-                        {{ blocking ? 'Cursed' : 'Untangle curse' }}</span
+                        {{ curseName }}</span
                     >
                     <span v-if="phaseLabel || timeLabel">
                         {{ phaseLabel
                         }}<template v-if="phaseLabel && timeLabel"> · </template
                         >{{ timeLabel }}
                     </span>
+                    <span
+                        v-if="
+                            curse.stage !== undefined &&
+                            curse.stages !== undefined
+                        "
+                        class="curse-seals"
+                        role="status"
+                        aria-live="polite"
+                        aria-atomic="true"
+                        >Seal {{ stage }} of {{ stages }}</span
+                    >
                 </div>
                 <div class="curse-dialog-body">
                     <button
@@ -319,6 +367,9 @@ function restoreFocus(event: Event) {
                         >
                             {{ error }} You can edit your answer and try again.
                         </p>
+                        <p v-if="stages > 1" class="curse-seal-note">
+                            Solved seals stay cleared. The timer keeps running.
+                        </p>
                         <div class="curse-controls">
                             <button
                                 type="button"
@@ -353,9 +404,11 @@ function restoreFocus(event: Event) {
                                 {{
                                     pending
                                         ? 'Checking…'
-                                        : curse.type === 'mist'
-                                          ? 'Clear my head'
-                                          : 'Break the curse'
+                                        : hasNextSeal
+                                          ? 'Next seal'
+                                          : curse.type === 'mist'
+                                            ? 'Clear my head'
+                                            : 'Break the curse'
                                 }}
                             </button>
                         </div>
@@ -364,6 +417,9 @@ function restoreFocus(event: Event) {
                                 How to play · Level {{ curse.level }}
                             </summary>
                             <p>
+                                <template v-if="stages > 1"
+                                    >Solved seals stay cleared.
+                                </template>
                                 {{
                                     blocking
                                         ? 'Solve this mechanism to return to the room. The game keeps moving.'
@@ -446,6 +502,16 @@ function restoreFocus(event: Event) {
     align-items: center;
     gap: 7px;
     font-weight: 600;
+}
+.curse-dialog-context .curse-seals {
+    flex: 1 0 100%;
+    color: #c8e4d8;
+    font-size: 11px;
+}
+.curse-dialog .curse-challenge .curse-seal-note {
+    color: #c8b6d0;
+    font-size: 12px;
+    margin-block: 10px 0;
 }
 .curse-dialog-body {
     padding: 24px;

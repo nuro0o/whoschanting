@@ -8,6 +8,7 @@ import {
     ringTurn,
     rotateCurseRing,
     selectCurseObject,
+    nextGuidedLantern,
 } from '@/lib/cursePuzzleState';
 
 const props = defineProps<{
@@ -22,6 +23,11 @@ const sceneKey = computed(() => JSON.stringify(props.challenge));
 const rings = computed(() => props.challenge.scene?.rings ?? []);
 const objects = computed(() => props.challenge.scene?.objects ?? []);
 const isRings = computed(() => props.challenge.scene?.kind === 'rings');
+const nextLantern = computed(() =>
+    nextGuidedLantern(props.challenge, props.answer),
+);
+const feedback = ref('');
+let feedbackTimer: ReturnType<typeof setTimeout> | undefined;
 const selectedCount = computed(() =>
     isRings.value
         ? rings.value.filter(
@@ -40,7 +46,20 @@ function choose(id: string | number) {
         typeof id === 'number'
             ? rotateCurseRing(props.challenge, props.answer, id)
             : selectCurseObject(props.challenge, props.answer, id);
-    if (next !== props.answer) emit('change', next);
+    clearTimeout(feedbackTimer);
+    if (next !== props.answer) {
+        feedback.value = '';
+        emit('change', next);
+    } else if (
+        typeof id === 'string' &&
+        nextLantern.value &&
+        !props.answer.includes(id)
+    ) {
+        feedback.value = `Look for lantern ${nextLantern.value.label}`;
+        feedbackTimer = setTimeout(() => {
+            feedback.value = '';
+        }, 2200);
+    }
 }
 function stop() {
     generation++;
@@ -52,6 +71,8 @@ async function start() {
     if (!mounted || !host.value) return;
     const current = generation;
     status.value = 'loading';
+    feedback.value = '';
+    clearTimeout(feedbackTimer);
     try {
         const { createCursePuzzle } = await import('@/lib/cursePuzzleRenderer');
         if (!mounted || current !== generation || !host.value) return;
@@ -80,7 +101,11 @@ function height(id: string) {
 watch(sceneKey, start);
 watch(
     () => [props.answer, props.disabled],
-    () => renderer?.update(props.answer, props.disabled),
+    () => {
+        feedback.value = '';
+        clearTimeout(feedbackTimer);
+        renderer?.update(props.answer, props.disabled);
+    },
     { deep: true },
 );
 onMounted(() => {
@@ -90,6 +115,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
     mounted = false;
     stop();
+    clearTimeout(feedbackTimer);
 });
 </script>
 
@@ -137,7 +163,25 @@ onBeforeUnmount(() => {
             {{
                 isRings
                     ? 'Tap a ring or use its turn button below.'
-                    : 'Tap an object to light it · Drag to look around'
+                    : challenge.scene?.kind === 'lanterns'
+                      ? 'Follow the numbers, not the heights · Drag to look around'
+                      : 'Tap an object to light it · Drag to look around'
+            }}
+        </p>
+        <p
+            v-if="
+                challenge.scene?.kind === 'lanterns' && challenge.scene.guided
+            "
+            class="mechanism-next"
+            role="status"
+            aria-live="polite"
+            aria-atomic="true"
+        >
+            {{
+                feedback ||
+                (nextLantern
+                    ? `Next lantern: ${nextLantern.label}`
+                    : 'All lanterns lit. Your seal is ready.')
             }}
         </p>
         <div
@@ -210,6 +254,13 @@ onBeforeUnmount(() => {
     color: #d9c8e0;
     font-size: 10px;
     letter-spacing: 0.12em;
+}
+.mechanism-next {
+    margin: 0;
+    padding: 0 14px 12px;
+    color: #a8e1cd;
+    font-size: 13px;
+    font-weight: 600;
 }
 .mechanism-status span:last-child {
     color: #9fdac9;

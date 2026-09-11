@@ -283,7 +283,7 @@ class MatchEngine
                 && ($curse['challenge'] ?? null) !== null && ($curse['solution'] ?? []) !== []
                 && ($a['curse_id'] ?? null) === $curse['id'], 'This curse has already faded or changed.');
             $this->ensure(($a['answer'] ?? null) === $curse['solution'], 'The sigils resist. Check the clues and try again.');
-            $s['players'][$id]['curse'] = null;
+            $s['players'][$id]['curse'] = $this->curses->advance($curse);
 
             return;
         }

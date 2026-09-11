@@ -20,6 +20,8 @@ export function createCursePuzzle(
 ): CursePuzzleRenderer {
     const spec = challenge.scene;
     if (!spec) throw new Error('Missing puzzle scene');
+    const fogDensity =
+        spec.difficulty === 1 ? 0.015 : spec.difficulty === 2 ? 0.03 : 0.05;
     const canvas = document.createElement('canvas');
     canvas.setAttribute('aria-hidden', 'true');
     const renderer = new THREE.WebGLRenderer({
@@ -217,8 +219,9 @@ export function createCursePuzzle(
         });
         if (scene.fog instanceof THREE.FogExp2) {
             scene.fog.density =
-                0.05 -
-                Math.min(answer.length / challenge.answer_length, 1) * 0.035;
+                fogDensity *
+                (1 -
+                    Math.min(answer.length / challenge.answer_length, 1) * 0.7);
         }
         draw();
     }
@@ -454,7 +457,7 @@ export function createCursePuzzle(
             seal.position.y = 0.38;
         } else {
             if (spec.kind === 'lanterns')
-                scene.fog = new THREE.FogExp2(0x87929e, 0.05);
+                scene.fog = new THREE.FogExp2(0x87929e, fogDensity);
             (spec.objects ?? []).forEach((object) => {
                 const option = challenge.options.find(
                     (item) => item.id === object.option_id,

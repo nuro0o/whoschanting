@@ -5,6 +5,8 @@ import {
     ringTurn,
     rotateCurseRing,
     selectCurseObject,
+    nextGuidedLantern,
+    isNextCurseSeal,
 } from '../../resources/js/lib/cursePuzzleState.ts';
 
 const challenge = {
@@ -63,4 +65,94 @@ await test('objects cannot repeat, exceed the answer length or inject unknown ID
     const full = selectCurseObject(challenge, first, 'a');
     assert.deepEqual(full, ['b', 'a']);
     assert.equal(selectCurseObject(challenge, full, 'c'), full);
+});
+
+const guided = {
+    ...challenge,
+    kind: 'lanterns',
+    answer_length: 3,
+    options: [
+        { id: 'three', label: '3' },
+        { id: 'one', label: '1' },
+        { id: 'two', label: '2' },
+    ],
+    scene: { kind: 'lanterns', difficulty: 1, guided: true },
+};
+
+await test('guided lanterns reject out-of-order clicks without losing the correct prefix', () => {
+    const empty = [];
+    assert.equal(selectCurseObject(guided, empty, 'three'), empty);
+    assert.equal(nextGuidedLantern(guided, empty).label, '1');
+    const first = selectCurseObject(guided, empty, 'one');
+    assert.deepEqual(first, ['one']);
+    assert.equal(selectCurseObject(guided, first, 'three'), first);
+    assert.equal(nextGuidedLantern(guided, first).label, '2');
+    assert.deepEqual(selectCurseObject(guided, first, 'two'), ['one', 'two']);
+});
+
+await test('guided lanterns finish with no next hint, and clearing starts from one', () => {
+    const answer = ['one', 'two'].reduce(
+        (state, id) => selectCurseObject(guided, state, id),
+        [],
+    );
+    const full = selectCurseObject(guided, answer, 'three');
+    assert.deepEqual(full, ['one', 'two', 'three']);
+    assert.equal(nextGuidedLantern(guided, full), undefined);
+    assert.equal(selectCurseObject(guided, full, 'three'), full);
+    assert.equal(nextGuidedLantern(guided, []).id, 'one');
+});
+
+await test('unguided and legacy lanterns still accept arbitrary order for server checking', () => {
+    for (const scene of [
+        undefined,
+        { kind: 'lanterns' },
+        { kind: 'lanterns', difficulty: 2, guided: false },
+    ]) {
+        const unguided = { ...guided, scene };
+        assert.deepEqual(selectCurseObject(unguided, [], 'three'), ['three']);
+        assert.equal(nextGuidedLantern(unguided, []), undefined);
+    }
+});
+
+const firstSeal = {
+    id: 'first',
+    type: 'mist',
+    day: 2,
+    level: 1,
+    stage: 1,
+    stages: 3,
+};
+await test('new IDs advancing the same curse retain the active seal flow', () => {
+    assert.equal(
+        isNextCurseSeal(firstSeal, { ...firstSeal, id: 'next', stage: 2 }),
+        true,
+    );
+    assert.equal(
+        isNextCurseSeal(firstSeal, { ...firstSeal, id: 'latest', stage: 3 }),
+        true,
+    );
+    assert.equal(isNextCurseSeal(firstSeal, { ...firstSeal }), false);
+});
+
+await test('unrelated replacement and legacy curses cannot be mistaken for the next seal', () => {
+    for (const changes of [
+        { day: 3 },
+        { type: 'puzzle' },
+        { level: 2 },
+        { stages: 2 },
+        { stage: 1 },
+        { stage: 4 },
+    ]) {
+        assert.equal(
+            isNextCurseSeal(firstSeal, {
+                ...firstSeal,
+                id: 'new',
+                stage: 2,
+                ...changes,
+            }),
+            false,
+        );
+    }
+    const legacy = { ...firstSeal, stage: undefined, stages: undefined };
+    assert.equal(isNextCurseSeal(legacy, { ...legacy, id: 'new' }), false);
 });

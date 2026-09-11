@@ -89,7 +89,7 @@ const nextAction = computed(() => {
             </p>
             <p>
                 Reveal your secrets to use a private night ability. A submitted
-                choice is final. Puzzle and mist curses must be solved before
+                choice is final. Soul Bind and Mind Mist must be cleared before
                 you can return to the room. The Medium instead targets a
                 banished player when using their ability at night.
             </p>

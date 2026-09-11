@@ -27,11 +27,31 @@ class CurseEngine
         $puzzles = ['rings', 'towers'];
 
         return ['id' => (string) Str::uuid(), 'type' => $type, 'level' => $level, 'day' => $day,
+            'stage' => 1, 'stages' => 4 - $level,
             ...$this->challenge(match ($type) {
                 'mist' => 'lanterns',
                 'misdirection' => 'rings',
                 default => $puzzles[array_rand($puzzles)],
             }, $level)];
+    }
+
+    /** Advance only after the current seal has been checked by MatchEngine.
+     * @param  array<string, mixed>  $curse
+     * @return array<string, mixed>|null
+     */
+    public function advance(array $curse): ?array
+    {
+        if (($curse['stage'] ?? 1) >= ($curse['stages'] ?? 1)) {
+            return null;
+        }
+        $kind = match ($curse['type']) {
+            'mist' => 'lanterns',
+            'misdirection' => 'rings',
+            default => $curse['challenge']['kind'] === 'rings' ? 'towers' : 'rings',
+        };
+
+        return [...$curse, 'id' => (string) Str::uuid(), 'stage' => $curse['stage'] + 1,
+            ...$this->challenge($kind, $curse['level'])];
     }
 
     /** Generate new content and opaque option IDs for every affliction.
@@ -199,15 +219,15 @@ class CurseEngine
         shuffle($runes);
         $options = [];
         $solution = [];
-        $scene = ['kind' => $kind];
+        $scene = ['kind' => $kind, 'difficulty' => $level, 'guided' => $level === 1];
 
         if ($kind === 'rings') {
             $title = 'The astral lock';
             $instruction = 'Rotate each ring until its glowing notch points to the north beacon. Every touch turns a ring one quarter clockwise.';
             $clues = ['Align every notch with NORTH, then break the curse. Rings are numbered from the inside out.'];
             $scene['rings'] = [];
-            for ($ring = 0; $ring < 2 + $level; $ring++) {
-                $start = random_int(1, 3);
+            for ($ring = 0; $ring < [1 => 2, 2 => 3, 3 => 5][$level]; $ring++) {
+                $start = $level === 1 ? 3 : random_int($level === 2 ? 2 : 1, 3);
                 $ids = [];
                 for ($turn = 0; $turn < 4; $turn++) {
                     $id = (string) Str::uuid();
@@ -222,14 +242,18 @@ class CurseEngine
                 $title = 'The sunken spires';
                 $instruction = 'Wake the stone towers from shortest to tallest. Turn the scene to compare their heights, then touch each tower in order.';
                 $clues = ['Judge the height of the stone, not how high its label appears on your screen. Each tower is used once.'];
-                $labels = array_slice($runes, 0, 3 + $level);
+                $labels = array_slice($runes, 0, [1 => 3, 2 => 4, 3 => 6][$level]);
             } else {
                 $title = 'Lanterns in the mist';
-                $instruction = 'Find and light the numbered lanterns from lowest to highest. Ignore lanterns bearing words. Each light pushes back the mist.';
+                $instruction = $level === 1
+                    ? 'Light lantern 1, then 2, then 3. Follow the numbers, not their heights. Each light pushes back the mist.'
+                    : 'Light the lanterns by number, smallest number first. Ignore words; lantern height does not matter. Each light pushes back the mist.';
                 $clues = ['Orbit the scene to find the lanterns. Follow their numbers, not their heights.'];
-                $numbers = range(1, 40 + 20 * $level);
-                shuffle($numbers);
-                $labels = [...array_map(strval(...), array_slice($numbers, 0, 4 + 2 * $level)), ...array_slice($runes, 0, $level + 1)];
+                $numbers = range(1, [1 => 3, 2 => 20, 3 => 90][$level]);
+                if ($level > 1) {
+                    shuffle($numbers);
+                }
+                $labels = [...array_map(strval(...), array_slice($numbers, 0, [1 => 3, 2 => 5, 3 => 8][$level])), ...array_slice($runes, 0, $level - 1)];
             }
             shuffle($labels);
             $heights = range(0, count($labels) - 1);
@@ -241,9 +265,16 @@ class CurseEngine
                 $options[] = ['id' => $id, 'label' => $label];
                 $angle = 2 * M_PI * $index / count($labels);
                 $radius = $index % 2 === 0 ? 2.8 : 2.0;
-                $height = round(0.6 + $heights[$index] * 0.35, 2);
-                $scene['objects'][] = ['option_id' => $id, 'x' => round(cos($angle) * $radius, 3),
-                    'z' => round(sin($angle) * $radius, 3), 'height' => $height];
+                $height = $kind === 'towers'
+                    ? round(0.6 + $heights[$index] * [1 => 0.85, 2 => 0.6, 3 => 0.35][$level], 2)
+                    : round(0.9 + $heights[$index] * [1 => 0, 2 => 0.12, 3 => 0.17][$level], 2);
+                // Short lanterns in separated rows keep numbers readable on phones.
+                $columns = $level === 3 ? 4 : 3;
+                $rows = (int) ceil(count($labels) / $columns);
+                $scene['objects'][] = ['option_id' => $id,
+                    'x' => $kind === 'lanterns' ? ($index % $columns - ($columns - 1) / 2) * 1.6 : round(cos($angle) * $radius, 3),
+                    'z' => $kind === 'lanterns' ? (intdiv($index, $columns) - ($rows - 1) / 2) * 1.8 : round(sin($angle) * $radius, 3),
+                    'height' => $height];
                 if ($kind === 'towers' || is_numeric($label)) {
                     $ranked[] = ['id' => $id, 'rank' => $kind === 'towers' ? $height : (int) $label];
                 }
@@ -279,7 +310,7 @@ class CurseEngine
      */
     public function view(?array $curse): ?array
     {
-        return $curse === null ? null : array_intersect_key($curse, array_flip(['id', 'type', 'level', 'day', 'challenge']));
+        return $curse === null ? null : array_intersect_key($curse, array_flip(['id', 'type', 'level', 'day', 'challenge', 'stage', 'stages']));
     }
 
     public function garble(string $body, string $salt): string

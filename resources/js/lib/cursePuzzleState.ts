@@ -1,4 +1,46 @@
-import type { CurseChallenge } from './chanting';
+import type { Curse, CurseChallenge } from './chanting';
+
+export function nextGuidedLantern(challenge: CurseChallenge, answer: string[]) {
+    if (
+        challenge.scene?.kind !== 'lanterns' ||
+        !challenge.scene.guided ||
+        answer.length >= challenge.answer_length
+    )
+        return undefined;
+    return challenge.options
+        .filter(
+            (option) =>
+                /^\d+$/.test(option.label) && !answer.includes(option.id),
+        )
+        .reduce<{ id: string; label: string } | undefined>(
+            (next, option) =>
+                !next || Number(option.label) < Number(next.label)
+                    ? option
+                    : next,
+            undefined,
+        );
+}
+
+type CurseStage = Pick<
+    Curse,
+    'id' | 'type' | 'day' | 'level' | 'stage' | 'stages'
+>;
+export function isNextCurseSeal(
+    previous: CurseStage,
+    current: CurseStage,
+): boolean {
+    return (
+        previous.id !== current.id &&
+        previous.type === current.type &&
+        previous.day === current.day &&
+        previous.level === current.level &&
+        previous.stages === current.stages &&
+        previous.stage !== undefined &&
+        current.stage !== undefined &&
+        current.stage > previous.stage &&
+        current.stage <= (current.stages ?? 1)
+    );
+}
 
 export function ringTurn(ring: { options: string[] }, id?: string): number {
     return Math.max(0, ring.options.indexOf(id ?? ''));
@@ -31,6 +73,12 @@ export function selectCurseObject(
         answer.length >= challenge.answer_length ||
         answer.includes(id) ||
         !challenge.options.some((option) => option.id === id)
+    )
+        return answer;
+    if (
+        challenge.scene?.kind === 'lanterns' &&
+        challenge.scene.guided &&
+        nextGuidedLantern(challenge, answer)?.id !== id
     )
         return answer;
     return [...answer, id];

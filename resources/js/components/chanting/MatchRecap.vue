@@ -84,7 +84,7 @@ function actionDescription(action: RecapNightAction) {
                 : '';
         const curse =
             action.curse_type && action.target_id
-                ? `Cursed ${name(action.target_id)} with ${{ puzzle: 'a puzzle curse', mist: 'mind mist', misdirection: 'misdirection' }[action.curse_type]}.`
+                ? `Cursed ${name(action.target_id)} with ${{ puzzle: 'Soul Bind', mist: 'Mind Mist', misdirection: 'Misdirection' }[action.curse_type]}.`
                 : action.curse_blocked
                   ? `Tried to curse ${name(action.target_id)}, but protection blocked it.`
                   : '';

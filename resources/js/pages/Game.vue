@@ -145,12 +145,13 @@ const curseChoices: {
 }[] = [
     {
         type: 'puzzle',
-        label: '3D puzzle',
-        description: 'Align rune rings or wake stone towers in height order.',
+        label: 'Soul Bind',
+        description:
+            'Bind them to a series of rune rings or stone-tower seals.',
     },
     {
         type: 'mist',
-        label: 'Mind mist',
+        label: 'Mind Mist',
         description:
             'Obscure the village and chat until they light lanterns in the mist.',
     },

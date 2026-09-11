@@ -154,6 +154,8 @@ export interface CurseChallenge {
     answer_length: number;
     scene?: {
         kind: 'rings' | 'towers' | 'lanterns';
+        difficulty?: 1 | 2 | 3;
+        guided?: boolean;
         objects?: { option_id: string; x: number; z: number; height: number }[];
         rings?: { label: string; start: number; options: string[] }[];
     };
@@ -163,6 +165,8 @@ export interface Curse {
     type: 'puzzle' | 'mist' | 'misdirection';
     level: number;
     day: number;
+    stage?: number;
+    stages?: number;
     challenge: CurseChallenge | null;
 }
 export interface RoomState {
@@ -305,14 +309,14 @@ export const roles: Record<
         name: 'The Veilweaver',
         subtitle: 'Cult · master of misdirection',
         description:
-            'Chant for the ritual. You may veil another living player: their alignment appears reversed to the Oracle tonight, and your chosen curse takes hold at dawn. Choose a 3D puzzle with rings or towers, or mind mist with numbered lanterns. At ritual level 3, misdirection can redirect their next target unless they untangle its rings first.',
+            'Chant for the ritual. You may veil another living player: their alignment appears reversed to the Oracle tonight, and your chosen curse takes hold at dawn. Soul Bind traps them behind rings and towers; Mind Mist clouds their thoughts with lost lanterns. At ritual level 3, Misdirection can redirect their next target unless they untangle its rings first.',
         symbol: '◈',
     },
     acolyte: {
         name: 'The Acolyte',
         subtitle: 'Cult · keeper of the ritual',
         description:
-            'Chant each night to complete your shared mission. You may also curse another living player at dawn with a 3D ring or tower puzzle, or mind mist with numbered lanterns. Curses grow stronger with the ritual. At ritual level 3, misdirection can redirect their next target unless they untangle its rings first.',
+            'Chant each night to complete your shared mission. You may curse another living player at dawn with Soul Bind or Mind Mist. Their seals grow harder as the ritual strengthens. At ritual level 3, Misdirection can redirect their next target unless they untangle its rings first.',
         symbol: '✧',
     },
     oracle: {

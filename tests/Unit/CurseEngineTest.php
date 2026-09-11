@@ -217,7 +217,9 @@ class CurseEngineTest extends TestCase
                     } else {
                         $objects = $challenge['scene']['objects'];
                         $this->assertCount(count($options), $objects);
-                        $this->assertCount(count($objects), array_unique(array_column($objects, 'height')));
+                        if ($kind === 'towers') {
+                            $this->assertCount(count($objects), array_unique(array_column($objects, 'height')));
+                        }
                         foreach ($objects as $object) {
                             $this->assertArrayHasKey($object['option_id'], $options);
                             $this->assertLessThanOrEqual(3, abs($object['x']));
@@ -228,7 +230,7 @@ class CurseEngineTest extends TestCase
                             usort($objects, fn (array $a, array $b): int => $a['height'] <=> $b['height']);
                         } else {
                             $objects = array_filter($objects, fn (array $o): bool => is_numeric($options[$o['option_id']]));
-                            $this->assertCount($level + 1, array_diff(array_keys($options), array_column($objects, 'option_id')));
+                            $this->assertCount($level - 1, array_diff(array_keys($options), array_column($objects, 'option_id')));
                             usort($objects, fn (array $a, array $b): int => (int) $options[$a['option_id']] <=> (int) $options[$b['option_id']]);
                         }
                         $expected = array_column($objects, 'option_id');
@@ -243,5 +245,43 @@ class CurseEngineTest extends TestCase
                 }
             }
         }
+    }
+
+    public function test_easy_curses_have_more_short_seals_and_hard_curses_have_fewer_complex_seals(): void
+    {
+        $engine = new CurseEngine;
+        foreach ([1 => 0, 2 => 2, 3 => 4] as $level => $tokens) {
+            foreach (['puzzle', 'mist'] as $type) {
+                $curse = $engine->create($tokens, 6, 2, $type);
+                $this->assertSame(4 - $level, $curse['stages']);
+                $this->assertSame(1, $curse['stage']);
+                $this->assertSame($level, $curse['challenge']['scene']['difficulty']);
+                $this->assertSame($level === 1, $curse['challenge']['scene']['guided']);
+                for ($stage = 1; $stage <= 4 - $level; $stage++) {
+                    $this->assertSame($stage, $engine->view($curse)['stage']);
+                    $this->assertSame(4 - $level, $engine->view($curse)['stages']);
+                    $next = $engine->advance($curse);
+                    if ($stage === 4 - $level) {
+                        $this->assertNull($next);
+                        break;
+                    }
+                    $this->assertNotSame($curse['id'], $next['id']);
+                    $this->assertSame(2, $next['day']);
+                    $this->assertSame($level, $next['level']);
+                    $this->assertEmpty(array_intersect($curse['solution'], $next['solution']));
+                    if ($type === 'puzzle') {
+                        $this->assertNotSame($curse['challenge']['kind'], $next['challenge']['kind']);
+                    }
+                    $curse = $next;
+                }
+            }
+        }
+        $easy = $engine->challenge('lanterns', 1)['challenge'];
+        $labels = array_column($easy['options'], 'label');
+        sort($labels);
+        $this->assertSame(['1', '2', '3'], $labels);
+        $this->assertSame([0.9], array_values(array_unique(array_column($easy['scene']['objects'], 'height'))));
+        $this->assertSame([3, 3], array_column($engine->challenge('rings', 1)['challenge']['scene']['rings'], 'start'));
+        $this->assertNull($engine->advance(['id' => 'legacy', ...$engine->challenge('focus', 1)]));
     }
 }
