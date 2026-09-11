@@ -53,8 +53,11 @@ import MatchRecap from '@/components/chanting/MatchRecap.vue';
 import CardTable from '@/components/chanting/CardTable.vue';
 import DiscussionAbility from '@/components/chanting/DiscussionAbility.vue';
 import GameAtmosphere from '@/components/chanting/GameAtmosphere.vue';
+import RitualDisturbances from '@/components/chanting/RitualDisturbances.vue';
+import type { RitualDisturbance } from '@/lib/ritualDisturbances';
 import SoundControl from '@/components/chanting/SoundControl.vue';
 import type { MusicLibrary } from '@/lib/phaseMusic';
+import type { WhisperLibrary } from '@/lib/whisperAtmosphere';
 import {
     csrfToken,
     RoomError,
@@ -79,16 +82,20 @@ const props = withDefaults(
         characters?: Character[];
         preferredCharacter?: string | null;
         music?: MusicLibrary;
+        whispers?: WhisperLibrary;
     }>(),
     {
         characters: () => defaultCharacters,
         music: () => ({ day: [], night: [] }),
+        whispers: () => ({ ambient: [], oneoff: [] }),
     },
 );
 const page = usePage();
 const signedIn = computed(() => !!page.props.auth.user);
 const state = ref<RoomState>();
 const loading = ref(true);
+const disturbancesEnabled = ref(true);
+const disturbance = ref<RitualDisturbance | null>(null);
 const modeDraft = ref<ModeSetup>(defaultModeSetup());
 const modeEditorOpen = ref(false);
 const modeDirty = computed(
@@ -819,6 +826,23 @@ onBeforeUnmount(() => {
             :ritual-tokens="state?.ritual.tokens ?? 0"
             :ritual-threshold="state?.ritual.threshold ?? 0"
             :final-vote="state?.ritual.final_vote ?? false"
+        />
+        <RitualDisturbances
+            v-if="state && !loading"
+            :phase="state.phase"
+            :phase-id="state.phase_id"
+            :tokens="state.ritual.tokens"
+            :threshold="state.ritual.threshold"
+            :seconds="seconds"
+            :allowed="
+                disturbancesEnabled &&
+                state.me.alive &&
+                !disconnected &&
+                !puzzleCursed &&
+                !mistCursed &&
+                ['play', 'chat'].includes(activeView)
+            "
+            @change="disturbance = $event"
         />
         <header class="site-header game-header">
             <a href="/" class="wordmark" aria-label="Who's Chanting? home"
@@ -1634,6 +1658,16 @@ onBeforeUnmount(() => {
                             : null
                     "
                     :music="music"
+                    :whispers="whispers"
+                    :ritual-threshold="state.ritual.threshold"
+                    :atmosphere-allowed="
+                        !loading &&
+                        !puzzleCursed &&
+                        !mistCursed &&
+                        ['play', 'chat'].includes(activeView)
+                    "
+                    :disturbance="disturbance"
+                    @disturbances="disturbancesEnabled = $event"
                     :phase="state.phase"
                     :phase-id="state.phase_id"
                     :submitted="state.me.submitted"
@@ -1801,13 +1835,9 @@ onBeforeUnmount(() => {
                                 v-if="state.mode_setup?.mode === 'paranoia'"
                             >
                                 <p v-if="state.mode_preview.team_counts">
-                                    {{
-                                        state.mode_preview.team_counts.town
-                                    }}
+                                    {{ state.mode_preview.team_counts.town }}
                                     Town ·
-                                    {{
-                                        state.mode_preview.team_counts.cult
-                                    }}
+                                    {{ state.mode_preview.team_counts.cult }}
                                     Cult. Dealt role counts stay secret until
                                     the match ends.
                                 </p>
@@ -1817,9 +1847,7 @@ onBeforeUnmount(() => {
                                     :key="side"
                                 >
                                     Possible
-                                    {{
-                                        side === 'town' ? 'Town' : 'Cult'
-                                    }}
+                                    {{ side === 'town' ? 'Town' : 'Cult' }}
                                     roles:
                                     {{
                                         pool
@@ -2273,6 +2301,10 @@ onBeforeUnmount(() => {
                             ref="chatList"
                             @scroll.passive="markChatRead"
                             class="chat-messages"
+                            :class="{
+                                'is-ritual-glitch':
+                                    disturbance?.kind === 'chat',
+                            }"
                             role="log"
                             aria-label="Village messages"
                             aria-live="polite"
@@ -2407,6 +2439,33 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
+.chat-messages.is-ritual-glitch .chat-message {
+    animation: ritual-chat-drift 0.9s ease-in-out both;
+}
+@keyframes ritual-chat-drift {
+    0%,
+    100% {
+        transform: translateX(0);
+        text-shadow: none;
+    }
+    30% {
+        transform: translateX(-1.5px);
+        text-shadow:
+            2px 0 #93c9b980,
+            -2px 0 #bf806d65;
+    }
+    65% {
+        transform: translateX(1px);
+        text-shadow:
+            -1px 0 #93c9b980,
+            1px 0 #bf806d65;
+    }
+}
+@media (prefers-reduced-motion: reduce) {
+    .chat-messages.is-ritual-glitch .chat-message {
+        animation: none;
+    }
+}
 .game-tools {
     gap: 8px;
     align-items: center;

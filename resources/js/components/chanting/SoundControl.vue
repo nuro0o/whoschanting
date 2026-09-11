@@ -3,6 +3,11 @@ import { SlidersHorizontal, Volume2, VolumeX } from '@lucide/vue';
 import { computed, onBeforeUnmount, onMounted, ref, useId, watch } from 'vue';
 import { PhaseMusic, type MusicLibrary } from '@/lib/phaseMusic';
 import {
+    WhisperAtmosphere,
+    type WhisperLibrary,
+} from '@/lib/whisperAtmosphere';
+import type { RitualDisturbance } from '@/lib/ritualDisturbances';
+import {
     CoastalAudio,
     defaultSoundPreferences,
     parseSoundPreferences,
@@ -12,8 +17,16 @@ import {
 } from '@/lib/coastalAudio';
 
 const props = defineProps<
-    SoundSnapshot & { music: MusicLibrary; hauntPan?: number | null }
+    SoundSnapshot & {
+        music: MusicLibrary;
+        hauntPan?: number | null;
+        whispers?: WhisperLibrary;
+        ritualThreshold?: number;
+        atmosphereAllowed?: boolean;
+        disturbance?: RitualDisturbance | null;
+    }
 >();
+const emit = defineEmits<{ disturbances: [enabled: boolean] }>();
 const preferences = ref({ ...defaultSoundPreferences });
 const active = ref(false);
 const busy = ref(false);
@@ -25,6 +38,8 @@ const controlId = useId();
 const tracker = new SoundCueTracker();
 let engine: CoastalAudio | null = null;
 let music: PhaseMusic | null = null;
+let whispers: WhisperAtmosphere | null = null;
+let whisperTimer: ReturnType<typeof setInterval> | undefined;
 let activated = false;
 let disposed = false;
 const label = computed(() =>
@@ -47,6 +62,30 @@ function sync() {
     engine?.update(preferences.value, props.phase);
     engine?.play(cues);
     syncMusic();
+    syncWhispers();
+}
+function syncWhispers(running = active.value) {
+    whispers?.update({
+        eventId:
+            props.disturbance?.kind === 'whisper' ? props.disturbance.id : null,
+        phase: props.phase,
+        phaseId: props.phaseId,
+        tokens: props.ritualTokens,
+        threshold: props.ritualThreshold ?? 0,
+        seconds: props.seconds,
+        allowed:
+            running &&
+            preferences.value.enabled &&
+            preferences.value.disturbances &&
+            !document.hidden &&
+            props.connected &&
+            props.alive &&
+            (props.atmosphereAllowed ?? true) &&
+            !document.activeElement?.closest(
+                'input, textarea, [contenteditable="true"]',
+            ),
+        volume: preferences.value.whispers,
+    });
 }
 function syncMusic(running = active.value) {
     music?.update(
@@ -64,6 +103,7 @@ async function enable() {
     engine.update(preferences.value, props.phase);
     // Start media within the user's gesture, before awaiting AudioContext.resume().
     syncMusic(true);
+    syncWhispers(true);
     const started = await engine.enable();
     if (disposed) return;
     busy.value = false;
@@ -74,6 +114,7 @@ async function enable() {
         save();
     } else {
         syncMusic(false);
+        syncWhispers(false);
         if (!document.hidden)
             issue.value =
                 'Sound could not start. Turn sound off and on to try again.';
@@ -100,6 +141,7 @@ function startOnInteraction(event: Event) {
 }
 function visibilityChanged() {
     tracker.update({ ...props }, false);
+    if (document.hidden) syncWhispers(false);
     if (document.hidden) engine?.pause();
     else if (activated && preferences.value.enabled) void enable();
 }
@@ -131,10 +173,16 @@ onMounted(() => {
     engine = new CoastalAudio((running) => {
         active.value = running && !document.hidden;
         syncMusic(running);
+        syncWhispers(running);
     });
     music = new PhaseMusic(props.music, (message) => {
         musicIssue.value = message;
     });
+    whispers = new WhisperAtmosphere(
+        props.whispers ?? { ambient: [], oneoff: [] },
+    );
+    whisperTimer = setInterval(() => syncWhispers(), 250);
+    emit('disturbances', preferences.value.disturbances);
     tracker.update({ ...props }, false);
     document.addEventListener('visibilitychange', visibilityChanged);
     document.addEventListener('pointerdown', closeSettings);
@@ -153,17 +201,21 @@ watch(
         save();
         engine?.update(preferences.value, props.phase);
         syncMusic();
+        syncWhispers();
+        emit('disturbances', preferences.value.disturbances);
     },
     { deep: true },
 );
 onBeforeUnmount(() => {
     disposed = true;
+    clearInterval(whisperTimer);
     document.removeEventListener('visibilitychange', visibilityChanged);
     document.removeEventListener('pointerdown', closeSettings);
     document.removeEventListener('click', startOnInteraction);
     document.removeEventListener('keydown', startOnInteraction);
     engine?.close();
     music?.close();
+    whispers?.close();
     music = null;
     engine = null;
 });
@@ -178,10 +230,10 @@ onBeforeUnmount(() => {
             @keydown.esc.stop.prevent="escapeSettings"
         >
             <summary
-                aria-label="Sound settings"
+                aria-label="Sound and atmosphere settings"
                 :aria-expanded="settingsOpen"
                 :aria-controls="`${controlId}-panel`"
-                title="Sound settings"
+                title="Sound and atmosphere settings"
             >
                 <SlidersHorizontal :size="16" aria-hidden="true" />
                 <span>{{ label }}</span>
@@ -203,7 +255,7 @@ onBeforeUnmount(() => {
                 </button>
                 <p class="sound-settings-title">Sounds of the village</p>
                 <p class="sound-settings-note">
-                    Music, quiet waves, and distant bells.
+                    Music, quiet waves, distant bells, and whispers.
                 </p>
                 <div class="sound-volume">
                     <label :for="`${controlId}-music`">Music</label>
@@ -250,6 +302,29 @@ onBeforeUnmount(() => {
                 <p class="sound-settings-note">
                     Music and ambience soften during discussion.
                 </p>
+                <div class="sound-volume">
+                    <label :for="`${controlId}-whispers`">Whispers</label>
+                    <output :for="`${controlId}-whispers`"
+                        >{{ preferences.whispers }}%</output
+                    >
+                    <input
+                        :id="`${controlId}-whispers`"
+                        v-model.number="preferences.whispers"
+                        type="range"
+                        min="0"
+                        max="100"
+                        step="1"
+                    />
+                </div>
+                <label class="disturbance-setting">
+                    <input v-model="preferences.disturbances" type="checkbox" />
+                    Unsettling atmosphere
+                </label>
+                <p class="sound-settings-note">
+                    Fleeting shadows, strange words, whispers, and chat
+                    distortions grow with the ritual. These are not clues about
+                    anyone's role.
+                </p>
                 <button
                     v-if="active"
                     class="sound-preview"
@@ -273,6 +348,16 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
+.disturbance-setting {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-block: 12px 8px;
+    font-size: 12px;
+}
+.disturbance-setting input {
+    accent-color: var(--green);
+}
 .coastal-sound {
     position: relative;
     display: inline-flex;
@@ -320,6 +405,9 @@ onBeforeUnmount(() => {
     top: calc(100% + 10px);
     right: 0;
     width: min(270px, calc(100vw - 32px));
+    max-height: min(640px, calc(100dvh - 130px));
+    overflow-y: auto;
+    overscroll-behavior: contain;
     padding: 20px;
     border: 1px solid #70867c;
     border-radius: 6px;

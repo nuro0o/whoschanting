@@ -323,9 +323,23 @@ await test('preferences default to sound on, preserve mute, and validate stored 
     );
     assert.deepEqual(
         parseSoundPreferences('{"enabled":true,"effects":150,"ambience":-5}'),
-        { enabled: true, effects: 100, ambience: 0, music: 25 },
+        {
+            ...defaultSoundPreferences,
+            enabled: true,
+            effects: 100,
+            ambience: 0,
+        },
     );
     assert.equal(parseSoundPreferences('{"effects":12.8}').effects, 13);
+    assert.equal(parseSoundPreferences('{"whispers":150}').whispers, 100);
+    assert.equal(
+        parseSoundPreferences('{"disturbances":false}').disturbances,
+        false,
+    );
+    assert.equal(
+        parseSoundPreferences('{"disturbances":"false"}').disturbances,
+        true,
+    );
 });
 
 await test('mount and repeated polling remain silent, including a finished match', () => {

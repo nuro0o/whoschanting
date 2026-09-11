@@ -73,6 +73,17 @@ const nextAction = computed(() => {
             }"
         />
         <section class="help-answer">
+            <h3>Did anyone else see that?</h3>
+            <p>
+                Shadows, strange words and brief chat distortions become more
+                frequent as the ritual grows. Each player can experience
+                different disturbances. They are atmosphere, not clues about
+                anyone's role; your actual messages and choices stay intact.
+                Open Sound and atmosphere settings to adjust Whispers or turn
+                off Unsettling atmosphere.
+            </p>
+        </section>
+        <section class="help-answer">
             <h3>How do we win?</h3>
             <p>
                 <strong>Town:</strong> find and banish every cultist. When the

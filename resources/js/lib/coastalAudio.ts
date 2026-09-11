@@ -5,6 +5,8 @@ export interface SoundPreferences {
     effects: number;
     ambience: number;
     music: number;
+    whispers: number;
+    disturbances: boolean;
 }
 
 export const soundStorageKey = 'chanting-audio-v1';
@@ -13,6 +15,8 @@ export const defaultSoundPreferences: SoundPreferences = {
     effects: 45,
     ambience: 25,
     music: 25,
+    whispers: 25,
+    disturbances: true,
 };
 
 export function parseSoundPreferences(
@@ -40,6 +44,11 @@ export function parseSoundPreferences(
             effects: volume(data.effects, fallback.effects),
             ambience: volume(data.ambience, fallback.ambience),
             music: volume(data.music, fallback.music),
+            whispers: volume(data.whispers, fallback.whispers),
+            disturbances:
+                typeof data.disturbances === 'boolean'
+                    ? data.disturbances
+                    : fallback.disturbances,
         };
     } catch {
         return fallback;

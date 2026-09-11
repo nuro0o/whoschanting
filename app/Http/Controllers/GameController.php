@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Game\AccountProgression;
 use App\Game\MatchEngine;
 use App\Game\MusicLibrary;
+use App\Game\WhisperLibrary;
 use App\Models\GameRoom;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -44,6 +45,7 @@ class GameController extends Controller
         return Inertia::render('Game', [
             'code' => strtoupper($code),
             'music' => (new MusicLibrary)->tracks(public_path('assets/Music')),
+            'whispers' => (new WhisperLibrary)->tracks(public_path('assets/Sounds/Whispers')),
             ...$this->characterProps($request),
         ]);
     }
