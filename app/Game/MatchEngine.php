@@ -256,6 +256,9 @@ class MatchEngine
             $s['match_id'] = (string) Str::uuid();
             $s['match_rules'] = ['version' => config('game.rules_version'), 'player_count' => $count,
                 'seconds' => config('game.seconds'), 'roster' => $s['roster'] ?? 'classic', 'mode_setup' => $setup];
+            if ($setup['mode'] === 'paranoia') {
+                $s['match_rules']['paranoia_preview'] = $this->modes->preview($setup, $count);
+            }
             $s['started_at'] = now()->toISOString();
             $s['rounds'] = [];
             $s['missed_actions'] = ['night' => 0, 'vote' => 0];
@@ -299,7 +302,8 @@ class MatchEngine
                 $s['players'][$target]['haunting'] = null;
                 $s['players'][$id]['results'][] = ['kind' => 'exorcism', 'day' => $s['day'], 'target' => $s['players'][$target]['name']];
             } else {
-                $this->ensure($p['role'] === 'oathkeeper' && ($p['oath']['day'] ?? null) !== $s['day'], 'You may make one oath per discussion.');
+                $this->ensure($p['role'] === 'oathkeeper' || $this->modes->setup($s)['mode'] === 'paranoia', 'Only the Oathkeeper can make an oath in this mode.');
+                $this->ensure(($p['oath']['day'] ?? null) !== $s['day'], 'You may make one oath per discussion.');
                 $s['players'][$id]['oath'] = ['day' => $s['day'], 'target_id' => $target];
                 $s['log'][] = $p['name'].' publicly swore to vote for '.$s['players'][$target]['name'].'.';
             }
@@ -424,7 +428,7 @@ class MatchEngine
             }
         }
         $effective = array_diff_key($s['actions'], $disrupted);
-        if (in_array($this->modes->setup($s)['mode'], ['custom', 'chaos'], true)) {
+        if (in_array($this->modes->setup($s)['mode'], ['custom', 'chaos', 'paranoia'], true)) {
             // Stable seat order resolves overlapping duplicate abilities, rather than arrival order.
             $effective = [];
             foreach ($s['players'] as $pid => $_) {
@@ -606,7 +610,7 @@ class MatchEngine
                 $submitted = isset($s['actions'][$id]);
                 $oathKept = ($player['oath']['day'] ?? null) === $s['day']
                     ? $submitted && ($s['actions'][$id]['target'] ?? null) === $player['oath']['target_id'] : null;
-                if ($oathKept !== null) {
+                if ($oathKept !== null && $player['role'] === 'oathkeeper') {
                     $s['players'][$id]['oath_protection_day'] = $oathKept ? $s['day'] + 1 : null;
                     $s['players'][$id]['results'][] = ['kind' => 'oath', 'day' => $s['day'], 'target' => $s['players'][$player['oath']['target_id']]['name'], 'kept' => $oathKept];
                 }
@@ -703,7 +707,20 @@ class MatchEngine
         $s['phase_id']++;
         $s['actions'] = [];
         $duration = $s['match_rules']['seconds'][$phase] ?? config('game.seconds.'.$phase);
+        if ($phase === 'discussion' && isset($s['match_rules']['paranoia_preview'])) {
+            $duration = $this->paranoiaDiscussionSeconds($s);
+            $s['log'][] = 'Paranoia: '.$duration.' seconds to discuss. Anyone can make a public oath; an oath does not prove a role.';
+        }
         $room->deadline = $duration === null ? null : now()->addSeconds($duration);
+    }
+
+    /** @param array<string, mixed> $s */
+    private function paranoiaDiscussionSeconds(array $s): int
+    {
+        $stage = $s['tokens'] * 3 >= $s['threshold'] * 2 ? 'late'
+            : ($s['threshold'] <= $s['tokens'] * 3 ? 'middle' : 'early');
+
+        return $s['match_rules']['paranoia_preview']['discussion_seconds'][$stage];
     }
 
     /** @param array<string, mixed> $s */
@@ -724,9 +741,10 @@ class MatchEngine
     {
         $me = $s['players'][$id];
         $setup = $this->modes->setup($s);
-        $preview = $this->modes->preview($setup, count($s['players']));
+        $preview = $s['match_rules']['paranoia_preview'] ?? $this->modes->preview($setup, count($s['players']));
         if ($s['phase'] !== 'lobby') {
-            $preview['roles'] = array_count_values(array_filter(array_column($s['players'], 'role'), 'is_string'));
+            $preview['roles'] = $setup['mode'] === 'paranoia' && $s['phase'] !== 'finished'
+                ? null : array_count_values(array_filter(array_column($s['players'], 'role'), 'is_string'));
             $preview['error'] = null;
         }
         $players = [];
@@ -779,8 +797,10 @@ class MatchEngine
             'rules' => array_replace(array_intersect_key($this->rules(), array_flip(['min_players', 'max_players', 'seconds', 'ritual_goals', 'cultists_by_player_count', 'small_gathering_max_players', 'town_roles_min_players', 'cult_roles_min_players'])),
                 ($s['roster'] ?? 'classic') === 'illusions' ? ['town_roles_min_players' => config('game.illusion_town_roles_min_players'), 'cult_roles_min_players' => config('game.illusion_cult_roles_min_players')] : [],
                 $setup['mode'] === 'hard' ? ['town_roles_min_players' => config('game.hard_town_roles_min_players'), 'cult_roles_min_players' => config('game.hard_cult_roles_min_players')] : [],
-                in_array($setup['mode'], ['custom', 'chaos'], true) ? ['town_roles_min_players' => [], 'cult_roles_min_players' => []] : [],
-                isset($s['match_rules']['seconds']) ? ['seconds' => $s['match_rules']['seconds']] : []),
+                in_array($setup['mode'], ['custom', 'chaos', 'paranoia'], true) ? ['town_roles_min_players' => [], 'cult_roles_min_players' => []] : [],
+                $setup['mode'] === 'paranoia' ? ['min_players' => max(5, config('game.min_players'))] : [],
+                isset($s['match_rules']['seconds']) ? ['seconds' => array_replace($s['match_rules']['seconds'],
+                    isset($s['match_rules']['paranoia_preview']) ? ['discussion' => $this->paranoiaDiscussionSeconds($s)] : [])] : []),
         ];
     }
 

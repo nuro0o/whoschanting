@@ -1,5 +1,5 @@
 export interface ModeSetup {
-    mode: 'classic' | 'hard' | 'chaos' | 'custom';
+    mode: 'classic' | 'hard' | 'chaos' | 'paranoia' | 'custom';
     classic_variant: 'classic' | 'illusions';
     chaos_variant: 'wildcards' | 'maelstrom';
     roles: Record<string, number>;
@@ -86,6 +86,7 @@ export function modeName(
             : 'Classic';
     if (current.mode === 'chaos')
         return `Chaos · ${current.chaos_variant === 'maelstrom' ? 'Maelstrom' : 'Wildcards'}`;
+    if (current.mode === 'paranoia') return 'Paranoia';
     return current.mode === 'hard' ? 'Hard' : 'Custom';
 }
 export const chaosEvents = {

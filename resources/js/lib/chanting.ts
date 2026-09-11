@@ -173,6 +173,9 @@ export interface Curse {
 export interface RoomState {
     mode_setup?: ModeSetup;
     mode_preview?: {
+        possible_roles?: Record<string, string[]>;
+        team_counts?: { town: number; cult: number } | null;
+        discussion_seconds?: { early: number; middle: number; late: number };
         roles: Record<string, number> | null;
         required_players: number | null;
         error: string | null;

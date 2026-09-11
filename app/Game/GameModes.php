@@ -14,7 +14,7 @@ class GameModes
         $mode = $input['mode'] ?? 'classic';
         $classic = $input['classic_variant'] ?? 'classic';
         $chaos = $input['chaos_variant'] ?? 'wildcards';
-        $this->ensure(in_array($mode, ['classic', 'hard', 'chaos', 'custom'], true), 'Choose a valid mode.');
+        $this->ensure(in_array($mode, ['classic', 'hard', 'chaos', 'paranoia', 'custom'], true), 'Choose a valid mode.');
         $this->ensure(in_array($classic, ['classic', 'illusions'], true), 'Choose a valid Classic variant.');
         $this->ensure(in_array($chaos, ['wildcards', 'maelstrom'], true), 'Choose a valid Chaos variant.');
         $roles = [];
@@ -65,7 +65,7 @@ class GameModes
         $this->ensure(! $expanded || $count >= 5, 'This mode needs at least 5 players.');
         $cultCount = config('game.cultists_by_player_count.'.$count);
         $this->ensure(is_int($cultCount) && $cultCount >= 1 && $cultCount < $count, 'No valid role roster is configured for this room size.');
-        if ($setup['mode'] === 'chaos') {
+        if (in_array($setup['mode'], ['chaos', 'paranoia'], true)) {
             $roles = [];
             foreach (['cult' => $cultCount, 'town' => $count - $cultCount] as $side => $seats) {
                 $pool = array_keys(array_filter(config('game.role_alignments'), fn (string $alignment): bool => $alignment === $side));
@@ -102,8 +102,8 @@ class GameModes
         $required = $setup['mode'] === 'custom' ? array_sum($setup['roles']) : null;
         try {
             // Preview random rosters without consuming randomness or implying a guaranteed deal.
-            if ($setup['mode'] === 'chaos') {
-                $this->ensure($count >= 5 && $count <= config('game.max_players'), 'Chaos needs 5–'.config('game.max_players').' players.');
+            if (in_array($setup['mode'], ['chaos', 'paranoia'], true)) {
+                $this->ensure($count >= 5 && $count <= config('game.max_players'), ucfirst($setup['mode']).' needs 5–'.config('game.max_players').' players.');
                 $roles = null;
             } else {
                 $roles = array_count_values($this->roster($setup, $count));
@@ -114,7 +114,18 @@ class GameModes
             $error = $exception->errors()['game'][0];
         }
 
-        return ['roles' => $roles, 'required_players' => $required, 'error' => $error];
+        $preview = ['roles' => $roles, 'required_players' => $required, 'error' => $error];
+        if ($setup['mode'] === 'paranoia') {
+            $preview['possible_roles'] = [];
+            foreach (['town', 'cult'] as $side) {
+                $preview['possible_roles'][$side] = array_keys(array_filter(config('game.role_alignments'), fn (string $alignment): bool => $alignment === $side));
+            }
+            $cultCount = config('game.cultists_by_player_count.'.$count);
+            $preview['team_counts'] = $error === null ? ['town' => $count - $cultCount, 'cult' => $cultCount] : null;
+            $preview['discussion_seconds'] = config('game.paranoia_discussion_seconds');
+        }
+
+        return $preview;
     }
 
     private function ensure(bool $condition, string $message): void

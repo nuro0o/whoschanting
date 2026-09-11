@@ -100,7 +100,7 @@ class GameModesTest extends TestCase
 
     public function test_http_creation_persists_selected_modes_and_custom_counts(): void
     {
-        foreach ([['mode' => 'hard'], ['mode' => 'chaos', 'chaos_variant' => 'maelstrom'], ['mode' => 'custom', 'roles' => ['oracle' => 2, 'acolyte' => 1]]] as $setup) {
+        foreach ([['mode' => 'hard'], ['mode' => 'paranoia'], ['mode' => 'chaos', 'chaos_variant' => 'maelstrom'], ['mode' => 'custom', 'roles' => ['oracle' => 2, 'acolyte' => 1]]] as $setup) {
             $code = $this->postJson('/rooms', ['name' => 'Host', 'setup' => $setup])->assertCreated()->json('code');
             $this->getJson('/rooms/'.$code.'/state')->assertOk()->assertJsonPath('mode_setup.mode', $setup['mode']);
             $this->assertSame($this->modes->normalize($setup), GameRoom::where('code', $code)->firstOrFail()->state['mode_setup']);
@@ -189,6 +189,143 @@ class GameModesTest extends TestCase
         $assigned = $room->fresh()->state['players'];
         $this->engine->access($room->code, 'guest-0');
         $this->assertSame($assigned, $room->fresh()->state['players']);
+    }
+
+    public function test_paranoia_preserves_team_sizes_allows_duplicates_and_requires_five_players(): void
+    {
+        // A restricted pool demonstrates duplicates and the absence of a guaranteed Oracle.
+        config(['game.role_alignments' => ['oathkeeper' => 'town', 'acolyte' => 'cult']]);
+        $setup = $this->modes->normalize(['mode' => 'paranoia']);
+        foreach (range(5, 10) as $count) {
+            $cult = config('game.cultists_by_player_count.'.$count);
+            $this->assertEquals(['oathkeeper' => $count - $cult, 'acolyte' => $cult], array_count_values($this->modes->roster($setup, $count)));
+            $preview = $this->modes->preview($setup, $count);
+            $this->assertNull($preview['roles']);
+            $this->assertSame(['town' => $count - $cult, 'cult' => $cult], $preview['team_counts']);
+            $this->assertSame(['town' => ['oathkeeper'], 'cult' => ['acolyte']], $preview['possible_roles']);
+        }
+        $room = $this->gathering($setup, 4, false);
+        $this->assertSame(5, $this->engine->access($room->code, 'guest-0')['rules']['min_players']);
+        $this->assertNotNull($this->engine->access($room->code, 'guest-0')['mode_preview']['error']);
+        $this->reject(fn () => $this->act($room, $room->state['host_id'], 'start'));
+    }
+
+    public function test_paranoia_hides_the_dealt_cast_until_victory_and_resets_for_rematches(): void
+    {
+        $room = $this->gathering(['mode' => 'paranoia'], 5, false);
+        $host = $room->state['host_id'];
+        $this->act($room, $host, 'start');
+        $s = $room->fresh()->state;
+        $cast = array_count_values(array_column($s['players'], 'role'));
+        $deadTown = array_key_first(array_filter($s['players'], fn (array $p): bool => $p['alignment'] === 'town'));
+        $s['players'][$deadTown]['alive'] = false;
+        $room->update(['state' => $s]);
+        foreach (['reveal', 'night', 'discussion', 'voting'] as $phase) {
+            $this->assertSame($phase, $room->fresh()->state['phase']);
+            foreach ($this->identities as $identity) {
+                $view = $this->engine->access($room->code, $identity);
+                $this->assertNull($view['mode_preview']['roles']);
+                $this->assertNull($view['recap']);
+                $this->assertEmpty($view['mode_setup']['roles']);
+                foreach ($view['players'] as $player) {
+                    $this->assertArrayNotHasKey('role', $player);
+                    $this->assertArrayNotHasKey('alignment', $player);
+                }
+            }
+            if ($phase === 'night') {
+                $s = $room->fresh()->state;
+                $s['tokens'] = $s['threshold'];
+                $room->update(['state' => $s]);
+            }
+            $this->expire($room);
+        }
+        $finished = $this->engine->access($room->code, 'guest-0');
+        $this->assertSame('finished', $finished['phase']);
+        $this->assertEquals($cast, $finished['mode_preview']['roles']);
+        $this->assertSame('paranoia', $finished['recap']['mode_setup']['mode']);
+        $rematch = $this->act($room, $host, 'rematch');
+        $this->assertSame('paranoia', $rematch['mode_setup']['mode']);
+        $this->assertNull($rematch['mode_preview']['roles']);
+        $this->assertArrayNotHasKey('match_rules', $room->fresh()->state);
+    }
+
+    /** @return array<string, array{int, int}> */
+    public static function paranoiaProgress(): array
+    {
+        return ['empty' => [0, 90], 'early' => [1, 90], 'one third' => [2, 70],
+            'middle' => [3, 70], 'two thirds' => [4, 50], 'late' => [5, 50], 'final vote' => [6, 50]];
+    }
+
+    #[DataProvider('paranoiaProgress')]
+    public function test_paranoia_discussion_deadlines_use_snapshotted_progress_tiers(int $tokens, int $seconds): void
+    {
+        $room = $this->gathering(['mode' => 'paranoia']);
+        $s = $room->state;
+        $s['tokens'] = $tokens;
+        $s['threshold'] = 6;
+        $room->update(['state' => $s]);
+        config(['game.paranoia_discussion_seconds' => ['early' => 5, 'middle' => 4, 'late' => 3], 'game.seconds.voting' => 10]);
+        $this->expire($room);
+        $view = $this->engine->access($room->code, 'guest-0');
+        $this->assertSame('discussion', $view['phase']);
+        $this->assertEquals($seconds, now()->diffInSeconds($room->deadline));
+        $this->assertSame($seconds, $view['rules']['seconds']['discussion']);
+        $this->assertSame(90, $view['mode_preview']['discussion_seconds']['early']);
+        $this->assertStringContainsString('Paranoia: '.$seconds.' seconds', implode(' ', $view['log']));
+        $this->expire($room);
+        $this->assertSame('voting', $room->state['phase']);
+        $this->assertEquals(45, now()->diffInSeconds($room->deadline));
+    }
+
+    public function test_paranoia_public_oaths_do_not_prove_roles_or_grant_other_roles_protection(): void
+    {
+        $room = $this->gathering(['mode' => 'paranoia']);
+        $s = $room->state;
+        $ids = array_keys($s['players']);
+        foreach (['oathkeeper', 'townsperson', 'exorcist', 'acolyte', 'veilweaver'] as $index => $role) {
+            $s['players'][$ids[$index]]['role'] = $role;
+            $s['players'][$ids[$index]]['alignment'] = config('game.role_alignments')[$role];
+        }
+        $room->update(['state' => $s]);
+        $this->reject(fn () => $this->act($room, $ids[3], 'oath', ['target' => $ids[4]]));
+        $this->expire($room);
+        $this->reject(fn () => $this->act($room, $ids[3], 'oath', ['target' => $ids[3]]));
+        $this->reject(fn () => $this->act($room, $ids[3], 'oath'));
+        foreach (array_slice($ids, 0, 4) as $id) {
+            $view = $this->act($room, $id, 'oath', ['target' => $ids[4]]);
+            $this->assertFalse($view['me']['submitted']);
+            $public = array_column($view['players'], null, 'id')[$id];
+            $this->assertSame(['day' => 1, 'target_id' => $ids[4]], $public['oath']);
+            $this->assertArrayNotHasKey('role', $public);
+            $this->reject(fn () => $this->act($room, $id, 'oath', ['target' => $ids[0]]));
+        }
+        $this->assertTrue($this->act($room, $ids[2], 'exorcise', ['target' => $ids[1]])['me']['ability_used']);
+        $this->expire($room);
+        foreach (array_slice($ids, 0, 4) as $id) {
+            $this->act($room, $id, 'vote', ['target' => $ids[4]]);
+        }
+        $this->act($room, $ids[4], 'vote');
+        foreach (array_slice($ids, 0, 4) as $index => $id) {
+            $view = $this->engine->access($room->code, $this->identities[$id]);
+            $this->assertSame($index === 0, $view['me']['oath_protected']);
+        }
+        $this->act($room, $ids[3], 'night', ['target' => $ids[1]]);
+        $this->expire($room);
+        $this->assertNotNull($room->state['players'][$ids[1]]['curse']);
+        $this->assertNotEmpty($this->act($room, $ids[3], 'oath', ['target' => $ids[0]]));
+        $this->reject(fn () => $this->act($room, $ids[4], 'oath', ['target' => $ids[0]]));
+    }
+
+    public function test_classic_keeps_its_discussion_time_and_oath_restrictions(): void
+    {
+        $room = $this->gathering(['mode' => 'classic']);
+        $s = $room->state;
+        $s['tokens'] = $s['threshold'] - 1;
+        $room->update(['state' => $s]);
+        $this->expire($room);
+        $this->assertEquals(90, now()->diffInSeconds($room->deadline));
+        $ids = array_keys($room->state['players']);
+        $this->reject(fn () => $this->act($room, $ids[0], 'oath', ['target' => $ids[1]]));
     }
 
     public function test_tracker_sees_submitted_visit_even_if_disrupted_but_not_private_ability(): void
@@ -282,9 +419,21 @@ class GameModesTest extends TestCase
         }
     }
 
-    public function test_duplicate_forgeries_resolve_in_seat_order_regardless_of_submission_order(): void
+    /** @return array<string, array{string}> */
+    public static function duplicateModes(): array
+    {
+        return ['custom' => ['custom'], 'paranoia' => ['paranoia']];
+    }
+
+    #[DataProvider('duplicateModes')]
+    public function test_duplicate_forgeries_resolve_in_seat_order_regardless_of_submission_order(string $mode): void
     {
         $room = $this->gathering(['mode' => 'custom', 'roles' => ['counterfeiter' => 2, 'oracle' => 1, 'tracker' => 1, 'townsperson' => 1]]);
+        if ($mode === 'paranoia') {
+            $s = $room->state;
+            $s['mode_setup'] = $this->modes->normalize(['mode' => $mode]);
+            $room->update(['state' => $s]);
+        }
         $casters = $this->roles['counterfeiter']; // collected in public seat order
         $target = $this->roles['townsperson'][0];
         $this->act($room, $casters[1], 'night', ['target' => $target, 'use_ability' => true, 'forged_alignment' => 'cult']);

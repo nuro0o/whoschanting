@@ -66,9 +66,10 @@ const allegiances = [
                 has them. Classic preserves the familiar lineup; its Illusions
                 variant adds haunting and forged readings. Hard introduces
                 Tracker and Herbalist alongside more deceptive roles. Chaos
-                draws a fresh cast with possible duplicates. Custom uses the
-                host’s exact role counts. Check the room’s Modes settings for
-                your gathering.
+                draws a fresh cast with possible duplicates. Paranoia keeps the
+                dealt role counts secret and lets anyone make a public oath.
+                Custom uses the host’s exact role counts. Check the room’s Modes
+                settings for your gathering.
             </p>
         </header>
         <div class="role-guide__sides">

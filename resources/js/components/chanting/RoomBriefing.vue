@@ -1,13 +1,12 @@
 <script setup lang="ts">
 import { computed } from 'vue';
-import { Check, Clock3 } from '@lucide/vue';
+import { Check } from '@lucide/vue';
 import type { RoomState } from '@/lib/chanting';
 import { usePanelMotion } from '@/composables/usePanelMotion';
 const panel = usePanelMotion();
 const props = defineProps<{
     state: RoomState;
     pending: boolean;
-    timeLabel: string;
     revealed: boolean;
     roleRead: boolean;
 }>();
@@ -106,9 +105,6 @@ const step = computed(() => {
                     <span v-if="pending" class="turn-pending" role="status"
                         >Sending…</span
                     >
-                    <span v-if="timeLabel" class="turn-time">
-                        <Clock3 :size="12" /> {{ timeLabel }} left
-                    </span>
                 </div>
                 <div class="turn-status" role="status" aria-atomic="true">
                     <h2 id="turn-heading">{{ step[0] }}</h2>
@@ -169,7 +165,6 @@ const step = computed(() => {
     letter-spacing: 1.6px;
     text-transform: uppercase;
 }
-.turn-time,
 .turn-pending {
     min-width: 0;
     margin: 0;

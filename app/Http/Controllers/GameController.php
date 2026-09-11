@@ -105,7 +105,7 @@ class GameController extends Controller
     {
         return [
             'setup' => ['sometimes', 'array:mode,classic_variant,chaos_variant,roles'],
-            'setup.mode' => ['sometimes', 'string', 'in:classic,hard,chaos,custom'],
+            'setup.mode' => ['sometimes', 'string', 'in:classic,hard,chaos,paranoia,custom'],
             'setup.classic_variant' => ['sometimes', 'string', 'in:classic,illusions'],
             'setup.chaos_variant' => ['sometimes', 'string', 'in:wildcards,maelstrom'],
             'setup.roles' => ['sometimes', 'array', 'max:'.count(config('game.role_alignments'))],

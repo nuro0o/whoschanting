@@ -4,7 +4,6 @@ import {
     Check,
     ChevronDown,
     Circle,
-    Clock3,
     Copy,
     Eye,
     LoaderCircle,
@@ -67,6 +66,7 @@ import {
     defaultCharacters,
 } from '@/lib/chanting';
 import {
+    discussionActionTypes,
     eligibleTargets,
     hasLimitedAbility,
     nightActionLabel,
@@ -441,7 +441,11 @@ const tableDisplay = computed(() => {
                 ? 'Gather around'
                 : 'The secrets are out'
             : `${phase === 'night' ? 'Night' : 'Day'} ${state.value?.day ?? 1}`,
-        urgent: !idle && seconds.value !== null && seconds.value <= 10,
+        urgent:
+            !idle &&
+            seconds.value !== null &&
+            seconds.value > 0 &&
+            seconds.value <= 10,
     };
 });
 const requiresTarget = computed(
@@ -521,10 +525,7 @@ const showPrivateTools = computed(
 const actionDetailsAvailable = computed(() => {
     if (!state.value?.me.alive) return false;
     if (state.value.phase === 'discussion')
-        return (
-            revealed.value &&
-            ['exorcist', 'oathkeeper'].includes(state.value.me.role ?? '')
-        );
+        return discussionActionTypes(state.value, revealed.value).length > 0;
     return (
         !state.value.me.submitted &&
         (state.value.phase === 'voting' ||
@@ -537,11 +538,13 @@ const actionDetailsTitle = computed(() =>
         ? 'Night action'
         : state.value?.phase === 'voting'
           ? 'Your vote'
-          : 'Day ability',
+          : 'Discussion actions',
 );
 const actionDetailsSummary = computed(() => {
     if (state.value?.phase === 'discussion')
-        return 'Your private ability and choices';
+        return state.value.mode_setup?.mode === 'paranoia'
+            ? 'Public oath and available day abilities'
+            : 'Your private ability and choices';
     const selected = state.value?.players.find(
         (player) => player.id === target.value,
     );
@@ -874,7 +877,6 @@ onBeforeUnmount(() => {
                     :server-time="state.server_time"
                     :chat-suppressed="mistCursed"
                     :phase="state.phase"
-                    :phase-id="state.phase_id"
                     :display="tableDisplay"
                     :me-id="state.me.id"
                     :submitted="state.me.submitted"
@@ -901,7 +903,6 @@ onBeforeUnmount(() => {
                             :pending="pending"
                             :revealed="revealed"
                             :role-read="roleRead"
-                            :time-label="timeLabel"
                         >
                             <template #controls>
                                 <template
@@ -1462,9 +1463,7 @@ onBeforeUnmount(() => {
                                     </p>
                                 </section>
                                 <DiscussionAbility
-                                    v-if="
-                                        state.phase === 'discussion' && revealed
-                                    "
+                                    v-if="state.phase === 'discussion'"
                                     :key="state.day"
                                     :state="state"
                                     :revealed="revealed"
@@ -1590,21 +1589,6 @@ onBeforeUnmount(() => {
                                   : 'Synced every 3 seconds'
                         }}
                     </p>
-                </div>
-                <div
-                    v-if="seconds !== null"
-                    class="phase-clock"
-                    :class="{ 'is-urgent': seconds !== null && seconds <= 10 }"
-                    role="timer"
-                    :aria-label="`${seconds} seconds remaining`"
-                >
-                    <Clock3 :size="23" />
-                    <div>
-                        <strong>{{ timeLabel }}</strong
-                        ><span>{{
-                            seconds === 0 ? 'Resolving…' : 'remaining'
-                        }}</span>
-                    </div>
                 </div>
             </div>
             <Transition name="room-notice">
@@ -1753,11 +1737,6 @@ onBeforeUnmount(() => {
                             · Day {{ state.day }}</template
                         ></span
                     >
-                    <span v-if="timeLabel"
-                        ><Clock3 :size="14" />{{
-                            seconds === 0 ? 'Resolving…' : `${timeLabel} left`
-                        }}</span
-                    >
                 </div>
                 <RitualWarning v-if="state.ritual.final_vote" />
                 <div
@@ -1818,6 +1797,60 @@ onBeforeUnmount(() => {
                                 repeat; the Town/Cult split follows your village
                                 size.
                             </p>
+                            <template
+                                v-if="state.mode_setup?.mode === 'paranoia'"
+                            >
+                                <p v-if="state.mode_preview.team_counts">
+                                    {{
+                                        state.mode_preview.team_counts.town
+                                    }}
+                                    Town ·
+                                    {{
+                                        state.mode_preview.team_counts.cult
+                                    }}
+                                    Cult. Dealt role counts stay secret until
+                                    the match ends.
+                                </p>
+                                <p
+                                    v-for="(pool, side) in state.mode_preview
+                                        .possible_roles"
+                                    :key="side"
+                                >
+                                    Possible
+                                    {{
+                                        side === 'town' ? 'Town' : 'Cult'
+                                    }}
+                                    roles:
+                                    {{
+                                        pool
+                                            .map(
+                                                (role) =>
+                                                    roles[role]?.name.replace(
+                                                        /^The /,
+                                                        '',
+                                                    ) ?? role,
+                                            )
+                                            .join(', ')
+                                    }}. None is guaranteed; duplicates are
+                                    possible.
+                                </p>
+                                <p v-if="state.mode_preview.discussion_seconds">
+                                    Discussion:
+                                    {{
+                                        state.mode_preview.discussion_seconds
+                                            .early
+                                    }}s below one-third ritual progress,
+                                    {{
+                                        state.mode_preview.discussion_seconds
+                                            .middle
+                                    }}s from one-third, and
+                                    {{
+                                        state.mode_preview.discussion_seconds
+                                            .late
+                                    }}s from two-thirds onward. Anyone can make
+                                    a public oath.
+                                </p>
+                            </template>
                             <p v-if="state.mode_preview.required_players">
                                 This exact cast needs
                                 {{ state.mode_preview.required_players }}
@@ -2646,14 +2679,6 @@ onBeforeUnmount(() => {
     color: var(--muted);
     font-size: 11px;
 }
-.is-immersive .phase-clock {
-    display: flex;
-    padding: 9px 12px;
-    flex-shrink: 0;
-}
-.is-immersive .phase-clock strong {
-    font-size: 24px;
-}
 .is-immersive .game-tools {
     grid-area: 1 / 2 / 2 / 3;
     position: static;
@@ -2665,7 +2690,7 @@ onBeforeUnmount(() => {
 .is-immersive .game-tools > .button {
     padding: 9px 11px;
     font-size: 11px;
-    min-height: 36px;
+    min-height: 44px;
 }
 .is-immersive .immersive-table-stage {
     grid-area: 2 / 1 / 4 / 2;
@@ -2833,7 +2858,7 @@ onBeforeUnmount(() => {
 @media (max-width: 900px) {
     .is-immersive .game-main {
         grid-template-columns: minmax(0, 1fr);
-        grid-template-rows: repeat(4, max-content);
+        grid-template-rows: repeat(5, max-content);
         overflow-y: auto;
         align-content: start;
         gap: 8px;
@@ -2842,7 +2867,6 @@ onBeforeUnmount(() => {
     .is-immersive .phase-heading {
         grid-area: 1 / 1;
         margin: 0;
-        padding-right: 160px;
         min-height: 64px;
     }
     .is-immersive .phase-heading h1 {
@@ -2854,53 +2878,25 @@ onBeforeUnmount(() => {
     .is-immersive .phase-heading .immersive-connection {
         font-size: 9px;
     }
-    .is-immersive .phase-clock {
-        position: absolute;
-        top: 51px;
-        right: 10px;
-        padding: 0;
-        border: 0;
-        background: transparent;
-        gap: 5px;
-    }
-    .is-immersive .phase-clock strong {
-        font-size: 18px;
-    }
-    .is-immersive .phase-clock > svg {
-        width: 15px;
-    }
-    .is-immersive .phase-clock span {
-        display: none;
-    }
     .is-immersive .game-tools {
-        position: absolute;
-        top: 10px;
-        right: 10px;
+        grid-area: 2 / 1;
+        position: static;
+        align-items: flex-start;
         margin: 0;
-        gap: 4px;
-        max-width: 165px;
+        gap: 8px;
+        max-width: none;
     }
     .is-immersive .game-tools > .button {
-        padding: 6px;
-        font-size: 10px;
-        min-height: 30px;
+        min-width: 44px;
+        min-height: 44px;
+        padding: 10px;
+        font-size: 12px;
     }
     .is-immersive .fullscreen-toggle > span {
         display: none;
     }
-    .is-immersive .game-tools :deep(.coastal-sound) {
-        position: absolute;
-        top: 39px;
-        right: 77px;
-    }
-    .is-immersive .game-tools :deep(.sound-control) {
-        font-size: 0;
-        gap: 0;
-        padding: 6px;
-        min-height: 28px;
-    }
     .is-immersive .immersive-table-stage {
-        grid-area: 2 / 1;
+        grid-area: 3 / 1;
         overflow: visible;
     }
     .table-actions.your-turn {
@@ -2928,7 +2924,7 @@ onBeforeUnmount(() => {
         padding-inline: 12px;
     }
     .is-immersive .room-navigation {
-        grid-area: 3 / 1;
+        grid-area: 4 / 1;
         padding: 0;
     }
     .is-immersive .room-navigation > button {
@@ -2936,7 +2932,7 @@ onBeforeUnmount(() => {
         min-height: 39px;
     }
     .is-immersive .room-workspace {
-        grid-area: 4 / 1;
+        grid-area: 5 / 1;
         height: auto;
         overflow: visible;
         padding: 0;

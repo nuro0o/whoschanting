@@ -20,6 +20,7 @@ const busy = ref(false);
 const issue = ref('');
 const musicIssue = ref('');
 const settings = ref<HTMLDetailsElement>();
+const settingsOpen = ref(false);
 const controlId = useId();
 const tracker = new SoundCueTracker();
 let engine: CoastalAudio | null = null;
@@ -103,8 +104,14 @@ function visibilityChanged() {
     else if (activated && preferences.value.enabled) void enable();
 }
 function closeSettings(event: Event) {
-    if (settings.value && !settings.value.contains(event.target as Node))
+    if (
+        settings.value?.open &&
+        !settings.value.contains(event.target as Node)
+    ) {
+        const focusWasInside = settings.value.contains(document.activeElement);
         settings.value.open = false;
+        if (focusWasInside) settings.value.querySelector('summary')?.focus();
+    }
 }
 function escapeSettings() {
     if (!settings.value?.open) return;
@@ -164,25 +171,36 @@ onBeforeUnmount(() => {
 
 <template>
     <div class="coastal-sound">
-        <button
-            class="sound-control"
-            :aria-pressed="preferences.enabled"
-            :disabled="busy"
-            @click="toggle"
-        >
-            <Volume2 v-if="preferences.enabled" :size="15" aria-hidden="true" />
-            <VolumeX v-else :size="15" aria-hidden="true" />
-            {{ busy ? 'Starting sound...' : label }}
-        </button>
         <details
             ref="settings"
             class="sound-settings"
+            @toggle="settingsOpen = settings?.open ?? false"
             @keydown.esc.stop.prevent="escapeSettings"
         >
-            <summary aria-label="Sound settings" title="Sound settings">
-                <SlidersHorizontal :size="15" aria-hidden="true" />
+            <summary
+                aria-label="Sound settings"
+                :aria-expanded="settingsOpen"
+                :aria-controls="`${controlId}-panel`"
+                title="Sound settings"
+            >
+                <SlidersHorizontal :size="16" aria-hidden="true" />
+                <span>{{ label }}</span>
             </summary>
-            <div class="sound-settings-panel">
+            <div :id="`${controlId}-panel`" class="sound-settings-panel">
+                <button
+                    class="sound-control"
+                    :aria-pressed="preferences.enabled"
+                    :disabled="busy"
+                    @click="toggle"
+                >
+                    <Volume2
+                        v-if="preferences.enabled"
+                        :size="15"
+                        aria-hidden="true"
+                    />
+                    <VolumeX v-else :size="15" aria-hidden="true" />
+                    {{ busy ? 'Starting sound...' : label }}
+                </button>
                 <p class="sound-settings-title">Sounds of the village</p>
                 <p class="sound-settings-note">
                     Music, quiet waves, and distant bells.
@@ -258,21 +276,27 @@ onBeforeUnmount(() => {
 .coastal-sound {
     position: relative;
     display: inline-flex;
-    align-items: center;
-    gap: 3px;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 8px;
 }
 .sound-settings {
     position: relative;
 }
 .sound-settings summary {
-    display: grid;
-    place-items: center;
-    width: 34px;
-    height: 34px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-width: 44px;
+    min-height: 44px;
+    padding: 10px 12px;
+    font-size: 12px;
     cursor: pointer;
     color: var(--muted, #aebdb6);
-    border: 1px solid transparent;
-    border-radius: 8px;
+    border: 1px solid #53695d;
+    border-radius: 4px;
+    background: #203330;
     list-style: none;
 }
 .sound-settings summary::-webkit-details-marker {
@@ -298,11 +322,17 @@ onBeforeUnmount(() => {
     width: min(270px, calc(100vw - 32px));
     padding: 20px;
     border: 1px solid #70867c;
-    border-radius: 12px;
+    border-radius: 6px;
     background: #192b2b;
     color: #eae9d9;
     box-shadow: 0 14px 40px #06131480;
     text-align: left;
+}
+.sound-settings-panel .sound-control {
+    width: 100%;
+    min-height: 44px;
+    margin-bottom: 16px;
+    font-size: 13px;
 }
 .sound-settings-title {
     margin: 0 0 7px;
@@ -329,12 +359,13 @@ onBeforeUnmount(() => {
 .sound-volume input {
     grid-column: 1 / -1;
     width: 100%;
-    height: 20px;
+    min-height: 44px;
     accent-color: #b8d5b4;
     cursor: pointer;
 }
 .sound-preview {
     margin-top: 13px;
+    min-height: 44px;
     padding: 7px 11px;
     border: 1px solid #789386;
     border-radius: 6px;
@@ -345,10 +376,6 @@ onBeforeUnmount(() => {
     background: #ffffff0a;
 }
 .sound-issue {
-    position: absolute;
-    right: 0;
-    top: 100%;
-    z-index: 61;
     width: 235px;
     padding: 10px;
     border: 1px solid #789386;
@@ -356,5 +383,21 @@ onBeforeUnmount(() => {
     background: #192b2b;
     color: #eae9d9;
     font-size: 12px;
+}
+@media (max-width: 900px) {
+    .sound-settings[open] {
+        width: min(280px, calc(100vw - 84px));
+    }
+    .sound-settings summary {
+        width: fit-content;
+        margin-left: auto;
+    }
+    .sound-settings-panel {
+        position: static;
+        width: 100%;
+        margin-top: 8px;
+        padding: 16px;
+        box-shadow: none;
+    }
 }
 </style>

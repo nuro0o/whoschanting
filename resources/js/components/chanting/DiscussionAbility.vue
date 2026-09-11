@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, reactive } from 'vue';
 import type { RoomState } from '@/lib/chanting';
+import { discussionActionTypes } from '@/lib/roleActions';
 const props = defineProps<{
     state: RoomState;
     revealed: boolean;
@@ -10,40 +11,31 @@ const emit = defineEmits<{
     reveal: [];
     act: [type: string, extra: { target: string }];
 }>();
-const target = ref('');
+const targets = reactive({ exorcise: '', oath: '' });
+const actions = computed(() =>
+    discussionActionTypes(props.state, props.revealed),
+);
 const oath = computed(
     () => props.state.players.find((p) => p.id === props.state.me.id)?.oath,
 );
-const available = computed(() =>
-    props.state.me.role === 'exorcist'
-        ? !props.state.me.ability_used
-        : !oath.value,
-);
+function available(type: 'exorcise' | 'oath') {
+    return type === 'exorcise' ? !props.state.me.ability_used : !oath.value;
+}
 </script>
 
 <template>
-    <div
-        v-if="
-            state.me.alive &&
-            (!revealed ||
-                ['exorcist', 'oathkeeper'].includes(state.me.role ?? ''))
-        "
-        class="discussion-ability"
-    >
-        <button v-if="!revealed" class="button" @click="emit('reveal')">
-            Reveal my role &amp; day ability
-        </button>
-        <template v-else>
+    <div v-for="type in actions" :key="type" class="discussion-ability">
+        <template v-if="actions.length">
             <h3>
                 {{
-                    state.me.role === 'exorcist'
+                    type === 'exorcise'
                         ? 'Cleanse a villager'
                         : 'Make a public oath'
                 }}
             </h3>
-            <p v-if="!available" role="status">
+            <p v-if="!available(type)" role="status">
                 {{
-                    state.me.role === 'exorcist'
+                    type === 'exorcise'
                         ? 'Your exorcism is spent.'
                         : 'Your oath is public and cannot be changed.'
                 }}
@@ -51,14 +43,16 @@ const available = computed(() =>
             <template v-else>
                 <p>
                     {{
-                        state.me.role === 'exorcist'
+                        type === 'exorcise'
                             ? 'Once per match, clear another player’s active curse and haunting. This spends your ability even if neither is present.'
-                            : 'Promise to vote for this player today. A matching actual ballot grants protection from new curses next night. Everyone sees your promise.'
+                            : state.mode_setup?.mode === 'paranoia'
+                              ? 'Promise to vote for this player today. Everyone can make an oath, so it proves no role. Only an Oathkeeper whose actual ballot matches earns protection from new curses next night.'
+                              : 'Promise to vote for this player today. A matching actual ballot grants protection from new curses next night. Everyone sees your promise.'
                     }}
                 </p>
                 <label
                     >Choose a villager
-                    <select v-model="target" :disabled="disabled">
+                    <select v-model="targets[type]" :disabled="disabled">
                         <option disabled value="">Select a player</option>
                         <option
                             v-for="player in state.players.filter(
@@ -73,17 +67,11 @@ const available = computed(() =>
                 </label>
                 <button
                     class="button"
-                    :disabled="disabled || !target"
-                    @click="
-                        emit(
-                            'act',
-                            state.me.role === 'exorcist' ? 'exorcise' : 'oath',
-                            { target },
-                        )
-                    "
+                    :disabled="disabled || !targets[type]"
+                    @click="emit('act', type, { target: targets[type] })"
                 >
                     {{
-                        state.me.role === 'exorcist'
+                        type === 'exorcise'
                             ? 'Use my exorcism'
                             : 'Publish my oath'
                     }}

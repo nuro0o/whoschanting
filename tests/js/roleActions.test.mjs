@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+    discussionActionTypes,
     eligibleTargets,
     privateResultText,
     nightActionLabel,
@@ -16,6 +17,45 @@ const state = {
         { id: 'banished', alive: false },
     ],
 };
+
+await test('Paranoia oaths are available with secrets hidden and alongside an Exorcist ability', () => {
+    const discussion = {
+        ...state,
+        phase: 'discussion',
+        mode_setup: { mode: 'paranoia' },
+        me: { ...state.me, alive: true, role: 'acolyte' },
+    };
+    assert.deepEqual(discussionActionTypes(discussion, false), ['oath']);
+    assert.deepEqual(discussionActionTypes(discussion, true), ['oath']);
+    const exorcist = {
+        ...discussion,
+        me: { ...discussion.me, role: 'exorcist' },
+    };
+    assert.deepEqual(discussionActionTypes(exorcist, true), [
+        'exorcise',
+        'oath',
+    ]);
+    assert.deepEqual(discussionActionTypes(exorcist, false), ['oath']);
+    assert.deepEqual(
+        discussionActionTypes({ ...discussion, phase: 'night' }, true),
+        [],
+    );
+    assert.deepEqual(
+        discussionActionTypes(
+            { ...discussion, me: { ...discussion.me, alive: false } },
+            true,
+        ),
+        [],
+    );
+    const classic = { ...discussion, mode_setup: { mode: 'classic' } };
+    assert.deepEqual(discussionActionTypes(classic, true), []);
+    const oathkeeper = {
+        ...classic,
+        me: { ...classic.me, role: 'oathkeeper' },
+    };
+    assert.deepEqual(discussionActionTypes(oathkeeper, true), ['oath']);
+    assert.deepEqual(discussionActionTypes(oathkeeper, false), []);
+});
 
 await test('protection cooldown filters night targets without removing voting choices', () => {
     assert.deepEqual(

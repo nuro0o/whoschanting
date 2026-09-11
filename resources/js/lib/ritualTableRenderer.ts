@@ -20,7 +20,7 @@ export interface RitualTableRenderer {
     resetView: () => void;
 }
 
-/** Loaded only after the viewer chooses 3D. Nothing here owns game state. */
+/** Loaded when the room's table mounts. Nothing here owns game state. */
 export function createRitualTable(
     host: HTMLElement,
     initial: RitualSceneState,

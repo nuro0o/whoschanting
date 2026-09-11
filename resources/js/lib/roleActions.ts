@@ -1,5 +1,20 @@
 import type { Player, PrivateNightResult, RoomState } from './chanting';
 
+export function discussionActionTypes(
+    state: RoomState,
+    revealed: boolean,
+): ('exorcise' | 'oath')[] {
+    if (!state.me.alive || state.phase !== 'discussion') return [];
+    const actions: ('exorcise' | 'oath')[] = [];
+    if (revealed && state.me.role === 'exorcist') actions.push('exorcise');
+    if (
+        state.mode_setup?.mode === 'paranoia' ||
+        (revealed && state.me.role === 'oathkeeper')
+    )
+        actions.push('oath');
+    return actions;
+}
+
 export function privateResultText(result: PrivateNightResult): string {
     if (result.kind === 'tracking')
         return result.visited_target

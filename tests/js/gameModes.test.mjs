@@ -50,6 +50,10 @@ await test('mode names preserve classic legacy rooms and distinguish chaos varia
     assert.equal(modeName(undefined, 'illusions'), 'Classic · Illusions');
     assert.equal(modeName({ ...defaultModeSetup(), mode: 'hard' }), 'Hard');
     assert.equal(
+        modeName({ ...defaultModeSetup(), mode: 'paranoia' }),
+        'Paranoia',
+    );
+    assert.equal(
         modeName({
             ...defaultModeSetup(),
             mode: 'chaos',

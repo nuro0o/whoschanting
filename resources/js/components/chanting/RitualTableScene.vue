@@ -9,7 +9,6 @@ import type { RitualTableRenderer } from '@/lib/ritualTableRenderer';
 import type { TableChatBubble } from '@/lib/tableChat';
 
 const props = defineProps<{
-    enabled: boolean;
     state: RitualSceneState;
     seats: RitualSceneSeat[];
     interactive?: boolean;
@@ -34,12 +33,11 @@ function stop() {
 }
 async function start() {
     stop();
-    if (!mounted || !props.enabled || !host.value) return;
+    if (!mounted || !host.value) return;
     const current = generation;
     try {
         const { createRitualTable } = await import('@/lib/ritualTableRenderer');
-        if (!mounted || !props.enabled || current !== generation || !host.value)
-            return;
+        if (!mounted || current !== generation || !host.value) return;
         renderer = createRitualTable(
             host.value,
             props.state,
@@ -61,7 +59,7 @@ async function start() {
         emit('unavailable');
     }
 }
-watch(() => [props.enabled, props.interactive], start);
+watch(() => props.interactive, start);
 defineExpose({ resetView: () => renderer?.resetView() });
 watch(
     () => props.bubbles,

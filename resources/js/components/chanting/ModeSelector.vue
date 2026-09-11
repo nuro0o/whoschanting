@@ -45,10 +45,16 @@ const choices = [
         mark: '03',
     },
     {
+        id: 'paranoia',
+        title: 'Paranoia',
+        detail: 'Fewer certainties. Less time.',
+        mark: '04',
+    },
+    {
         id: 'custom',
         title: 'Custom',
         detail: 'Your cast. Your rules.',
-        mark: '04',
+        mark: '05',
     },
 ] as const;
 const sides = [
@@ -192,6 +198,24 @@ function invalidCount(role: string): boolean {
                 <p v-else class="mode-footnote">
                     Any role can appear. Multiple Oracles, rival forgeries, a
                     chorus of bells: nobody knows what the village will draw.
+                </p>
+            </template>
+            <template v-else-if="modelValue.mode === 'paranoia'">
+                <p class="mode-kicker">Every claim is a gamble</p>
+                <p>
+                    For 5+ players. Any role can appear, including duplicates.
+                    The Town/Cult split is known, but the dealt role counts stay
+                    secret until the match ends. No role is guaranteed.
+                </p>
+                <p>
+                    Everyone can publicly promise a vote. Only an Oathkeeper who
+                    keeps that promise earns protection from new curses. Making
+                    an oath never proves your role.
+                </p>
+                <p class="mode-footnote">
+                    Discussion gets shorter at one-third and two-thirds ritual
+                    progress. Each dawn announces your time to talk; voting time
+                    stays the same.
                 </p>
             </template>
             <template v-else>

@@ -16,7 +16,6 @@ const props = defineProps<{
     serverTime?: string;
     chatSuppressed?: boolean;
     phase: RoomState['phase'];
-    phaseId: number;
     display?: RitualTableDisplay;
     meId: string;
     submitted: boolean;
@@ -32,7 +31,6 @@ const props = defineProps<{
 const emit = defineEmits<{ select: [id: string] }>();
 const scene = ref<InstanceType<typeof RitualTableScene>>();
 const projectedSeats = ref<{ left: string; top: string }[]>([]);
-const visualMode = ref<'3d' | 'simple'>('simple');
 const sceneReady = ref(false);
 const sceneUnavailable = ref(false);
 const chat = createTableChat();
@@ -80,34 +78,13 @@ const sceneSeats = computed(() =>
         };
     }),
 );
-function chooseVisuals(mode: '3d' | 'simple') {
-    sceneUnavailable.value = false;
-    visualMode.value = mode;
-    try {
-        localStorage.setItem('chanting-table-visuals', mode);
-    } catch {
-        /* Storage may be unavailable in private browsers. */
-    }
-}
 function unavailable() {
     sceneUnavailable.value = true;
     sceneReady.value = false;
-    visualMode.value = 'simple';
 }
 onMounted(() => {
     document.addEventListener('visibilitychange', expireChat);
-    try {
-        visualMode.value =
-            localStorage.getItem('chanting-table-visuals') === 'simple'
-                ? 'simple'
-                : '3d';
-    } catch {
-        visualMode.value = '3d';
-    }
 });
-const phaseChanging = ref(false);
-const newlyLit = ref<number[]>([]);
-const extinguished = ref<string[]>([]);
 const sealRecent = ref(false);
 const timers = new Set<ReturnType<typeof setTimeout>>();
 function later(callback: () => void, delay: number) {
@@ -176,49 +153,6 @@ const ritualLabel = computed(() =>
           : 'Ritual steps',
 );
 watch(
-    () => props.phaseId,
-    (next, previous) => {
-        if (next === previous) return;
-        phaseChanging.value = true;
-        later(() => {
-            phaseChanging.value = false;
-        }, 900);
-    },
-);
-watch(
-    () => props.ritualTokens,
-    (next, previous) => {
-        newlyLit.value =
-            next > previous
-                ? Array.from(
-                      { length: next - previous },
-                      (_, i) => previous + i + 1,
-                  )
-                : [];
-        later(() => {
-            newlyLit.value = [];
-        }, 1000);
-    },
-);
-watch(
-    () =>
-        props.players.map((player) => ({ id: player.id, alive: player.alive })),
-    (next, previous) => {
-        const ids = next
-            .filter(
-                (player) =>
-                    !player.alive &&
-                    previous.some((old) => old.id === player.id && old.alive),
-            )
-            .map((player) => player.id);
-        if (!ids.length) return;
-        extinguished.value = ids;
-        later(() => {
-            extinguished.value = [];
-        }, 1400);
-    },
-);
-watch(
     () => props.actionSerial,
     (next, previous) => {
         if (next <= previous) return;
@@ -239,7 +173,6 @@ onBeforeUnmount(() => {
     <section
         class="table-panel table-panel-immersive"
         :class="{
-            'phase-arriving': phaseChanging,
             'has-actions': !!$slots.briefing || !!$slots.actions,
         }"
         :data-phase="phase"
@@ -249,34 +182,18 @@ onBeforeUnmount(() => {
         <slot name="briefing" />
         <div class="table-topline">
             <span class="eyebrow">THE VILLAGE TABLE</span>
-            <div class="table-visuals" role="group" aria-label="Table visuals">
-                <span>View</span>
-                <button
-                    type="button"
-                    :aria-pressed="visualMode === '3d'"
-                    @click="chooseVisuals('3d')"
-                >
-                    3D
-                </button>
-                <button
-                    type="button"
-                    :aria-pressed="visualMode === 'simple'"
-                    @click="chooseVisuals('simple')"
-                >
-                    Simple
-                </button>
-                <button
-                    v-if="sceneReady"
-                    type="button"
-                    class="table-reset"
-                    @click="scene?.resetView()"
-                >
-                    <RotateCcw :size="13" /> Reset view
-                </button>
-            </div>
+            <button
+                v-if="sceneReady"
+                type="button"
+                class="table-reset"
+                @click="scene?.resetView()"
+            >
+                <RotateCcw :size="13" /> Reset view
+            </button>
         </div>
         <p v-if="sceneUnavailable" class="table-visual-notice" role="status">
-            3D is unavailable right now. The simple table is ready to play.
+            The 3D table could not load. Try refreshing the page. You can still
+            use the player controls and chat.
         </p>
         <div
             class="card-table"
@@ -285,12 +202,25 @@ onBeforeUnmount(() => {
                 'is-small': players.length <= 4,
                 'is-crowded': crowded,
                 'is-haunted': !!hauntedSeatId,
-                'is-three': sceneReady,
             }"
         >
+            <div
+                v-if="display"
+                :class="
+                    sceneReady
+                        ? 'sr-only'
+                        : ['table-clock', { 'is-urgent': display.urgent }]
+                "
+                role="timer"
+                aria-live="off"
+                :aria-label="`${display.phase}: ${display.value}. ${display.detail}`"
+            >
+                <span aria-hidden="true">{{ display.phase }}</span>
+                <strong aria-hidden="true">{{ display.value }}</strong>
+                <small aria-hidden="true">{{ display.detail }}</small>
+            </div>
             <RitualTableScene
                 ref="scene"
-                :enabled="visualMode === '3d'"
                 interactive
                 :state="sceneState"
                 :seats="sceneSeats"
@@ -300,51 +230,11 @@ onBeforeUnmount(() => {
                 @ready="sceneReady = $event"
                 @unavailable="unavailable"
             />
-            <div class="table-surface" aria-hidden="true">
-                <div class="table-inlay"></div>
-            </div>
-            <div class="table-atmosphere" aria-hidden="true"></div>
             <div
                 v-if="hauntedSeatId"
                 class="phantom-shadow"
                 aria-hidden="true"
             ></div>
-            <div
-                v-if="!sceneReady"
-                class="table-ritual"
-                :class="{ 'ritual-awakening': newlyLit.length > 0 }"
-                role="img"
-                :aria-label="`${ritualTokens} of ${ritualThreshold} ritual steps${phase === 'finished' ? ' achieved' : ''}`"
-            >
-                <div class="ritual-ring" aria-hidden="true">
-                    <span
-                        v-for="step in ritualThreshold"
-                        :key="step"
-                        class="ritual-rune"
-                        :class="{
-                            'is-lit': step <= ritualTokens,
-                            'is-new': newlyLit.includes(step),
-                        }"
-                        :style="{
-                            transform: `rotate(${((step - 1) / ritualThreshold) * 360}deg) translateY(calc(var(--ring-size) / -2))`,
-                        }"
-                        >ᛟ</span
-                    >
-                </div>
-                <span class="ritual-center-icon" aria-hidden="true"
-                    ><Flame :size="19"
-                /></span>
-                <strong
-                    >{{
-                        phase === 'lobby'
-                            ? ritualThreshold || '—'
-                            : ritualTokens
-                    }}<small v-if="phase !== 'lobby'">
-                        / {{ ritualThreshold }}</small
-                    ></strong
-                >
-                <span class="ritual-center-label">{{ ritualLabel }}</span>
-            </div>
             <component
                 :is="selectable(player) ? 'button' : 'div'"
                 v-for="(player, index) in players"
@@ -355,7 +245,6 @@ onBeforeUnmount(() => {
                     'is-banished': !player.alive,
                     'is-selectable': selectable(player),
                     'is-selected': selectedTarget === player.id && canSelect,
-                    'is-extinguishing': extinguished.includes(player.id),
                     'is-face-up': phase === 'finished',
                     'phantom-seat': player.id === hauntedSeatId,
                 }"
@@ -387,7 +276,6 @@ onBeforeUnmount(() => {
                     aria-hidden="true"
                     ><i></i><i></i
                 ></span>
-                <span class="seat-candle" aria-hidden="true"><i></i></span>
                 <span
                     v-if="
                         player.id === meId &&
@@ -430,7 +318,7 @@ onBeforeUnmount(() => {
             </component>
         </div>
         <slot name="actions" />
-        <div v-if="sceneReady" class="table-summoning-status">
+        <div class="table-summoning-status">
             <Flame :size="15" aria-hidden="true" />
             <span
                 ><strong
@@ -544,6 +432,43 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
+.table-clock {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    width: clamp(120px, 18vw, 180px);
+    aspect-ratio: 1;
+    padding: 12px;
+    border: 1px solid #ac9c62;
+    border-radius: 50%;
+    background: #172a27;
+    color: #e9dfb8;
+    text-align: center;
+    pointer-events: none;
+}
+.table-clock > span,
+.table-clock > small {
+    font-size: 9px;
+    font-weight: 600;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+}
+.table-clock > strong {
+    font-family: 'Fraunces', Georgia, serif;
+    font-size: clamp(20px, 3vw, 32px);
+    font-weight: 500;
+    line-height: 1.1;
+}
+.table-clock.is-urgent {
+    border-color: #dc9a78;
+    color: #f0b18c;
+}
 .table-compact-roster {
     display: none;
 }
@@ -644,12 +569,18 @@ onBeforeUnmount(() => {
         outline-offset: -2px;
     }
 }
-.table-visuals .table-reset {
+.table-reset {
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    margin-left: 6px;
-    border-color: #afa67d70;
+    padding: 5px 9px;
+    color: #c4cbbb;
+    border: 1px solid #afa67d70;
+    border-radius: 3px;
+    font: inherit;
+    font-size: 10px;
+    cursor: pointer;
+    background: transparent;
 }
 .table-panel-immersive {
     height: 100%;
@@ -800,34 +731,10 @@ onBeforeUnmount(() => {
         font-size: 10px;
     }
 }
-.table-visuals {
-    display: flex;
-    align-items: center;
-    gap: 3px;
-    color: #b8c3b4;
-    font-size: 10px;
-}
-.table-visuals > span {
-    margin-right: 5px;
-}
-.table-visuals button {
-    padding: 5px 9px;
-    color: #c4cbbb;
-    border: 1px solid transparent;
-    border-radius: 3px;
-    font: inherit;
-    cursor: pointer;
-    background: transparent;
-}
-.table-visuals button[aria-pressed='true'] {
-    background: #bfba8a18;
-    border-color: #afa67d70;
-    color: #f1e7c4;
-}
-.table-visuals button:hover {
+.table-reset:hover {
     background: #c4c2a52b;
 }
-.table-visuals button:focus-visible {
+.table-reset:focus-visible {
     outline: 2px solid #dec784;
     outline-offset: 2px;
 }
@@ -836,13 +743,6 @@ onBeforeUnmount(() => {
     margin: 0;
     color: #c5cbbb;
     font-size: 11px;
-}
-.is-three .table-surface,
-.is-three .table-atmosphere {
-    visibility: hidden;
-}
-.is-three .seat-candle {
-    display: none;
 }
 .table-summoning-status {
     display: flex;

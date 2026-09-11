@@ -56,6 +56,14 @@ const nextAction = computed(() => {
                 Town and one Cult player. Everyone can join before the match
                 starts; the number of players must then match the chosen cast.
             </p>
+            <p v-if="state.mode_setup?.mode === 'paranoia'">
+                Paranoia keeps the usual Town/Cult split, but no particular role
+                is guaranteed and duplicates are possible. Dealt role counts
+                stay secret until victory. Anyone can make a public voting oath;
+                only an Oathkeeper who keeps theirs earns curse protection.
+                Discussion gets shorter at one-third and two-thirds ritual
+                progress. Each dawn announces the time available.
+            </p>
         </section>
         <RoleGuide
             compact
@@ -133,7 +141,9 @@ const nextAction = computed(() => {
                     private investigation, then compare stories in Chat. Voting
                     starts when all living players are ready or the timer ends.
                     The Exorcist can cleanse another player once per match; the
-                    Oathkeeper can make one public voting promise each day.
+                    Oathkeeper can make one public voting promise each day. In
+                    Paranoia, everyone can make that promise, so an oath does
+                    not prove anyone's role.
                 </li>
                 <li>
                     <strong>Voting.</strong> Choose a player to banish or
