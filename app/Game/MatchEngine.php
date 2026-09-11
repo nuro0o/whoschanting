@@ -171,6 +171,7 @@ class MatchEngine
             $this->ensure($id === $s['host_id'] && $s['phase'] === 'finished', 'Only the host can start a new gathering after victory.');
             foreach ($s['players'] as &$player) {
                 $player = array_replace($player, ['ready' => false, 'alive' => true, 'role' => null, 'alignment' => null, 'results' => [], 'curse' => null, 'curse_notice' => null]);
+                unset($player['last_protection']);
             }
             unset($player);
             $s = array_replace($s, ['day' => 0, 'tokens' => 0, 'threshold' => 0, 'winner' => null, 'win_reason' => null,
@@ -189,12 +190,17 @@ class MatchEngine
             $this->ensure(count(array_filter($s['players'], fn (array $p): bool => ! $p['ready'])) === 0, 'Every player must be ready.');
             $ids = array_keys($s['players']);
             shuffle($ids);
+            $townRoles = ['oracle'];
+            foreach (config('game.town_roles_min_players') as $role => $minimum) {
+                if ($count >= $minimum && count($townRoles) < $count - $cultistCount) {
+                    $townRoles[] = $role;
+                }
+            }
             foreach ($ids as $index => $pid) {
                 $s['players'][$pid]['role'] = match (true) {
                     $index === 0 => 'veilweaver',
                     $index < $cultistCount => 'acolyte',
-                    $index === $cultistCount => 'oracle',
-                    default => 'townsperson',
+                    default => $townRoles[$index - $cultistCount] ?? 'townsperson',
                 };
                 $s['players'][$pid]['alignment'] = $index < $cultistCount ? 'cult' : 'town';
             }
@@ -247,7 +253,9 @@ class MatchEngine
         } elseif ($type === 'night') {
             $this->ensure($s['phase'] === 'night', 'Night has ended.');
             $this->ensure($p['role'] !== 'oracle' || $target !== null, 'Choose someone to investigate.');
-            $this->ensure(in_array($p['role'], ['oracle', 'veilweaver', 'acolyte']) || $target === null, 'Your role does not target another player.');
+            $this->ensure($p['role'] !== 'lamplighter' || $target !== null, 'Choose someone to watch.');
+            $this->ensure(in_array($p['role'], ['oracle', 'veilweaver', 'acolyte', 'warden', 'lamplighter']) || $target === null, 'Your role does not target another player.');
+            $this->ensure($target === null || $target !== $this->previousProtection($p, $s['day']), 'You cannot protect the same player on consecutive nights.');
         } elseif ($type === 'vote') {
             $this->ensure($s['phase'] === 'voting', 'Voting is not open.');
         } else {
@@ -257,7 +265,8 @@ class MatchEngine
         if ($target !== null && in_array($type, ['night', 'vote'], true)) {
             $curseType = $p['curse']['type'] ?? null;
             if ($curseType === 'misdirection') {
-                $alternatives = array_keys(array_filter($s['players'], fn (array $player): bool => $player['alive'] && $player['id'] !== $id && $player['id'] !== $target));
+                $excludedProtection = $type === 'night' ? $this->previousProtection($p, $s['day']) : null;
+                $alternatives = array_keys(array_filter($s['players'], fn (array $player): bool => $player['alive'] && $player['id'] !== $id && $player['id'] !== $target && $player['id'] !== $excludedProtection));
                 if ($alternatives !== []) {
                     $target = $alternatives[random_int(0, count($alternatives) - 1)];
                     $s['players'][$id]['curse'] = null;
@@ -317,11 +326,17 @@ class MatchEngine
         }
         unset($player);
         $veiled = [];
+        $protected = [];
         $investigated = [];
         $cult = array_filter($s['players'], fn (array $p): bool => $p['alive'] && $p['alignment'] === 'cult');
         foreach ($s['actions'] as $id => $a) {
             if ($s['players'][$id]['role'] === 'veilweaver' && $a['target'] !== null) {
                 $veiled[] = $a['target'];
+            }
+            if ($s['players'][$id]['role'] === 'warden' && $a['target'] !== null) {
+                $protected[$a['target']] = true;
+                $s['players'][$id]['last_protection'] = ['day' => $s['day'], 'target' => $a['target']];
+                $s['players'][$id]['results'][] = ['kind' => 'protection', 'day' => $s['day'], 'target' => $s['players'][$a['target']]['name']];
             }
         }
         foreach ($s['actions'] as $id => $a) {
@@ -333,6 +348,18 @@ class MatchEngine
                     $alignment = $alignment === 'cult' ? 'town' : 'cult';
                 }
                 $s['players'][$id]['results'][] = ['day' => $s['day'], 'target' => $s['players'][$target]['name'], 'alignment' => $alignment];
+            }
+            if ($s['players'][$id]['role'] === 'lamplighter') {
+                // Count other submitted visits, including curses that protection blocks.
+                // Observing a player never counts as the Lamplighter's own evidence.
+                $visited = false;
+                foreach ($s['actions'] as $visitor => $visit) {
+                    if ($visitor !== $id && ($visit['target'] ?? null) === $a['target']) {
+                        $visited = true;
+                        break;
+                    }
+                }
+                $s['players'][$id]['results'][] = ['kind' => 'visits', 'day' => $s['day'], 'target' => $s['players'][$a['target']]['name'], 'visited' => $visited];
             }
         }
         $allChanted = count(array_intersect(array_keys($cult), array_keys($s['actions']))) === count($cult);
@@ -356,9 +383,15 @@ class MatchEngine
         }
         // One affliction per victim per dawn, even if multiple cultists chose them.
         $cursed = [];
+        $blockedCurses = [];
         foreach ($s['actions'] as $id => $action) {
             $target = $action['target'] ?? null;
             if (isset($cult[$id]) && $target !== null && ! isset($cursed[$target])) {
+                if (isset($protected[$target])) {
+                    $blockedCurses[$target] = true;
+
+                    continue;
+                }
                 $s['players'][$target]['curse'] = $this->curses->create($s['tokens'], $s['threshold'], $s['day']);
                 $cursed[$target] = true;
             }
@@ -374,6 +407,9 @@ class MatchEngine
             $actions[] = ['player_id' => $id, 'role' => $player['role'], 'target_id' => $target,
                 'chosen_target_id' => $s['actions'][$id]['chosen_target'] ?? $target,
                 'curse_type' => isset($cult[$id]) && $target !== null ? ($s['players'][$target]['curse']['type'] ?? null) : null,
+                'curse_blocked' => isset($cult[$id]) && $target !== null && isset($blockedCurses[$target]),
+                'prevented_curse' => $player['role'] === 'warden' && $target !== null && isset($blockedCurses[$target]),
+                'visited' => $player['role'] === 'lamplighter' && $submitted ? end($player['results'])['visited'] : null,
                 'submitted' => $submitted, 'contributed' => in_array($id, $contributors, true),
                 'apparent_alignment' => $reading ? $reading['alignment'] : null,
                 'veiled' => $reading && in_array($target, $veiled, true)];
@@ -516,6 +552,7 @@ class MatchEngine
                 'character' => $this->character($me),
                 'curse' => $this->curses->view($me['curse'] ?? null),
                 'curse_notice' => $me['curse_notice'] ?? null,
+                'previous_protection_target' => $this->previousProtection($me, $s['day']),
                 'mission' => $me['alignment'] === 'cult' ? $s['mission'] : null,
                 'allies' => $allies, 'submitted' => isset($s['actions'][$id]),
             ]),
@@ -523,7 +560,7 @@ class MatchEngine
                 ? array_map(fn (array $message): array => array_replace($message, ['body' => $this->curses->garble($message['body'], $me['curse']['id'].$message['id'])]), $s['messages'])
                 : $s['messages'], 'log' => $s['log'],
             'recap' => $s['phase'] === 'finished' ? $this->recap($s) : null,
-            'rules' => array_replace(array_intersect_key($this->rules(), array_flip(['min_players', 'max_players', 'seconds', 'ritual_goals', 'cultists_by_player_count', 'small_gathering_max_players'])),
+            'rules' => array_replace(array_intersect_key($this->rules(), array_flip(['min_players', 'max_players', 'seconds', 'ritual_goals', 'cultists_by_player_count', 'small_gathering_max_players', 'town_roles_min_players'])),
                 isset($s['match_rules']['seconds']) ? ['seconds' => $s['match_rules']['seconds']] : []),
         ];
     }
@@ -569,6 +606,13 @@ class MatchEngine
         $characters = array_column(config('game.characters'), 'id');
 
         return $player['character'] ?? $characters[hexdec(substr(hash('sha256', $player['id']), 0, 6)) % count($characters)];
+    }
+
+    /** @param array<string, mixed> $player */
+    private function previousProtection(array $player, int $day): ?string
+    {
+        return $player['role'] === 'warden' && ($player['last_protection']['day'] ?? null) === $day - 1
+            ? $player['last_protection']['target'] : null;
     }
 
     private function ensure(bool $condition, string $message): void

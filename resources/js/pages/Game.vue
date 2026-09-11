@@ -51,6 +51,7 @@ import {
     type Character,
     defaultCharacters,
 } from '@/lib/chanting';
+import { eligibleTargets } from '@/lib/roleActions';
 import '../../css/chanting.css';
 
 const props = withDefaults(
@@ -275,18 +276,22 @@ const lobbyRoster = computed(() => {
         !goal
     )
         return null;
+    const townRoles = Object.entries(
+        state.value.rules.town_roles_min_players ?? {},
+    )
+        .filter(([, minimum]) => count >= minimum)
+        .slice(0, Math.max(0, count - cultists - 1))
+        .map(([role]) => role);
     return {
         cultists,
-        townspeople: count - cultists - 1,
+        townspeople: count - cultists - 1 - townRoles.length,
+        townRoles,
         steps: goal.steps,
         small: count <= state.value.rules.small_gathering_max_players,
     };
 });
-const targets = computed(
-    () =>
-        state.value?.players.filter(
-            (p) => p.alive && p.id !== state.value?.me.id,
-        ) ?? [],
+const targets = computed(() =>
+    state.value ? eligibleTargets(state.value) : [],
 );
 const canChat = computed(
     () =>
@@ -312,11 +317,15 @@ const timeLabel = computed(() =>
         : `${Math.floor(seconds.value / 60)}:${String(seconds.value % 60).padStart(2, '0')}`,
 );
 const requiresTarget = computed(
-    () => state.value?.phase === 'night' && state.value.me.role === 'oracle',
+    () =>
+        state.value?.phase === 'night' &&
+        ['oracle', 'lamplighter'].includes(state.value.me.role ?? ''),
 );
 const canChooseNightTarget = computed(
     () =>
         state.value?.me.role === 'oracle' ||
+        state.value?.me.role === 'warden' ||
+        state.value?.me.role === 'lamplighter' ||
         state.value?.me.role === 'veilweaver' ||
         state.value?.me.role === 'acolyte',
 );
@@ -350,9 +359,15 @@ function selectSeat(id: string) {
 const nightLabel = computed(() =>
     state.value?.me.role === 'oracle'
         ? 'Confirm investigation'
-        : state.value?.me.alignment === 'cult'
-          ? 'Chant for the ritual'
-          : 'Keep watch tonight',
+        : state.value?.me.role === 'warden'
+          ? target.value
+              ? 'Confirm protection'
+              : 'Confirm skipped protection'
+          : state.value?.me.role === 'lamplighter'
+            ? 'Confirm observation'
+            : state.value?.me.alignment === 'cult'
+              ? 'Chant for the ritual'
+              : 'Keep watch tonight',
 );
 
 function accept(next: RoomState) {
@@ -882,6 +897,18 @@ onBeforeUnmount(() => {
                                                 ? 'cultist'
                                                 : 'cultists'
                                         }}, 1 Oracle,
+                                        <template
+                                            v-for="role in lobbyRoster.townRoles"
+                                            :key="role"
+                                        >
+                                            1
+                                            {{
+                                                roles[role]?.name.replace(
+                                                    /^The /,
+                                                    '',
+                                                ) ?? role
+                                            }},
+                                        </template>
                                         {{ lobbyRoster.townspeople }}
                                         {{
                                             lobbyRoster.townspeople === 1
@@ -1028,9 +1055,13 @@ onBeforeUnmount(() => {
                                           ? 'Your private night move.'
                                           : state.me.role === 'oracle'
                                             ? 'Look a little closer.'
-                                            : state.me.alignment === 'cult'
-                                              ? 'Something stirs below.'
-                                              : 'Keep a watchful eye.'
+                                            : state.me.role === 'warden'
+                                              ? 'Keep a neighbor safe.'
+                                              : state.me.role === 'lamplighter'
+                                                ? 'Watch who comes calling.'
+                                                : state.me.alignment === 'cult'
+                                                  ? 'Something stirs below.'
+                                                  : 'Keep a watchful eye.'
                                 }}
                             </h2>
                             <p v-if="!state.me.alive">
@@ -1062,12 +1093,34 @@ onBeforeUnmount(() => {
                                     {{
                                         state.me.role === 'oracle'
                                             ? 'Choose a living player to investigate. Your private reading arrives at dawn.'
-                                            : state.me.role === 'veilweaver'
-                                              ? 'Choose someone to veil and curse, or chant without a target. Their alignment appears reversed tonight; a random curse takes hold at dawn.'
-                                              : state.me.role === 'acolyte'
-                                                ? 'Choose someone to curse, or chant without a target. A random curse takes hold at dawn. Your chant advances the ritual if your shared mission’s condition is met.'
-                                                : 'Stay alert. You have no secret ability, but your voice and your vote matter in the morning.'
+                                            : state.me.role === 'warden' ||
+                                                state.me.role === 'lamplighter'
+                                              ? roles[state.me.role].description
+                                              : state.me.role === 'veilweaver'
+                                                ? 'Choose someone to veil and curse, or chant without a target. Their alignment appears reversed tonight; a random curse takes hold at dawn.'
+                                                : state.me.role === 'acolyte'
+                                                  ? 'Choose someone to curse, or chant without a target. A random curse takes hold at dawn. Your chant advances the ritual if your shared mission’s condition is met.'
+                                                  : 'Stay alert. You have no secret ability, but your voice and your vote matter in the morning.'
                                     }}
+                                </p>
+                                <p
+                                    v-if="
+                                        state.me.role === 'warden' &&
+                                        state.me.previous_protection_target
+                                    "
+                                    class="small-help"
+                                >
+                                    You protected
+                                    {{
+                                        state.players.find(
+                                            (player) =>
+                                                player.id ===
+                                                state?.me
+                                                    .previous_protection_target,
+                                        )?.name
+                                    }}
+                                    last night. Choose someone else tonight, or
+                                    skip protection.
                                 </p>
                                 <div
                                     v-if="state.me.submitted"
@@ -1118,9 +1171,11 @@ onBeforeUnmount(() => {
                                             :disabled="pending"
                                             @click="target = null"
                                         >
-                                            <Moon :size="15" /><span
-                                                >Chant without a target</span
-                                            >
+                                            <Moon :size="15" /><span>{{
+                                                state.me.role === 'warden'
+                                                    ? 'Nobody (skip protection)'
+                                                    : 'Chant without a target'
+                                            }}</span>
                                         </button>
                                     </div>
                                     <button
@@ -1380,6 +1435,9 @@ onBeforeUnmount(() => {
                             state.phase === 'night' && !revealed ? null : target
                         "
                         :can-select="canSelectSeat"
+                        :eligible-target-ids="
+                            targets.map((player) => player.id)
+                        "
                         @select="selectSeat"
                     />
 

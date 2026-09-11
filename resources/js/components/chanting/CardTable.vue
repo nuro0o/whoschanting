@@ -18,6 +18,7 @@ const props = defineProps<{
     winner: 'town' | 'cult' | null;
     selectedTarget: string | null;
     canSelect: boolean;
+    eligibleTargetIds?: string[];
 }>();
 const emit = defineEmits<{ select: [id: string] }>();
 const phaseChanging = ref(false);
@@ -57,7 +58,13 @@ function seatStyle(index: number) {
     };
 }
 function selectable(player: Player) {
-    return props.canSelect && player.alive && player.id !== props.meId;
+    return (
+        props.canSelect &&
+        player.alive &&
+        player.id !== props.meId &&
+        (!props.eligibleTargetIds ||
+            props.eligibleTargetIds.includes(player.id))
+    );
 }
 function seatLabel(player: Player) {
     const identity = `${player.name}${player.id === props.meId ? ', you' : ''}`;

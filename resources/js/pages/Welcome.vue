@@ -2,6 +2,7 @@
 import { Head } from '@inertiajs/vue3';
 import { ArrowDown, Eye, Moon, Users, Vote, Waves } from '@lucide/vue';
 import RoomEntry from '@/components/chanting/RoomEntry.vue';
+import RoleGuide from '@/components/chanting/RoleGuide.vue';
 import VillageScene from '@/components/chanting/VillageScene.vue';
 import GameGlossary from '@/components/chanting/GameGlossary.vue';
 import CharacterPortrait from '@/components/chanting/CharacterPortrait.vue';
@@ -14,6 +15,7 @@ withDefaults(
         rules?: {
             min_players: number;
             max_players: number;
+            town_roles_min_players?: Record<string, number>;
             ritual_goals?: { players: number; steps: number }[];
         };
     }>(),
@@ -36,6 +38,7 @@ withDefaults(
                 chanting<span class="brand-question">?</span></a
             >
             <nav aria-label="Main navigation">
+                <a href="#roles" class="quiet-link">Roles</a>
                 <a href="#how-to-play" class="quiet-link"
                     >How to play <ArrowDown :size="14"
                 /></a>
@@ -116,6 +119,11 @@ withDefaults(
                     </li>
                 </ul>
             </section>
+            <RoleGuide
+                id="roles"
+                class="home-roles"
+                :minimum-players="rules.town_roles_min_players"
+            />
             <section
                 id="how-to-play"
                 class="how-section"
@@ -257,10 +265,12 @@ withDefaults(
                             players and one Oracle. There is 1 cultist with 3–4
                             players, 2 with 5–6, 3 with 7–8, and 4 with 9–10.
                             One cultist is the Veilweaver; the others are
-                            Acolytes. Default phases last 25 seconds for the
-                            reveal, 45 for night, 90 for discussion and 45 for
-                            voting. These balance settings are provisional and
-                            configurable.
+                            Acolytes. Larger gatherings replace Townsperson
+                            seats with a Warden and a Lamplighter; see the role
+                            guide for their player thresholds. Default phases
+                            last 25 seconds for the reveal, 45 for night, 90 for
+                            discussion and 45 for voting. These balance settings
+                            are provisional and configurable.
                         </p>
                     </div>
                 </details>
@@ -274,3 +284,33 @@ withDefaults(
         </footer>
     </div>
 </template>
+
+<style scoped>
+.home-roles {
+    width: min(1268px, 88%);
+    margin-inline: auto;
+}
+
+@media (max-width: 900px) {
+    .site-header {
+        height: auto;
+        min-height: 100px;
+        flex-wrap: wrap;
+        gap: 16px;
+        padding-block: 18px;
+    }
+
+    .site-header nav {
+        flex-wrap: wrap;
+        gap: 12px 20px;
+    }
+}
+
+@media (max-width: 400px) {
+    .site-header nav {
+        display: grid;
+        grid-template-columns: repeat(2, max-content);
+        justify-content: space-between;
+    }
+}
+</style>

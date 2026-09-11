@@ -2,6 +2,7 @@
 import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { Eye, EyeOff, LockKeyhole } from '@lucide/vue';
 import { roles, type RoomState } from '@/lib/chanting';
+import { privateResultText } from '@/lib/roleActions';
 import {
     prefersReducedMotion,
     usePanelMotion,
@@ -138,9 +139,7 @@ onBeforeUnmount(() => {
                 aria-controls="role-investigations"
                 @click="resultsOpen = !resultsOpen"
             >
-                {{
-                    resultsOpen ? 'Hide investigations' : 'Read investigations'
-                }}
+                {{ resultsOpen ? 'Hide night results' : 'Read night results' }}
                 <span v-if="newResults" class="room-badge"
                     >{{ newResults }} new result{{
                         newResults === 1 ? '' : 's'
@@ -154,7 +153,7 @@ onBeforeUnmount(() => {
                 class="private-separator role-results"
                 tabindex="-1"
             >
-                <strong>Your investigations · private</strong>
+                <strong>Your night results · private</strong>
                 <ul class="investigation-list">
                     <li
                         v-for="(result, index) in [
@@ -162,14 +161,20 @@ onBeforeUnmount(() => {
                         ].reverse()"
                         :key="index"
                     >
-                        Night {{ result.day }} · {{ result.target }} appeared
-                        <strong>{{ result.alignment }}</strong
-                        >.
+                        Night {{ result.day }} · {{ privateResultText(result) }}
                     </li>
                 </ul>
-                <p>
+                <p v-if="state.me.role === 'oracle'">
                     Readings can be veiled. Your own role and mission always
                     tell the truth.
+                </p>
+                <p v-else-if="state.me.role === 'lamplighter'">
+                    Visits can be friendly or hostile. Veils do not change these
+                    observations, and your own watch is excluded.
+                </p>
+                <p v-else-if="state.me.role === 'warden'">
+                    This records whom you protected, not whether a curse was
+                    attempted. Veils still affect Oracle readings.
                 </p>
             </div>
             <div class="role-details">

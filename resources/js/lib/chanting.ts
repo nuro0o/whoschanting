@@ -75,7 +75,16 @@ export interface RecapNightAction {
     contributed: boolean;
     apparent_alignment: string | null;
     veiled: boolean;
+    curse_blocked?: boolean;
+    prevented_curse?: boolean;
+    visited?: boolean | null;
 }
+export type PrivateNightResult = { day: number; target: string } & (
+    | { kind?: 'alignment'; alignment: string }
+    | { kind: 'visits'; visited: boolean }
+    | { kind: 'protection' }
+);
+
 export interface MatchRecapData {
     rules_version: string;
     player_count: number;
@@ -147,7 +156,8 @@ export interface RoomState {
         alignment: 'cult' | 'town' | null;
         mission: { id: string; name: string; description: string } | null;
         allies: { id: string; name: string; role: string }[];
-        results: { day: number; target: string; alignment: string }[];
+        results: PrivateNightResult[];
+        previous_protection_target?: string | null;
         submitted: boolean;
         curse: Curse | null;
         curse_notice: string | null;
@@ -161,6 +171,7 @@ export interface RoomState {
         ritual_goals: { players: number; steps: number }[];
         cultists_by_player_count: Record<number, number>;
         small_gathering_max_players: number;
+        town_roles_min_players?: Record<string, number>;
     };
 }
 
@@ -222,5 +233,19 @@ export const roles: Record<
         description:
             'Keep watch at night. Read the room by day, compare stories, and vote to banish every cultist. A full ritual leaves one final discussion and vote to stop the summoning.',
         symbol: '✦',
+    },
+    warden: {
+        name: 'The Warden',
+        subtitle: 'Town · guardian against curses',
+        description:
+            'Protect another living player from all new curses tonight, or skip protection. You cannot protect the same player on consecutive nights. Protection does not stop veils, investigations, or ritual progress, and does not remove an existing curse.',
+        symbol: '◇',
+    },
+    lamplighter: {
+        name: 'The Lamplighter',
+        subtitle: 'Town · watcher of midnight visitors',
+        description:
+            'Watch another living player tonight. At dawn, privately learn whether anyone else targeted them. Your own watch does not count. You learn no visitor names, roles, or abilities; even a blocked curse counts as a visit.',
+        symbol: '☼',
     },
 };

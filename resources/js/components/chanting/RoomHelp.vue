@@ -2,6 +2,7 @@
 import { computed } from 'vue';
 import { HelpCircle } from '@lucide/vue';
 import GameGlossary from '@/components/chanting/GameGlossary.vue';
+import RoleGuide from '@/components/chanting/RoleGuide.vue';
 import type { RoomState } from '@/lib/chanting';
 
 const props = defineProps<{ state: RoomState }>();
@@ -39,6 +40,10 @@ const nextAction = computed(() => {
             <p>{{ nextAction }}</p>
             <button class="button" @click="$emit('play')">Go to Play</button>
         </section>
+        <RoleGuide
+            compact
+            :minimum-players="state.rules.town_roles_min_players"
+        />
         <section class="help-answer">
             <h3>How do we win?</h3>
             <p>
@@ -71,6 +76,11 @@ const nextAction = computed(() => {
                 Selecting a player never submits automatically. Use the
                 confirmation button when you are ready.
             </p>
+            <p>
+                The Warden cannot protect the same player on consecutive nights.
+                That player is unavailable as a protection target until the
+                following night; the Warden may also skip protection.
+            </p>
             <button class="quiet-link" @click="$emit('reopen-hint')">
                 Show the selection hint again
             </button>
@@ -87,9 +97,10 @@ const nextAction = computed(() => {
                 </li>
                 <li>
                     <strong>Night.</strong> Everyone confirms one private
-                    action. Cultists chant, the Oracle investigates, and
-                    townspeople keep watch. Missing the deadline forfeits the
-                    action.
+                    action. Cultists chant, the Oracle investigates, and the
+                    Warden protects against new curses, the Lamplighter watches
+                    for other visitors, and townspeople keep watch. Missing the
+                    deadline forfeits the action.
                 </li>
                 <li>
                     <strong>Discussion.</strong> Read public events and any

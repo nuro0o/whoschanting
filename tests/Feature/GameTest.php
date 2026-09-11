@@ -102,7 +102,9 @@ class GameTest extends TestCase
         $this->assertSame(1, $roles['veilweaver']);
         $this->assertSame($cultistCount - 1, $roles['acolyte'] ?? 0);
         $this->assertSame(1, $roles['oracle']);
-        $this->assertSame($playerCount - $cultistCount - 1, $roles['townsperson']);
+        $this->assertSame($playerCount >= 5 ? 1 : 0, $roles['warden'] ?? 0);
+        $this->assertSame($playerCount >= 7 ? 1 : 0, $roles['lamplighter'] ?? 0);
+        $this->assertSame($playerCount - $cultistCount - 1 - (int) ($playerCount >= 5) - (int) ($playerCount >= 7), $roles['townsperson']);
         foreach ($identities as $id => $identity) {
             $view = $this->engine->access($room->code, $identity);
             foreach ($view['players'] as $public) {
@@ -124,6 +126,245 @@ class GameTest extends TestCase
         $this->expire($room);
         $this->assertSame($cultistCount, $room->state['tokens']);
         $this->assertCount($cultistCount, $room->state['awards']);
+    }
+
+    public static function protectionOrders(): array
+    {
+        return ['protection first' => [true], 'protection last' => [false]];
+    }
+
+    #[DataProvider('protectionOrders')]
+    public function test_protection_blocks_all_new_curses_but_not_veils_visits_or_chanting(bool $protectFirst): void
+    {
+        [$room, $identities] = $this->match(playerCount: 7);
+        $r = $this->roles($room);
+        $this->expire($room);
+        $target = $r['townsperson'];
+        $protection = fn () => $this->act($room, $identities[$r['warden']], 'night', ['target' => $target]);
+        if ($protectFirst) {
+            $protection();
+        }
+        $this->act($room, $identities[$r['lamplighter']], 'night', ['target' => $target]);
+        $this->act($room, $identities[$r['oracle']], 'night', ['target' => $target]);
+        foreach ($room->fresh()->state['players'] as $id => $player) {
+            if ($player['alignment'] === 'cult') {
+                $this->act($room, $identities[$id], 'night', ['target' => $target]);
+            }
+        }
+        if (! $protectFirst) {
+            $protection();
+        }
+        $this->expire($room);
+        $this->assertNull($room->state['players'][$target]['curse']);
+        $this->assertSame(3, $room->state['tokens']);
+        $this->assertSame('cult', $room->state['players'][$r['oracle']]['results'][0]['alignment']);
+        $this->assertSame([
+            'kind' => 'protection', 'day' => 1, 'target' => $room->state['players'][$target]['name'],
+        ], $room->state['players'][$r['warden']]['results'][0]);
+        $this->assertSame([
+            'kind' => 'visits', 'day' => 1, 'target' => $room->state['players'][$target]['name'], 'visited' => true,
+        ], $room->state['players'][$r['lamplighter']]['results'][0]);
+        foreach ($identities as $id => $identity) {
+            $view = $this->engine->access($room->code, $identity);
+            $this->assertSame($room->state['players'][$id]['results'], $view['me']['results']);
+            $this->assertNull($view['recap']);
+            $this->assertArrayNotHasKey('rounds', $view);
+            $this->assertArrayNotHasKey('last_protection', $view['me']);
+            foreach ($view['players'] as $player) {
+                $this->assertArrayNotHasKey('results', $player);
+                $this->assertArrayNotHasKey('last_protection', $player);
+                $this->assertArrayNotHasKey('role', $player);
+            }
+        }
+        // Finish the match and check the archived explanation, then rematch cleanup.
+        $s = $room->state;
+        $s['tokens'] = $s['threshold'];
+        $room->update(['state' => $s]);
+        $this->expire($room);
+        $this->expire($room);
+        $recap = $this->engine->access($room->code, 'secret-0')['recap'];
+        $this->assertSame('village-watch-v1', $recap['rules_version']);
+        $actions = array_column($recap['rounds'][0]['night']['actions'], null, 'player_id');
+        $this->assertTrue($actions[$r['warden']]['prevented_curse']);
+        $this->assertTrue($actions[$r['lamplighter']]['visited']);
+        $this->assertTrue($actions[$r['veilweaver']]['curse_blocked']);
+        $this->assertNull($actions[$r['veilweaver']]['curse_type']);
+        $this->assertSame($recap['rounds'], GameMatch::firstOrFail()->getAttribute('recap')['rounds']);
+        $this->act($room, 'secret-0', 'rematch');
+        foreach ($room->fresh()->state['players'] as $player) {
+            $this->assertSame([], $player['results']);
+            $this->assertArrayNotHasKey('last_protection', $player);
+        }
+    }
+
+    public function test_warden_cooldown_survives_refresh_allows_voting_and_resets_after_a_skipped_night(): void
+    {
+        [$room, $identities] = $this->match();
+        $r = $this->roles($room);
+        $warden = $identities[$r['warden']];
+        $target = $r['townsperson'];
+        $this->expire($room);
+        $this->assertRejected(fn () => $this->act($room, $warden, 'night', ['target' => $r['warden']]));
+        $this->act($room, $warden, 'night', ['target' => $target]);
+        $this->assertRejected(fn () => $this->act($room, $warden, 'night', ['target' => $r['oracle']]));
+        $this->expire($room);
+        $this->expire($room);
+        $this->act($room, $warden, 'vote', ['target' => $target]);
+        $this->expire($room);
+        $view = app(MatchEngine::class)->access($room->code, $warden);
+        $this->assertSame($target, $view['me']['previous_protection_target']);
+        $this->assertNull($this->engine->access($room->code, $identities[$target])['me']['previous_protection_target']);
+        $this->assertRejected(fn () => $this->act($room, $warden, 'night', ['target' => $target]));
+        $this->act($room, $warden, 'night');
+        $this->expire($room);
+        $actions = array_column($room->state['rounds'][2]['night']['actions'], null, 'player_id');
+        $this->assertTrue($actions[$r['warden']]['submitted']);
+        $this->assertNull($actions[$r['warden']]['target_id']);
+        $this->assertCount(1, $room->state['players'][$r['warden']]['results']);
+        $this->expire($room);
+        $this->expire($room);
+        $this->assertNull($this->engine->access($room->code, $warden)['me']['previous_protection_target']);
+        $this->act($room, $warden, 'night', ['target' => $target]);
+    }
+
+    public static function visitSources(): array
+    {
+        return [
+            'oracle' => ['oracle'], 'warden' => ['warden'],
+            'veilweaver' => ['veilweaver'], 'acolyte' => ['acolyte'],
+            'own watch only' => [null],
+        ];
+    }
+
+    #[DataProvider('visitSources')]
+    public function test_lamplighter_reports_only_other_actual_visits(?string $visitorRole): void
+    {
+        [$room, $identities] = $this->match(playerCount: 7);
+        $r = $this->roles($room);
+        $lamp = $identities[$r['lamplighter']];
+        $target = $r['townsperson'];
+        $this->expire($room);
+        $this->assertRejected(fn () => $this->act($room, $lamp, 'night'));
+        $this->assertRejected(fn () => $this->act($room, $lamp, 'night', ['target' => $r['lamplighter']]));
+        $this->act($room, $lamp, 'night', ['target' => $target]);
+        $this->assertRejected(fn () => $this->act($room, $lamp, 'night', ['target' => $r['oracle']]));
+        if ($visitorRole !== null) {
+            $this->act($room, $identities[$r[$visitorRole]], 'night', ['target' => $target]);
+        } else {
+            // Being visited yourself is unrelated to visits to your watched player.
+            $this->act($room, $identities[$r['oracle']], 'night', ['target' => $r['lamplighter']]);
+        }
+        $this->expire($room);
+        $this->assertSame([
+            ['kind' => 'visits', 'day' => 1, 'target' => $room->state['players'][$target]['name'], 'visited' => $visitorRole !== null],
+        ], $this->engine->access($room->code, $lamp)['me']['results']);
+        $this->assertSame([], $this->engine->access($room->code, $identities[$r['veilweaver']])['me']['results']);
+    }
+
+    public function test_missing_protection_and_observation_do_not_create_results_or_prevent_curses(): void
+    {
+        [$room, $identities] = $this->match(playerCount: 7);
+        $r = $this->roles($room);
+        $this->expire($room);
+        $this->act($room, $identities[$r['acolyte']], 'night', ['target' => $r['townsperson']]);
+        $this->expire($room);
+        $this->assertNotNull($room->state['players'][$r['townsperson']]['curse']);
+        foreach (['warden', 'lamplighter'] as $role) {
+            $this->assertSame([], $this->engine->access($room->code, $identities[$r[$role]])['me']['results']);
+        }
+        $actions = array_column($room->state['rounds'][1]['night']['actions'], null, 'player_id');
+        $this->assertFalse($actions[$r['warden']]['submitted']);
+        $this->assertFalse($actions[$r['lamplighter']]['submitted']);
+        $this->assertNull($actions[$r['lamplighter']]['visited']);
+    }
+
+    public function test_misdirection_respects_protection_cooldown_and_records_the_actual_target(): void
+    {
+        [$room, $identities] = $this->match();
+        $r = $this->roles($room);
+        $warden = $identities[$r['warden']];
+        $this->expire($room);
+        $this->act($room, $warden, 'night', ['target' => $r['townsperson']]);
+        $this->expire($room);
+        $this->expire($room);
+        $this->expire($room);
+        $this->afflict($room, $r['warden'], 'misdirection');
+        $this->act($room, $warden, 'night', ['target' => $r['oracle']]);
+        $actual = $room->fresh()->state['actions'][$r['warden']]['target'];
+        $this->assertNotContains($actual, [$r['warden'], $r['oracle'], $r['townsperson']]);
+        $this->expire($room);
+        $this->assertSame($actual, $room->state['players'][$r['warden']]['last_protection']['target']);
+        $actions = array_column($room->state['rounds'][2]['night']['actions'], null, 'player_id');
+        $this->assertSame($r['oracle'], $actions[$r['warden']]['chosen_target_id']);
+        $this->assertSame($actual, $actions[$r['warden']]['target_id']);
+    }
+
+    public function test_lamplighter_observes_the_redirected_watch_target(): void
+    {
+        [$room, $identities] = $this->match(playerCount: 7);
+        $r = $this->roles($room);
+        $this->expire($room);
+        $this->afflict($room, $r['lamplighter'], 'misdirection');
+        $this->act($room, $identities[$r['lamplighter']], 'night', ['target' => $r['townsperson']]);
+        $actual = $room->fresh()->state['actions'][$r['lamplighter']]['target'];
+        $visitor = $actual === $r['oracle'] ? $r['warden'] : $r['oracle'];
+        $this->act($room, $identities[$visitor], 'night', ['target' => $actual]);
+        $this->expire($room);
+        $result = $this->engine->access($room->code, $identities[$r['lamplighter']])['me']['results'][0];
+        $this->assertSame($room->state['players'][$actual]['name'], $result['target']);
+        $this->assertTrue($result['visited']);
+    }
+
+    public function test_lamplighter_counts_a_redirected_visit_only_at_its_actual_destination(): void
+    {
+        [$room, $identities] = $this->match(playerCount: 7);
+        $r = $this->roles($room);
+        $this->expire($room);
+        $this->afflict($room, $r['oracle'], 'misdirection');
+        $this->act($room, $identities[$r['oracle']], 'night', ['target' => $r['townsperson']]);
+        $actual = $room->fresh()->state['actions'][$r['oracle']]['target'];
+        $this->assertNotSame($r['townsperson'], $actual);
+        $this->act($room, $identities[$r['lamplighter']], 'night', ['target' => $r['townsperson']]);
+        $this->expire($room);
+        $this->assertFalse($room->state['players'][$r['lamplighter']]['results'][0]['visited']);
+    }
+
+    public static function watchRoles(): array
+    {
+        return ['warden' => ['warden'], 'lamplighter' => ['lamplighter']];
+    }
+
+    #[DataProvider('watchRoles')]
+    public function test_watch_roles_obey_curses_living_targets_and_banishment(string $role): void
+    {
+        [$room, $identities] = $this->match(playerCount: 7);
+        $r = $this->roles($room);
+        $identity = $identities[$r[$role]];
+        $target = $r['townsperson'];
+        $this->expire($room);
+        $curse = $this->afflict($room, $r[$role], 'puzzle');
+        $this->assertRejected(fn () => $this->act($room, $identity, 'night', ['target' => $target]));
+        $this->act($room, $identity, 'solve_curse', ['curse_id' => $curse['id'], 'answer' => $curse['solution']]);
+        $s = $room->fresh()->state;
+        $s['players'][$target]['alive'] = false;
+        $room->update(['state' => $s]);
+        $this->assertRejected(fn () => $this->act($room, $identity, 'night', ['target' => $target]));
+        $s['players'][$r[$role]]['alive'] = false;
+        $room->update(['state' => $s]);
+        $this->assertRejected(fn () => $this->act($room, $identity, 'night', ['target' => $r['oracle']]));
+    }
+
+    public function test_protection_does_not_clear_an_existing_curse_before_dawn(): void
+    {
+        [$room, $identities] = $this->match();
+        $r = $this->roles($room);
+        $this->expire($room);
+        $curse = $this->afflict($room, $r['oracle'], 'puzzle');
+        $this->act($room, $identities[$r['warden']], 'night', ['target' => $r['oracle']]);
+        $this->assertSame($curse, $room->fresh()->state['players'][$r['oracle']]['curse']);
+        $this->assertRejected(fn () => $this->act($room, $identities[$r['oracle']], 'night', ['target' => $r['acolyte']]));
+        $this->expire($room);
+        $this->assertNull($room->state['players'][$r['oracle']]['curse']);
     }
 
     public function test_three_player_town_can_win_by_banishing_the_lone_cultist(): void

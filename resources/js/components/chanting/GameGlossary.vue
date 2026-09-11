@@ -33,6 +33,14 @@ const terms = [
         'A cult role. Can chant while veiling and cursing one other living player. The veil reverses their apparent alignment for the Oracle tonight; a random curse takes hold at dawn.',
     ],
     [
+        'Warden',
+        'A town role. Protects another living player from all new curses for one night, or skips protection. Cannot protect the same person on consecutive nights. Does not remove existing curses or stop veils, investigations, or chanting.',
+    ],
+    [
+        'Lamplighter',
+        'A town role, separate from the cosmetic character of the same name. Watches another living player and privately learns whether anyone else targeted them that night. Their own watch is excluded; blocked curse attempts still count. No visitor identity, role, or ability is revealed.',
+    ],
+    [
         'Acolyte',
         'A cult role. Chants to advance the ritual when the shared mission condition is met, and can optionally curse one other living player. A random curse takes hold at dawn.',
     ],

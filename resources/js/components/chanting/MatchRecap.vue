@@ -32,6 +32,13 @@ function actionDescription(action: RecapNightAction) {
     if (action.role === 'oracle') {
         return `Investigated ${name(action.target_id)}. Read as ${action.apparent_alignment === 'cult' ? 'cult' : 'town'}.`;
     }
+    if (action.role === 'warden') {
+        if (!action.target_id) return 'Skipped protection.';
+        return `Protected ${name(action.target_id)} from new curses. ${action.prevented_curse ? 'Blocked a curse attempt.' : 'No curse was attempted on that player.'}`;
+    }
+    if (action.role === 'lamplighter') {
+        return `Watched ${name(action.target_id)}. ${action.visited ? 'At least one other player targeted them.' : 'No other player targeted them.'}`;
+    }
     if (action.role === 'veilweaver' || action.role === 'acolyte') {
         const chant = action.contributed
             ? 'Chanted. Added 1 ritual step.'
@@ -45,7 +52,9 @@ function actionDescription(action: RecapNightAction) {
         const curse =
             action.curse_type && action.target_id
                 ? `Cursed ${name(action.target_id)} with ${{ puzzle: 'a puzzle curse', mist: 'mind mist', misdirection: 'misdirection' }[action.curse_type]}.`
-                : '';
+                : action.curse_blocked
+                  ? `Tried to curse ${name(action.target_id)}, but the Warden protected them.`
+                  : '';
         return [chant, veil, curse].filter(Boolean).join(' ');
     }
     return 'Kept watch.';
