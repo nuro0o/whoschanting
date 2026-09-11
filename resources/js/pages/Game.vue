@@ -16,6 +16,8 @@ import {
     Send,
     ShieldCheck,
     Vote,
+    Maximize2,
+    Minimize2,
 } from '@lucide/vue';
 import Echo from 'laravel-echo';
 import Pusher from 'pusher-js';
@@ -53,7 +55,6 @@ import DiscussionAbility from '@/components/chanting/DiscussionAbility.vue';
 import GameAtmosphere from '@/components/chanting/GameAtmosphere.vue';
 import SoundControl from '@/components/chanting/SoundControl.vue';
 import type { MusicLibrary } from '@/lib/phaseMusic';
-import { prefersReducedMotion } from '@/composables/usePanelMotion';
 import {
     csrfToken,
     RoomError,
@@ -173,14 +174,25 @@ const message = ref('');
 const copied = ref(false);
 type RoomView = 'play' | 'role' | 'chat' | 'help';
 const activeView = ref<RoomView>('play');
-const workspace = ref<HTMLElement>();
-let viewAnimation: Animation | undefined;
-let navigationTimer: ReturnType<typeof setTimeout> | undefined;
-function finishNavigation() {
-    clearTimeout(navigationTimer);
-    window.removeEventListener('scrollend', finishNavigation);
-    workspace.value?.style.removeProperty('min-height');
+const hasRoom = computed(() => !!state.value);
+const fullscreen = ref(false);
+const fullscreenNotice = ref('');
+const fullscreenAvailable = ref(false);
+let previousOverflow = '';
+function syncFullscreen() {
+    fullscreen.value = document.fullscreenElement === document.documentElement;
 }
+async function toggleFullscreen() {
+    try {
+        if (fullscreen.value) await document.exitFullscreen();
+        else await document.documentElement.requestFullscreen();
+        fullscreenNotice.value = '';
+    } catch {
+        fullscreenNotice.value =
+            'Browser fullscreen is unavailable. The table is still ready to play.';
+    }
+}
+const workspace = ref<HTMLElement>();
 const roleRead = ref(false);
 const hintDismissed = ref(false);
 const readMessageIds = ref<Set<string>>(new Set());
@@ -255,43 +267,12 @@ function markChatRead() {
 }
 async function navigate(view: RoomView, focus = true) {
     if (activeView.value === view) return;
-    // A shorter view must not clamp the scroll position before we can scroll.
-    const previousHeight = workspace.value?.getBoundingClientRect().height;
-    finishNavigation();
-    if (workspace.value && previousHeight) {
-        workspace.value.style.minHeight = `${previousHeight}px`;
-    }
     activeView.value = view;
     await nextTick();
     if (activeView.value !== view) return;
-    const destination = document.getElementById(`room-${view}`);
-    viewAnimation?.cancel();
-    if (destination && !prefersReducedMotion()) {
-        viewAnimation = destination.animate(
-            [
-                { opacity: 0, translate: '0 6px' },
-                { opacity: 1, translate: '0 0' },
-            ],
-            { duration: 220, easing: 'ease-out' },
-        );
-    }
-    if (focus) {
-        destination?.focus({ preventScroll: true });
-        const top = destination?.getBoundingClientRect().top;
-        // Keep the page still when the destination is already within reach.
-        if (top !== undefined && (top < 55 || top > window.innerHeight - 160)) {
-            window.addEventListener('scrollend', finishNavigation, {
-                once: true,
-            });
-            navigationTimer = setTimeout(finishNavigation, 1000);
-            destination?.scrollIntoView({
-                behavior: prefersReducedMotion() ? 'instant' : 'smooth',
-                block: 'start',
-            });
-            return;
-        }
-    }
-    finishNavigation();
+    if (focus)
+        document.getElementById(`room-${view}`)?.focus({ preventScroll: true });
+    if (workspace.value) workspace.value.scrollTop = 0;
 }
 async function showRole() {
     revealed.value = true;
@@ -469,8 +450,13 @@ const canSelectSeat = computed(
                 canChooseNightTarget.value)),
 );
 function selectSeat(id: string) {
-    if (canSelectSeat.value && targets.value.some((player) => player.id === id))
+    if (
+        canSelectSeat.value &&
+        targets.value.some((player) => player.id === id)
+    ) {
         target.value = id;
+        if (activeView.value !== 'play') void navigate('play');
+    }
 }
 const nightLabel = computed(() =>
     state.value
@@ -669,7 +655,20 @@ watch(
         markChatRead();
     },
 );
+// Lock scrolling only while the game workspace is present, not on join/error screens.
+watch(hasRoom, (available) => {
+    if (available) {
+        previousOverflow = document.body.style.overflow;
+        document.body.style.overflow = 'hidden';
+    } else {
+        document.body.style.overflow = previousOverflow;
+        if (fullscreen.value) void document.exitFullscreen().catch(() => {});
+        fullscreenNotice.value = '';
+    }
+});
 onMounted(() => {
+    fullscreenAvailable.value = !!document.fullscreenEnabled;
+    document.addEventListener('fullscreenchange', syncFullscreen);
     try {
         hintDismissed.value =
             localStorage.getItem('chanting-target-hint') === 'seen';
@@ -687,14 +686,17 @@ onMounted(() => {
     window.addEventListener('online', onResume);
 });
 onBeforeUnmount(() => {
+    if (hasRoom.value) {
+        document.body.style.overflow = previousOverflow;
+        if (fullscreen.value) void document.exitFullscreen().catch(() => {});
+    }
+    document.removeEventListener('fullscreenchange', syncFullscreen);
     disposed = true;
     clearInterval(polling);
     clearInterval(clock);
     echo?.disconnect();
     chatObserver?.disconnect();
-    viewAnimation?.cancel();
     document.removeEventListener('visibilitychange', onResume);
-    finishNavigation();
     window.removeEventListener('online', onResume);
 });
 </script>
@@ -703,6 +705,7 @@ onBeforeUnmount(() => {
     <Head :title="`Room ${code}`" />
     <div
         class="chanting game-page"
+        :class="{ 'is-immersive': hasRoom }"
         :data-phase="state?.phase"
         :data-winner="state?.winner"
     >
@@ -761,6 +764,31 @@ onBeforeUnmount(() => {
             >
         </main>
         <main v-else class="game-main">
+            <div class="immersive-table-stage" aria-label="Village table">
+                <CardTable
+                    :haunted-seat-id="state.me.haunting?.seat_id ?? null"
+                    :class="{ 'is-mist-cursed': mistCursed }"
+                    :players="state.players"
+                    :phase="state.phase"
+                    :phase-id="state.phase_id"
+                    :me-id="state.me.id"
+                    :submitted="state.me.submitted"
+                    :action-serial="actionSerial"
+                    :ritual-tokens="state.ritual.tokens"
+                    :ritual-threshold="
+                        state.phase === 'lobby'
+                            ? (lobbyRoster?.steps ?? 0)
+                            : state.ritual.threshold
+                    "
+                    :winner="state.winner"
+                    :selected-target="
+                        state.phase === 'night' && !revealed ? null : target
+                    "
+                    :can-select="canSelectSeat"
+                    :eligible-target-ids="targets.map((player) => player.id)"
+                    @select="selectSeat"
+                />
+            </div>
             <div class="phase-heading">
                 <div>
                     <p class="eyebrow">
@@ -774,6 +802,16 @@ onBeforeUnmount(() => {
                     </p>
                     <h1>{{ heading[0] }}</h1>
                     <p>{{ heading[1] }}</p>
+                    <p class="immersive-connection" role="status">
+                        Room {{ code }} ·
+                        {{
+                            disconnected
+                                ? 'Reconnecting…'
+                                : live
+                                  ? 'Live in the village'
+                                  : 'Synced every 3 seconds'
+                        }}
+                    </p>
                 </div>
                 <div
                     v-if="seconds !== null"
@@ -807,6 +845,21 @@ onBeforeUnmount(() => {
                 for the next match.
             </p>
             <div class="game-tools">
+                <button
+                    v-if="fullscreenAvailable"
+                    class="button fullscreen-toggle"
+                    :aria-label="
+                        fullscreen
+                            ? 'Leave browser fullscreen'
+                            : 'Enter browser fullscreen'
+                    "
+                    @click="toggleFullscreen"
+                >
+                    <Minimize2 v-if="fullscreen" :size="16" /><Maximize2
+                        v-else
+                        :size="16"
+                    /><span>{{ fullscreen ? 'Window' : 'Fullscreen' }}</span>
+                </button>
                 <SoundControl
                     :haunt-pan="
                         state.me.haunting
@@ -830,6 +883,9 @@ onBeforeUnmount(() => {
                     :connected="!disconnected"
                 />
             </div>
+            <p v-if="fullscreenNotice" class="fullscreen-notice" role="status">
+                {{ fullscreenNotice }}
+            </p>
             <nav class="room-navigation" aria-label="Room sections">
                 <button
                     id="nav-play"
@@ -886,30 +942,30 @@ onBeforeUnmount(() => {
                     <HelpCircle :size="18" /><span>Help</span>
                 </button>
             </nav>
-            <CursePanel
-                v-if="
-                    state.me.curse &&
-                    state.me.alive &&
-                    state.phase !== 'finished'
-                "
-                :curse="state.me.curse"
-                :time-label="timeLabel"
-                :phase-label="phaseLabel"
-                :final-vote="state.ritual.final_vote"
-                :disconnected="disconnected"
-                :pending="pending"
-                :error="curseError"
-                @solve="act('solve_curse', $event)"
-            />
-            <p
-                v-if="state.me.curse_notice && state.phase !== 'finished'"
-                class="curse-notice"
-                role="status"
-            >
-                {{ state.me.curse_notice }}
-            </p>
-
             <div ref="workspace" class="room-workspace" :data-view="activeView">
+                <CursePanel
+                    v-if="
+                        state.me.curse &&
+                        state.me.alive &&
+                        state.phase !== 'finished'
+                    "
+                    :curse="state.me.curse"
+                    :time-label="timeLabel"
+                    :phase-label="phaseLabel"
+                    :final-vote="state.ritual.final_vote"
+                    :disconnected="disconnected"
+                    :pending="pending"
+                    :error="curseError"
+                    @solve="act('solve_curse', $event)"
+                />
+                <p
+                    v-if="state.me.curse_notice && state.phase !== 'finished'"
+                    class="curse-notice"
+                    role="status"
+                >
+                    {{ state.me.curse_notice }}
+                </p>
+
                 <div class="room-phase-context" aria-label="Current phase">
                     <span
                         >{{ phaseLabel
@@ -1866,31 +1922,6 @@ onBeforeUnmount(() => {
                             </p>
                         </section>
                     </RoomBriefing>
-                    <CardTable
-                        :haunted-seat-id="state.me.haunting?.seat_id ?? null"
-                        :class="{ 'is-mist-cursed': mistCursed }"
-                        :players="state.players"
-                        :phase="state.phase"
-                        :phase-id="state.phase_id"
-                        :me-id="state.me.id"
-                        :submitted="state.me.submitted"
-                        :action-serial="actionSerial"
-                        :ritual-tokens="state.ritual.tokens"
-                        :ritual-threshold="
-                            state.phase === 'lobby'
-                                ? (lobbyRoster?.steps ?? 0)
-                                : state.ritual.threshold
-                        "
-                        :winner="state.winner"
-                        :selected-target="
-                            state.phase === 'night' && !revealed ? null : target
-                        "
-                        :can-select="canSelectSeat"
-                        :eligible-target-ids="
-                            targets.map((player) => player.id)
-                        "
-                        @select="selectSeat"
-                    />
 
                     <p
                         v-if="state.me.haunting"
@@ -2271,6 +2302,293 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
+.game-tools {
+    gap: 8px;
+    align-items: center;
+}
+.room-workspace > .curse-panel,
+.room-workspace > .curse-notice {
+    grid-column: 1 / -1;
+}
+.immersive-table-stage {
+    min-width: 0;
+    min-height: 0;
+}
+.is-immersive {
+    position: fixed;
+    inset: 0;
+    z-index: 40;
+    height: 100dvh;
+    overflow: hidden;
+    background: #101e20;
+}
+.is-immersive .game-header,
+.is-immersive .game-bottom-note {
+    display: none;
+}
+.is-immersive .game-main {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 370px;
+    grid-template-rows: auto auto minmax(0, 1fr);
+    gap: 0 20px;
+    width: 100%;
+    max-width: none;
+    height: 100%;
+    margin: 0;
+    padding: 20px;
+}
+.is-immersive .phase-heading {
+    grid-area: 1 / 1 / 2 / 2;
+    margin: 0 0 16px;
+    gap: 16px;
+    align-items: center;
+}
+.is-immersive .phase-heading h1 {
+    font-size: clamp(24px, 2.6vw, 38px);
+    margin: 4px 0;
+}
+.is-immersive
+    .phase-heading
+    > div
+    > p:not(.eyebrow):not(.immersive-connection) {
+    display: none;
+}
+.is-immersive .phase-heading .eyebrow {
+    display: flex;
+    font-size: 10px;
+}
+.is-immersive .phase-heading .immersive-connection {
+    display: block;
+    margin: 5px 0 0;
+    color: var(--muted);
+    font-size: 11px;
+}
+.is-immersive .phase-clock {
+    display: flex;
+    padding: 9px 12px;
+    flex-shrink: 0;
+}
+.is-immersive .phase-clock strong {
+    font-size: 24px;
+}
+.is-immersive .game-tools {
+    grid-area: 1 / 2 / 2 / 3;
+    position: static;
+    display: flex;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    margin: 0 0 16px;
+}
+.is-immersive .game-tools > .button {
+    padding: 9px 11px;
+    font-size: 11px;
+    min-height: 36px;
+}
+.is-immersive .immersive-table-stage {
+    grid-area: 2 / 1 / 4 / 2;
+}
+.is-immersive .room-navigation {
+    grid-area: 2 / 2 / 3 / 3;
+    position: static;
+    margin: 0;
+    padding: 3px 0;
+    background: #122224;
+    z-index: auto;
+}
+.is-immersive .room-navigation > button {
+    gap: 5px;
+    padding: 10px 4px;
+    min-height: 46px;
+    font-size: 12px;
+    flex-direction: column;
+}
+.is-immersive .room-navigation .room-badge {
+    position: absolute;
+    top: 0;
+    right: 1px;
+    font-size: 9px;
+}
+.is-immersive .room-workspace {
+    grid-area: 3 / 2 / 4 / 3;
+    display: block;
+    height: 100%;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+    scrollbar-color: #526250 #142224;
+    padding-top: 16px;
+    padding-right: 4px;
+}
+.is-immersive .room-workspace > * {
+    margin-bottom: 16px;
+}
+.is-immersive .room-workspace .room-phase-context {
+    display: none;
+}
+.is-immersive .room-workspace:not([data-view='chat']) .room-chat {
+    display: none;
+}
+.is-immersive .room-workspace[data-view='chat'] .room-chat {
+    display: block;
+    position: static;
+}
+.is-immersive .room-chat :deep(.chat-messages) {
+    height: clamp(150px, 40dvh, 480px);
+}
+.is-immersive .room-play {
+    gap: 16px;
+}
+.is-immersive .room-workspace :deep(.game-panel),
+.is-immersive .room-workspace :deep(.room-briefing),
+.is-immersive .room-workspace :deep(.role-private),
+.is-immersive .room-workspace :deep(.role-cover),
+.is-immersive .room-workspace :deep(.room-help-panel) {
+    padding: 20px;
+}
+.is-immersive .room-workspace :deep(h2) {
+    font-size: 25px;
+}
+.is-immersive .room-workspace :deep(.room-village-details) {
+    grid-template-columns: 1fr;
+}
+.is-immersive .game-error,
+.is-immersive .spectator-banner,
+.is-immersive .fullscreen-notice {
+    position: absolute;
+    z-index: 4;
+    left: 32px;
+    right: 422px;
+    bottom: 100px;
+    padding: 12px 16px;
+    margin: 0;
+    background: #302923;
+    border: 1px solid #9e8767;
+    color: var(--cream);
+    font-size: 12px;
+}
+.is-immersive .spectator-banner {
+    bottom: 150px;
+}
+.is-immersive .fullscreen-notice {
+    bottom: 200px;
+}
+@media (max-width: 1000px) and (min-width: 901px) {
+    .is-immersive .game-main {
+        grid-template-columns: minmax(0, 1fr) 320px;
+        gap: 0 12px;
+        padding: 12px;
+    }
+    .is-immersive .game-error,
+    .is-immersive .spectator-banner,
+    .is-immersive .fullscreen-notice {
+        right: 360px;
+        left: 24px;
+    }
+}
+@media (max-width: 900px) {
+    .is-immersive .game-main {
+        grid-template-columns: minmax(0, 1fr);
+        grid-template-rows: auto minmax(330px, 46dvh) auto minmax(0, 1fr);
+        gap: 8px;
+        padding: 10px;
+    }
+    .is-immersive .phase-heading {
+        grid-area: 1 / 1;
+        margin: 0;
+        padding-right: 160px;
+        min-height: 64px;
+    }
+    .is-immersive .phase-heading h1 {
+        font-size: 22px;
+    }
+    .is-immersive .phase-heading .eyebrow {
+        font-size: 9px;
+    }
+    .is-immersive .phase-heading .immersive-connection {
+        font-size: 9px;
+    }
+    .is-immersive .phase-clock {
+        position: absolute;
+        top: 51px;
+        right: 10px;
+        padding: 0;
+        border: 0;
+        background: transparent;
+        gap: 5px;
+    }
+    .is-immersive .phase-clock strong {
+        font-size: 18px;
+    }
+    .is-immersive .phase-clock > svg {
+        width: 15px;
+    }
+    .is-immersive .phase-clock span {
+        display: none;
+    }
+    .is-immersive .game-tools {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        margin: 0;
+        gap: 4px;
+        max-width: 165px;
+    }
+    .is-immersive .game-tools > .button {
+        padding: 6px;
+        font-size: 10px;
+        min-height: 30px;
+    }
+    .is-immersive .fullscreen-toggle > span {
+        display: none;
+    }
+    .is-immersive .game-tools :deep(.coastal-sound) {
+        position: absolute;
+        top: 39px;
+        right: 77px;
+    }
+    .is-immersive .game-tools :deep(.sound-control) {
+        font-size: 0;
+        gap: 0;
+        padding: 6px;
+        min-height: 28px;
+    }
+    .is-immersive .immersive-table-stage {
+        grid-area: 2 / 1;
+    }
+    .is-immersive .room-navigation {
+        grid-area: 3 / 1;
+        padding: 0;
+    }
+    .is-immersive .room-navigation > button {
+        flex-direction: row;
+        min-height: 39px;
+    }
+    .is-immersive .room-workspace {
+        grid-area: 4 / 1;
+        padding: 0;
+    }
+    .is-immersive .game-error,
+    .is-immersive .spectator-banner,
+    .is-immersive .fullscreen-notice {
+        left: 20px;
+        right: 20px;
+        bottom: auto;
+        top: 100px;
+    }
+    .is-immersive .spectator-banner {
+        top: 145px;
+    }
+    .is-immersive .fullscreen-notice {
+        top: 190px;
+    }
+}
+@media (max-height: 540px) and (max-width: 900px) {
+    .is-immersive .game-main {
+        overflow-y: auto;
+        grid-template-rows: 90px 330px 45px 260px;
+    }
+}
 .lobby-mode-settings {
     margin-block: 20px;
 }

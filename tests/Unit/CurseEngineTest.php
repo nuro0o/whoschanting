@@ -21,11 +21,12 @@ class CurseEngineTest extends TestCase
                 $this->assertSame($tier, $curse['level']);
                 $this->assertSame($type, $curse['type']);
                 $this->assertArrayNotHasKey('solution', $engine->view($curse));
-                if ($type === 'misdirection') {
-                    $this->assertNull($curse['challenge']);
-                } else {
-                    $this->assertContains($curse['challenge']['kind'], $type === 'mist' ? ['focus'] : ['cipher', 'order', 'missing', 'arithmetic', 'odd', 'reverse']);
-                }
+                $this->assertContains($curse['challenge']['kind'], match ($type) {
+                    'mist' => ['lanterns'],
+                    'misdirection' => ['rings'],
+                    default => ['rings', 'towers'],
+                });
+                $this->assertSame($curse['challenge']['kind'], $curse['challenge']['scene']['kind']);
             }
         }
     }
@@ -184,10 +185,63 @@ class CurseEngineTest extends TestCase
     public function test_each_tier_adds_more_required_reasoning_steps(): void
     {
         $engine = new CurseEngine;
-        foreach (['cipher', 'order', 'missing', 'arithmetic', 'odd', 'reverse', 'focus'] as $kind) {
+        foreach (['cipher', 'order', 'missing', 'arithmetic', 'odd', 'reverse', 'focus', 'rings', 'towers', 'lanterns'] as $kind) {
             $lengths = array_map(fn (int $level): int => $engine->challenge($kind, $level)['challenge']['answer_length'], [1, 2, 3]);
             $this->assertGreaterThan($lengths[0], $lengths[1], $kind);
             $this->assertGreaterThan($lengths[1], $lengths[2], $kind);
+        }
+    }
+
+    public function test_spatial_challenges_are_solvable_using_only_visible_geometry_and_labels(): void
+    {
+        $engine = new CurseEngine;
+        foreach (['rings', 'towers', 'lanterns'] as $kind) {
+            foreach ([1, 2, 3] as $level) {
+                for ($attempt = 0; $attempt < 20; $attempt++) {
+                    $generated = $engine->challenge($kind, $level);
+                    $challenge = $generated['challenge'];
+                    $options = array_column($challenge['options'], 'label', 'id');
+                    $expected = [];
+                    if ($kind === 'rings') {
+                        foreach ($challenge['scene']['rings'] as $ring) {
+                            $this->assertContains($ring['start'], [1, 2, 3], 'No ring starts solved.');
+                            $this->assertCount(4, $ring['options']);
+                            $direction = $ring['start'];
+                            $turns = 0;
+                            while ($direction !== 0) {
+                                $direction = ($direction + 1) % 4;
+                                $turns++;
+                            }
+                            $expected[] = $ring['options'][$turns];
+                        }
+                    } else {
+                        $objects = $challenge['scene']['objects'];
+                        $this->assertCount(count($options), $objects);
+                        $this->assertCount(count($objects), array_unique(array_column($objects, 'height')));
+                        foreach ($objects as $object) {
+                            $this->assertArrayHasKey($object['option_id'], $options);
+                            $this->assertLessThanOrEqual(3, abs($object['x']));
+                            $this->assertLessThanOrEqual(3, abs($object['z']));
+                            $this->assertGreaterThan(0, $object['height']);
+                        }
+                        if ($kind === 'towers') {
+                            usort($objects, fn (array $a, array $b): int => $a['height'] <=> $b['height']);
+                        } else {
+                            $objects = array_filter($objects, fn (array $o): bool => is_numeric($options[$o['option_id']]));
+                            $this->assertCount($level + 1, array_diff(array_keys($options), array_column($objects, 'option_id')));
+                            usort($objects, fn (array $a, array $b): int => (int) $options[$a['option_id']] <=> (int) $options[$b['option_id']]);
+                        }
+                        $expected = array_column($objects, 'option_id');
+                    }
+                    $this->assertSame($expected, $generated['solution']);
+                    $this->assertSame(count($expected), $challenge['answer_length']);
+                    $this->assertLessThanOrEqual(12, count($expected));
+                    $this->assertEmpty(array_diff($expected, array_keys($options)));
+                    $this->assertCount(count($options), array_unique(array_values($options)));
+                    $next = $engine->challenge($kind, $level);
+                    $this->assertEmpty(array_intersect(array_keys($options), array_column($next['challenge']['options'], 'id')));
+                }
+            }
         }
     }
 }

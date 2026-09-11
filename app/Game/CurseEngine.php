@@ -24,11 +24,14 @@ class CurseEngine
         if (! in_array($type, $this->availableTypes($tokens, $threshold), true)) {
             throw new \InvalidArgumentException('Choose an unlocked curse type.');
         }
-        $puzzles = ['cipher', 'order', 'missing', 'arithmetic', 'odd', 'reverse'];
+        $puzzles = ['rings', 'towers'];
 
         return ['id' => (string) Str::uuid(), 'type' => $type, 'level' => $level, 'day' => $day,
-            ...($type === 'misdirection' ? ['challenge' => null, 'solution' => []]
-                : $this->challenge($type === 'mist' ? 'focus' : $puzzles[random_int(0, 5)], $level))];
+            ...$this->challenge(match ($type) {
+                'mist' => 'lanterns',
+                'misdirection' => 'rings',
+                default => $puzzles[array_rand($puzzles)],
+            }, $level)];
     }
 
     /** Generate new content and opaque option IDs for every affliction.
@@ -37,6 +40,9 @@ class CurseEngine
     public function challenge(string $kind, int $level): array
     {
         $level = max(1, min(3, $level));
+        if (in_array($kind, ['rings', 'towers', 'lanterns'], true)) {
+            return $this->spatialChallenge($kind, $level);
+        }
         $size = 3 + $level;
         $runes = ['ASH', 'EYE', 'TIDE', 'BONE', 'MOON', 'VOID', 'SALT', 'STAR', 'ROOT', 'MOTH'];
         shuffle($runes);
@@ -182,6 +188,73 @@ class CurseEngine
         return ['challenge' => ['kind' => $kind, 'title' => $title, 'instruction' => $instruction,
             'clues' => $clues, 'options' => $options, 'answer_length' => count($answers)],
             'solution' => array_map(fn (string $answer): string => $ids[$answer] ?? throw new \LogicException('A curse answer must have a matching option.'), $answers)];
+    }
+
+    /** Generate physical clues; keep the checked answer exclusively on the server.
+     * @return array<string, mixed>
+     */
+    private function spatialChallenge(string $kind, int $level): array
+    {
+        $runes = ['ASH', 'EYE', 'TIDE', 'BONE', 'MOON', 'VOID', 'SALT', 'STAR', 'ROOT', 'MOTH'];
+        shuffle($runes);
+        $options = [];
+        $solution = [];
+        $scene = ['kind' => $kind];
+
+        if ($kind === 'rings') {
+            $title = 'The astral lock';
+            $instruction = 'Rotate each ring until its glowing notch points to the north beacon. Every touch turns a ring one quarter clockwise.';
+            $clues = ['Align every notch with NORTH, then break the curse. Rings are numbered from the inside out.'];
+            $scene['rings'] = [];
+            for ($ring = 0; $ring < 2 + $level; $ring++) {
+                $start = random_int(1, 3);
+                $ids = [];
+                for ($turn = 0; $turn < 4; $turn++) {
+                    $id = (string) Str::uuid();
+                    $ids[] = $id;
+                    $options[] = ['id' => $id, 'label' => 'Ring '.($ring + 1).' · '.$turn.' turns'];
+                }
+                $scene['rings'][] = ['label' => 'Ring '.($ring + 1), 'start' => $start, 'options' => $ids];
+                $solution[] = $ids[(4 - $start) % 4];
+            }
+        } else {
+            if ($kind === 'towers') {
+                $title = 'The sunken spires';
+                $instruction = 'Wake the stone towers from shortest to tallest. Turn the scene to compare their heights, then touch each tower in order.';
+                $clues = ['Judge the height of the stone, not how high its label appears on your screen. Each tower is used once.'];
+                $labels = array_slice($runes, 0, 3 + $level);
+            } else {
+                $title = 'Lanterns in the mist';
+                $instruction = 'Find and light the numbered lanterns from lowest to highest. Ignore lanterns bearing words. Each light pushes back the mist.';
+                $clues = ['Orbit the scene to find the lanterns. Follow their numbers, not their heights.'];
+                $numbers = range(1, 40 + 20 * $level);
+                shuffle($numbers);
+                $labels = [...array_map(strval(...), array_slice($numbers, 0, 4 + 2 * $level)), ...array_slice($runes, 0, $level + 1)];
+            }
+            shuffle($labels);
+            $heights = range(0, count($labels) - 1);
+            shuffle($heights);
+            $scene['objects'] = [];
+            $ranked = [];
+            foreach ($labels as $index => $label) {
+                $id = (string) Str::uuid();
+                $options[] = ['id' => $id, 'label' => $label];
+                $angle = 2 * M_PI * $index / count($labels);
+                $radius = $index % 2 === 0 ? 2.8 : 2.0;
+                $height = round(0.6 + $heights[$index] * 0.35, 2);
+                $scene['objects'][] = ['option_id' => $id, 'x' => round(cos($angle) * $radius, 3),
+                    'z' => round(sin($angle) * $radius, 3), 'height' => $height];
+                if ($kind === 'towers' || is_numeric($label)) {
+                    $ranked[] = ['id' => $id, 'rank' => $kind === 'towers' ? $height : (int) $label];
+                }
+            }
+            usort($ranked, fn (array $left, array $right): int => $left['rank'] <=> $right['rank']);
+            $solution = array_column($ranked, 'id');
+        }
+
+        return ['challenge' => ['kind' => $kind, 'title' => $title, 'instruction' => $instruction,
+            'clues' => $clues, 'options' => $options, 'answer_length' => count($solution), 'scene' => $scene],
+            'solution' => $solution];
     }
 
     /** @param list<string> $answers

@@ -279,7 +279,8 @@ class MatchEngine
         if ($type === 'solve_curse') {
             $curse = $p['curse'] ?? null;
             $this->ensure(in_array($s['phase'], ['discussion', 'voting', 'night'], true), 'There is no curse to break now.');
-            $this->ensure($curse !== null && in_array($curse['type'], ['puzzle', 'mist'], true)
+            $this->ensure($curse !== null && in_array($curse['type'], ['puzzle', 'mist', 'misdirection'], true)
+                && ($curse['challenge'] ?? null) !== null && ($curse['solution'] ?? []) !== []
                 && ($a['curse_id'] ?? null) === $curse['id'], 'This curse has already faded or changed.');
             $this->ensure(($a['answer'] ?? null) === $curse['solution'], 'The sigils resist. Check the clues and try again.');
             $s['players'][$id]['curse'] = null;

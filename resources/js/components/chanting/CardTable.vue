@@ -1,6 +1,6 @@
 ﻿<script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import { Check, Flame, LockKeyhole } from '@lucide/vue';
+import { Check, Flame, LockKeyhole, RotateCcw } from '@lucide/vue';
 import { roles, type Player, type RoomState } from '@/lib/chanting';
 import CharacterPortrait from './CharacterPortrait.vue';
 import RitualTableScene from './RitualTableScene.vue';
@@ -24,6 +24,8 @@ const props = defineProps<{
     hauntedSeatId?: string | null;
 }>();
 const emit = defineEmits<{ select: [id: string] }>();
+const scene = ref<InstanceType<typeof RitualTableScene>>();
+const projectedSeats = ref<{ left: string; top: string }[]>([]);
 const visualMode = ref<'3d' | 'simple'>('simple');
 const sceneReady = ref(false);
 const sceneUnavailable = ref(false);
@@ -199,8 +201,10 @@ onBeforeUnmount(() => {
 
 <template>
     <section
-        class="table-panel"
-        :class="{ 'phase-arriving': phaseChanging }"
+        class="table-panel table-panel-immersive"
+        :class="{
+            'phase-arriving': phaseChanging,
+        }"
         :data-phase="phase"
         :data-winner="winner"
         aria-label="The village card table"
@@ -223,6 +227,14 @@ onBeforeUnmount(() => {
                 >
                     Simple
                 </button>
+                <button
+                    v-if="sceneReady"
+                    type="button"
+                    class="table-reset"
+                    @click="scene?.resetView()"
+                >
+                    <RotateCcw :size="13" /> Reset view
+                </button>
             </div>
         </div>
         <p v-if="sceneUnavailable" class="table-visual-notice" role="status">
@@ -239,9 +251,12 @@ onBeforeUnmount(() => {
             }"
         >
             <RitualTableScene
+                ref="scene"
                 :enabled="visualMode === '3d'"
+                interactive
                 :state="sceneState"
                 :seats="sceneSeats"
+                @positions="projectedSeats = $event"
                 @ready="sceneReady = $event"
                 @unavailable="unavailable"
             />
@@ -304,7 +319,11 @@ onBeforeUnmount(() => {
                     'is-face-up': phase === 'finished',
                     'phantom-seat': player.id === hauntedSeatId,
                 }"
-                :style="seatStyle(index)"
+                :style="
+                    sceneReady
+                        ? (projectedSeats[index] ?? seatStyle(index))
+                        : seatStyle(index)
+                "
                 :type="selectable(player) ? 'button' : undefined"
                 :role="selectable(player) ? undefined : 'group'"
                 :aria-label="seatLabel(player)"
@@ -399,10 +418,328 @@ onBeforeUnmount(() => {
             }}</span>
         </div>
         <p class="table-caption">{{ caption }}</p>
+        <p v-if="sceneReady" class="table-camera-hint">
+            Drag the table to orbit · Scroll to zoom
+            <span
+                >Focus the table: arrow keys to orbit · + / − to zoom · Home to
+                reset</span
+            >
+        </p>
+        <div
+            class="table-compact-roster"
+            role="group"
+            aria-label="Village seating list"
+        >
+            <p>
+                AROUND THE TABLE <span>{{ players.length }} villagers</span>
+            </p>
+            <div>
+                <component
+                    :is="selectable(player) ? 'button' : 'div'"
+                    v-for="player in players"
+                    :key="player.id"
+                    :type="selectable(player) ? 'button' : undefined"
+                    :aria-label="seatLabel(player)"
+                    :aria-pressed="
+                        selectable(player)
+                            ? selectedTarget === player.id
+                            : undefined
+                    "
+                    @click="selectable(player) && emit('select', player.id)"
+                >
+                    <CharacterPortrait
+                        :character="player.character"
+                        :frame="player.customization?.frame"
+                        :accent="player.customization?.accent"
+                        decorative
+                    />
+                    <span
+                        ><strong :title="player.name">{{ player.name }}</strong
+                        ><small>{{
+                            phase === 'finished' && player.role
+                                ? (roles[player.role]?.name ?? player.role)
+                                : !player.alive
+                                  ? 'Banished'
+                                  : player.id === meId
+                                    ? 'You'
+                                    : selectedTarget === player.id && canSelect
+                                      ? 'Selected'
+                                      : 'Villager'
+                        }}</small></span
+                    >
+                </component>
+            </div>
+        </div>
+        <details class="table-seating-list">
+            <summary>
+                Seating list <span>{{ players.length }} villagers</span>
+            </summary>
+            <div>
+                <component
+                    :is="selectable(player) ? 'button' : 'span'"
+                    v-for="player in players"
+                    :key="player.id"
+                    :type="selectable(player) ? 'button' : undefined"
+                    :aria-label="seatLabel(player)"
+                    :aria-pressed="
+                        selectable(player)
+                            ? selectedTarget === player.id
+                            : undefined
+                    "
+                    @click="selectable(player) && emit('select', player.id)"
+                >
+                    {{ player.name
+                    }}<small>{{
+                        player.id === meId
+                            ? 'You'
+                            : !player.alive
+                              ? 'Banished'
+                              : ''
+                    }}</small>
+                </component>
+            </div>
+        </details>
     </section>
 </template>
 
 <style scoped>
+.table-compact-roster {
+    display: none;
+}
+@media (max-width: 900px) {
+    .table-panel.table-panel-immersive .card-table {
+        min-height: 100px;
+    }
+    .table-panel-immersive .table-caption {
+        display: none;
+    }
+    .table-panel-immersive .summoning-state {
+        display: none;
+    }
+    .table-panel-immersive .card-table .table-seat {
+        display: none;
+    }
+    .table-panel-immersive .table-seating-list {
+        display: none;
+    }
+    .table-panel-immersive .table-topline {
+        padding: 10px 12px 0;
+    }
+    .table-panel-immersive .table-camera-hint {
+        padding: 2px 10px 7px;
+        font-size: 10px;
+    }
+    .table-panel-immersive .table-camera-hint span {
+        display: none;
+    }
+    .table-compact-roster {
+        display: block;
+        flex-shrink: 0;
+        border-top: 1px solid #afb48b30;
+        padding: 8px 10px;
+    }
+    .table-compact-roster > p {
+        margin: 0 0 6px;
+        font-size: 9px;
+        letter-spacing: 1px;
+        color: #d8d7b9;
+    }
+    .table-compact-roster > p > span {
+        float: right;
+        letter-spacing: 0;
+        color: #aabcaa;
+    }
+    .table-compact-roster > div {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 4px;
+        max-height: 82px;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+    }
+    .table-compact-roster > div > * {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        min-width: 0;
+        padding: 3px 5px;
+        border: 1px solid #52614b;
+        background: #182a2a;
+        color: #e1dfc2;
+        text-align: left;
+        font: inherit;
+    }
+    .table-compact-roster :deep(.character-portrait) {
+        width: 25px;
+        flex: 0 0 25px;
+    }
+    .table-compact-roster > div > * > span {
+        display: block;
+        min-width: 0;
+    }
+    .table-compact-roster strong {
+        display: block;
+        overflow: hidden;
+        white-space: nowrap;
+        text-overflow: ellipsis;
+        font-size: 10px;
+        font-weight: 500;
+    }
+    .table-compact-roster small {
+        display: block;
+        color: #aabcaa;
+        font-size: 8px;
+    }
+    .table-compact-roster button {
+        cursor: pointer;
+    }
+    .table-compact-roster button:hover,
+    .table-compact-roster button[aria-pressed='true'] {
+        background: #364e3b;
+        border-color: #b7c78b;
+    }
+    .table-compact-roster :focus-visible {
+        outline: 2px solid #dec784;
+        outline-offset: -2px;
+    }
+}
+.table-visuals .table-reset {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin-left: 6px;
+    border-color: #afa67d70;
+}
+.table-panel-immersive {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+.table-panel-immersive .card-table {
+    flex: 1;
+    min-height: 180px;
+    height: auto;
+    width: 100%;
+    max-width: none;
+}
+.table-panel-immersive .table-seat {
+    z-index: 1;
+}
+@media (max-width: 900px) {
+    .table-panel-immersive .card-table .table-seat {
+        width: 76px;
+    }
+    .table-panel-immersive .card-table .table-seat .character-portrait {
+        width: 42px;
+    }
+    .table-panel-immersive .card-table .table-seat .seat-card {
+        width: 42px;
+        height: 50px;
+    }
+    .table-panel-immersive .card-table .table-seat .seat-name {
+        max-width: 76px;
+        font-size: 10px;
+    }
+    .table-panel-immersive .card-table.is-crowded .table-seat {
+        width: 54px;
+    }
+    .table-panel-immersive
+        .card-table.is-crowded
+        .table-seat
+        .character-portrait {
+        width: 32px;
+    }
+    .table-panel-immersive .card-table.is-crowded .table-seat .seat-card {
+        width: 33px;
+        height: 42px;
+    }
+    .table-panel-immersive .card-table.is-crowded .seat-name {
+        max-width: 54px;
+        font-size: 9px;
+    }
+}
+.table-panel-immersive .table-topline {
+    flex-wrap: wrap;
+    gap: 8px;
+}
+.table-panel-immersive .table-caption {
+    margin: 0;
+    padding: 4px 12px;
+}
+.table-panel-immersive .table-summoning-status {
+    flex-wrap: wrap;
+}
+.table-camera-hint {
+    margin: 0;
+    padding: 6px 12px 12px;
+    color: #b8c3b4;
+    font-size: 11px;
+    text-align: center;
+}
+.table-camera-hint span {
+    display: block;
+    margin-top: 4px;
+    font-size: 10px;
+    color: #9eafa4;
+}
+.table-seating-list {
+    border-top: 1px solid #afb48b30;
+    font-size: 11px;
+}
+.table-seating-list summary {
+    padding: 10px 16px;
+    cursor: pointer;
+    color: #d8d7b9;
+}
+.table-seating-list summary span {
+    float: right;
+    color: #9eafa4;
+}
+.table-seating-list > div {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 0 12px 12px;
+    max-height: 100px;
+    overflow-y: auto;
+}
+.table-seating-list button,
+.table-seating-list > div > span {
+    padding: 6px 9px;
+    background: #182a2a;
+    border: 1px solid #52614b;
+    color: #e1dfc2;
+    font: inherit;
+}
+.table-seating-list button {
+    cursor: pointer;
+}
+.table-seating-list button:hover,
+.table-seating-list button[aria-pressed='true'] {
+    background: #364e3b;
+    border-color: #b7c78b;
+}
+.table-seating-list small {
+    margin-left: 5px;
+    color: #aabcaa;
+}
+.table-seating-list :focus-visible {
+    outline: 2px solid #dec784;
+    outline-offset: -2px;
+}
+@media (max-width: 760px) {
+    .table-camera-hint span {
+        display: none;
+    }
+    .table-panel-immersive .table-topline {
+        padding: 10px 12px 0;
+    }
+    .table-camera-hint {
+        padding-bottom: 7px;
+        font-size: 10px;
+    }
+}
 .table-visuals {
     display: flex;
     align-items: center;

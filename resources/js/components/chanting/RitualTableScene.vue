@@ -7,8 +7,13 @@ const props = defineProps<{
     enabled: boolean;
     state: RitualSceneState;
     seats: RitualSceneSeat[];
+    interactive?: boolean;
 }>();
-const emit = defineEmits<{ ready: [ready: boolean]; unavailable: [] }>();
+const emit = defineEmits<{
+    ready: [ready: boolean];
+    unavailable: [];
+    positions: [positions: { left: string; top: string }[]];
+}>();
 const host = ref<HTMLElement>();
 let renderer: RitualTableRenderer | undefined;
 let mounted = false;
@@ -37,6 +42,8 @@ async function start() {
                 stop();
                 emit('unavailable');
             },
+            props.interactive,
+            (positions) => emit('positions', positions),
         );
         emit('ready', true);
     } catch {
@@ -45,7 +52,8 @@ async function start() {
         emit('unavailable');
     }
 }
-watch(() => props.enabled, start);
+watch(() => [props.enabled, props.interactive], start);
+defineExpose({ resetView: () => renderer?.resetView() });
 watch(
     () => [props.state, props.seats],
     () => renderer?.update(props.state, props.seats),
@@ -61,7 +69,12 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-    <div ref="host" class="ritual-table-scene" aria-hidden="true"></div>
+    <div
+        ref="host"
+        class="ritual-table-scene"
+        :class="{ 'is-interactive': interactive }"
+        :aria-hidden="interactive ? undefined : true"
+    ></div>
 </template>
 
 <style scoped>
@@ -75,5 +88,19 @@ onBeforeUnmount(() => {
     display: block;
     width: 100%;
     height: 100%;
+}
+.ritual-table-scene.is-interactive {
+    pointer-events: auto;
+}
+.is-interactive :deep(canvas) {
+    cursor: grab;
+    touch-action: none;
+}
+.is-interactive :deep(canvas:active) {
+    cursor: grabbing;
+}
+.is-interactive :deep(canvas:focus-visible) {
+    outline: 2px solid #dec784;
+    outline-offset: -3px;
 }
 </style>

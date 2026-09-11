@@ -152,6 +152,11 @@ export interface CurseChallenge {
     clues: string[];
     options: { id: string; label: string }[];
     answer_length: number;
+    scene?: {
+        kind: 'rings' | 'towers' | 'lanterns';
+        objects?: { option_id: string; x: number; z: number; height: number }[];
+        rings?: { label: string; start: number; options: string[] }[];
+    };
 }
 export interface Curse {
     id: string;

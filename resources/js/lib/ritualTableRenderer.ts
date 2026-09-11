@@ -1,9 +1,11 @@
 import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import type { RitualSceneSeat, RitualSceneState } from './ritualSceneState';
 
 export interface RitualTableRenderer {
     update: (state: RitualSceneState, seats: RitualSceneSeat[]) => void;
     dispose: () => void;
+    resetView: () => void;
 }
 
 /** Loaded only after the viewer chooses 3D. Nothing here owns game state. */
@@ -12,6 +14,8 @@ export function createRitualTable(
     initial: RitualSceneState,
     initialSeats: RitualSceneSeat[],
     failed: () => void,
+    interactive = false,
+    projectSeats?: (positions: { left: string; top: string }[]) => void,
 ): RitualTableRenderer {
     const canvas = document.createElement('canvas');
     canvas.setAttribute('aria-hidden', 'true');
@@ -36,6 +40,8 @@ export function createRitualTable(
     let lastFrame = 0;
     let clock = 0;
     let state = initial;
+    let seats = initialSeats;
+    let projectionKey = '';
     let darkness = initial.night ? 1 : 0;
     let emergence = initial.emergence;
     let schedule = () => {};
@@ -46,6 +52,75 @@ export function createRitualTable(
     const camera = new THREE.OrthographicCamera(-6, 6, 5, -5, 0.1, 60);
     camera.position.set(0, 10, 10);
     camera.lookAt(0, 0, 0);
+    const controls = new OrbitControls(camera, canvas);
+    controls.enabled = interactive;
+    controls.enablePan = false;
+    controls.enableRotate = interactive;
+    controls.minPolarAngle = Math.PI / 9;
+    controls.maxPolarAngle = Math.PI / 3;
+    controls.minZoom = 0.75;
+    controls.maxZoom = 1.65;
+    controls.rotateSpeed = 0.65;
+    controls.zoomSpeed = 0.7;
+    controls.saveState();
+    const cameraChanged = () => schedule();
+    controls.addEventListener('change', cameraChanged);
+    function keydown(event: KeyboardEvent) {
+        if (!interactive || event.altKey || event.ctrlKey || event.metaKey)
+            return;
+        const offset = camera.position.clone().sub(controls.target);
+        const spherical = new THREE.Spherical().setFromVector3(offset);
+        switch (event.key) {
+            case 'ArrowLeft':
+                spherical.theta -= 0.12;
+                break;
+            case 'ArrowRight':
+                spherical.theta += 0.12;
+                break;
+            case 'ArrowUp':
+                spherical.phi -= 0.09;
+                break;
+            case 'ArrowDown':
+                spherical.phi += 0.09;
+                break;
+            case '+':
+            case '=':
+                camera.zoom = Math.min(controls.maxZoom, camera.zoom * 1.1);
+                break;
+            case '-':
+            case '_':
+                camera.zoom = Math.max(controls.minZoom, camera.zoom / 1.1);
+                break;
+            case 'Home':
+                event.preventDefault();
+                controls.reset();
+                return;
+            default:
+                return;
+        }
+        event.preventDefault();
+        spherical.phi = THREE.MathUtils.clamp(
+            spherical.phi,
+            controls.minPolarAngle,
+            controls.maxPolarAngle,
+        );
+        camera.position
+            .copy(controls.target)
+            .add(new THREE.Vector3().setFromSpherical(spherical));
+        camera.updateProjectionMatrix();
+        controls.update();
+        schedule();
+    }
+    if (interactive) {
+        canvas.removeAttribute('aria-hidden');
+        canvas.tabIndex = 0;
+        canvas.setAttribute('role', 'group');
+        canvas.setAttribute(
+            'aria-label',
+            'Table camera. Drag to orbit, scroll to zoom. Arrow keys orbit, plus and minus zoom, Home resets.',
+        );
+        canvas.addEventListener('keydown', keydown);
+    }
     function mesh<G extends THREE.BufferGeometry, M extends THREE.Material>(
         geometry: G,
         material: M,
@@ -75,6 +150,9 @@ export function createRitualTable(
         document.removeEventListener('visibilitychange', schedule);
         motion.removeEventListener('change', changeMotion);
         canvas.removeEventListener('webglcontextlost', contextLost);
+        canvas.removeEventListener('keydown', keydown);
+        controls.removeEventListener('change', cameraChanged);
+        controls.dispose();
         geometries.forEach((geometry) => geometry.dispose());
         materials.forEach((material) => material.dispose());
         textures.forEach((texture) => texture.dispose());
@@ -452,6 +530,24 @@ export function createRitualTable(
                 ? 0
                 : Math.sin(clock * 0.035) * 0.12;
             renderer.render(scene, camera);
+            if (interactive && projectSeats) {
+                const positions = seats.map((seat) => {
+                    const point = new THREE.Vector3(
+                        (seat.x - 0.5) * 10,
+                        0.9,
+                        (seat.y - 0.5) * 7.2,
+                    ).project(camera);
+                    return {
+                        left: `${(point.x + 1) * 50}%`,
+                        top: `${(1 - point.y) * 50}%`,
+                    };
+                });
+                const nextProjectionKey = JSON.stringify(positions);
+                if (nextProjectionKey !== projectionKey) {
+                    projectionKey = nextProjectionKey;
+                    projectSeats(positions);
+                }
+            }
         }
         function animate(now: number) {
             frame = 0;
@@ -516,10 +612,11 @@ export function createRitualTable(
         motion.addEventListener('change', changeMotion);
         schedule();
         return {
-            update(next, seats) {
+            update(next, nextSeats) {
                 if (disposed) return;
                 const oldRuneCount = state.runeCount;
                 state = next;
+                seats = nextSeats;
                 if (oldRuneCount !== state.runeCount) buildRunes();
                 const nextKey = JSON.stringify(seats);
                 if (nextKey !== seatKey) {
@@ -530,6 +627,10 @@ export function createRitualTable(
                 schedule();
             },
             dispose,
+            resetView: () => {
+                controls.reset();
+                schedule();
+            },
         };
     } catch (error) {
         dispose();
