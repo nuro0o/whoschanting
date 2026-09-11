@@ -118,13 +118,15 @@ class GameController extends Controller
     /** @return array<string, mixed> */
     private function characterProps(Request $request): array
     {
-        return ['characters' => config('game.characters'), 'preferredCharacter' => $this->selectedCharacter($request, [])];
+        return ['characters' => $this->progression->characterCatalog($request->user()?->id), 'preferredCharacter' => $this->selectedCharacter($request, [])];
     }
 
     /** @return array<int, mixed> */
     private function characterRules(Request $request): array
     {
-        return [Rule::prohibitedIf($request->user() === null), 'nullable', 'string', Rule::in(array_column(config('game.characters'), 'id'))];
+        $available = array_filter($this->progression->characterCatalog($request->user()?->id), fn (array $character): bool => $character['unlocked']);
+
+        return [Rule::prohibitedIf($request->user() === null), 'nullable', 'string', Rule::in(array_column($available, 'id'))];
     }
 
     /** @param array<string, mixed> $data */
@@ -134,8 +136,13 @@ class GameController extends Controller
             return null;
         }
 
-        return $data['character'] ?? $this->progression->preferredCharacter($request->user()->id)
+        if (isset($data['character'])) {
+            return $data['character'];
+        }
+        $character = $this->progression->preferredCharacter($request->user()->id)
             ?? $request->session()->get('chanting.characters.'.$request->user()->getAuthIdentifier());
+
+        return is_string($character) && $this->progression->canUseCharacter($request->user()->id, $character) ? $character : null;
     }
 
     /** @param array<string, mixed> $data */

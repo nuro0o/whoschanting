@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Head, usePage } from '@inertiajs/vue3';
+import { Head, router, usePage } from '@inertiajs/vue3';
 import {
     BookOpen,
     Check,
@@ -95,6 +95,24 @@ const props = withDefaults(
 const page = usePage();
 const signedIn = computed(() => !!page.props.auth.user);
 const state = ref<RoomState>();
+const refreshedCharacterRewards = new Set<string>();
+watch(
+    () => {
+        const accountId = page.props.auth.user?.id;
+        const reward = state.value?.me.match_reward;
+        return accountId && reward?.characters?.length
+            ? `${accountId}:${reward.match_id}`
+            : null;
+    },
+    (rewardKey) => {
+        if (!rewardKey || refreshedCharacterRewards.has(rewardKey)) return;
+        // Room polling updates rewards, while the picker catalog is an Inertia prop.
+        // Refresh it once so new looks are selectable when this table plays again.
+        refreshedCharacterRewards.add(rewardKey);
+        // Inertia reload preserves component state and scroll automatically.
+        router.reload({ only: ['characters'] });
+    },
+);
 const loading = ref(true);
 const disturbancesEnabled = ref(true);
 const disturbance = ref<RitualDisturbance | null>(null);
@@ -1139,8 +1157,9 @@ onBeforeUnmount(() => {
                                     </button>
                                 </div>
                                 <span
-                                    v-if="pending"
                                     class="lobby-pending"
+                                    :class="{ 'is-idle': !pending }"
+                                    :aria-hidden="!pending"
                                     role="status"
                                     >Sending…</span
                                 >
@@ -2167,6 +2186,9 @@ onBeforeUnmount(() => {
                                         :character="player.character"
                                         :frame="player.customization?.frame"
                                         :accent="player.customization?.accent"
+                                        :background="
+                                            player.customization?.background
+                                        "
                                         decorative
                                     /><span class="player-name"
                                         >{{ player.name
@@ -2532,6 +2554,8 @@ onBeforeUnmount(() => {
     min-width: 0;
     min-height: 0;
     overflow-y: auto;
+    scrollbar-gutter: stable;
+    overflow-anchor: none;
     overscroll-behavior: contain;
     scrollbar-width: thin;
     scrollbar-color: #526250 #142224;
@@ -2750,6 +2774,9 @@ onBeforeUnmount(() => {
     color: #b9c5b8;
     font-size: 12px;
 }
+.lobby-pending.is-idle {
+    visibility: hidden;
+}
 .lobby-setup > h2 {
     margin-bottom: 12px;
 }
@@ -2845,6 +2872,7 @@ onBeforeUnmount(() => {
     height: 100%;
     min-height: 0;
     overflow-y: auto;
+    scrollbar-gutter: stable;
     overscroll-behavior: contain;
     scrollbar-width: thin;
     scrollbar-color: #526250 #142224;
@@ -2988,6 +3016,7 @@ onBeforeUnmount(() => {
         grid-template-columns: minmax(0, 1fr);
         grid-template-rows: repeat(5, max-content);
         overflow-y: auto;
+        scrollbar-gutter: stable;
         align-content: start;
         gap: 8px;
         padding: 10px;

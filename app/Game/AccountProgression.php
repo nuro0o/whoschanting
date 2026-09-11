@@ -28,11 +28,61 @@ class AccountProgression
         return (int) floor((1 + sqrt(1 + 8 * max(0, $xp) / config('progression.level_step'))) / 2);
     }
 
+    /** Original ordered cast, used for random assignments and legacy portrait fallbacks.
+     * @return list<string>
+     */
+    public function starterCharacterIds(): array
+    {
+        return array_values(array_filter(array_column(config('game.characters'), 'id'),
+            fn (string $id): bool => ! array_key_exists($id, config('progression.character_unlocks', []))));
+    }
+
+    /** @param array<string, string> $achievements
+     * @return list<array<string, mixed>>
+     */
+    private function characters(int $level, array $achievements, bool $account): array
+    {
+        return array_map(function (array $character) use ($level, $achievements, $account): array {
+            $unlock = config('progression.character_unlocks.'.$character['id']);
+            if ($unlock === null) {
+                return [...$character, 'unlocked' => true, 'requirement' => 'Available from the start'];
+            }
+            $unlocked = $account && (isset($unlock['achievement'])
+                ? isset($achievements[$unlock['achievement']]) : $level >= $unlock['level']);
+            $requirement = isset($unlock['achievement'])
+                ? 'Earn '.config('progression.achievements.'.$unlock['achievement'].'.name').' — '.($unlock['description'] ?? config('progression.achievements.'.$unlock['achievement'].'.description'))
+                : 'Reach level '.$unlock['level'].' ('.number_format((int) (config('progression.level_step') * $unlock['level'] * ($unlock['level'] - 1) / 2)).' lifetime XP)';
+
+            return [...$character, 'unlocked' => $unlocked, 'requirement' => $requirement];
+        }, array_values(config('game.characters')));
+    }
+
+    /** @return list<array<string, mixed>> */
+    public function characterCatalog(?int $userId = null): array
+    {
+        $eligible = $userId !== null && User::whereKey($userId)->whereNotNull('email_verified_at')->exists();
+        $profile = $eligible ? PlayerProfile::find($userId) : null;
+
+        return $this->characters($this->level($profile->xp ?? 0), $profile->achievements ?? [], $eligible);
+    }
+
+    public function canUseCharacter(?int $userId, string $character): bool
+    {
+        return (bool) (collect($this->characterCatalog($userId))->firstWhere('id', $character)['unlocked'] ?? false);
+    }
+
+    public function assertCharacterUnlocked(?int $userId, string $character): void
+    {
+        if (! $this->canUseCharacter($userId, $character)) {
+            throw ValidationException::withMessages(['character' => 'Choose an unlocked village character.']);
+        }
+    }
+
     /** @return array<string, mixed> */
     private function defaults(): array
     {
         return ['xp' => 0, 'matches' => 0, 'wins' => 0, 'town_wins' => 0, 'cult_wins' => 0, 'roles_played' => [], 'achievements' => [],
-            'customization' => ['title' => 'newcomer', 'frame' => 'plain', 'accent' => 'sea', 'character' => null]];
+            'customization' => ['title' => 'newcomer', 'frame' => 'plain', 'accent' => 'sea', 'background' => 'plain', 'character' => null]];
     }
 
     private function lockProfile(int $userId): PlayerProfile
@@ -109,6 +159,7 @@ class AccountProgression
             $xp = (int) config('progression.match_xp') + ($won ? (int) config('progression.win_xp') : 0)
                 + ($night + $votes === $opportunities ? (int) config('progression.attendance_xp') : 0);
             $before = $this->level($profile->xp);
+            $charactersBefore = array_column(array_filter($this->characters($before, $profile->achievements, true), fn (array $item): bool => $item['unlocked']), 'id');
             $profile->xp += $xp;
             $profile->matches++;
             $profile->wins += (int) $won;
@@ -135,7 +186,9 @@ class AccountProgression
             }
             $profile->achievements = $earned;
             $profile->save();
+            $charactersAfter = array_column(array_filter($this->characters($this->level($profile->xp), $profile->achievements, true), fn (array $item): bool => $item['unlocked']), 'id');
             $reward = ['match_id' => $match->id, 'season_id' => $season['id'], 'xp' => $xp, 'won' => $won,
+                'characters' => array_values(array_diff($charactersAfter, $charactersBefore)),
                 'earned_at' => $finishedAt->toISOString(), 'achievements' => $new, 'level_before' => $before, 'level_after' => $this->level($profile->xp)];
             MatchReward::create(['user_id' => $userId, 'match_id' => $match->id, 'data' => $reward]);
             $rewards[$seatId] = $reward;
@@ -149,6 +202,11 @@ class AccountProgression
     {
         $profile = array_replace($this->defaults(), PlayerProfile::find($userId)?->toArray() ?? []);
         $level = $this->level($profile['xp']);
+        $characters = $this->characterCatalog($userId);
+        $equipped = array_replace($this->defaults()['customization'], $profile['customization']);
+        if ($equipped['character'] !== null && ! (collect($characters)->firstWhere('id', $equipped['character'])['unlocked'] ?? false)) {
+            $equipped['character'] = null;
+        }
         $season = $this->season();
         $seasons = PlayerSeason::where('user_id', $userId)->orderByDesc('season_id')->get();
         $current = $seasons->firstWhere('season_id', $season['id']);
@@ -171,7 +229,8 @@ class AccountProgression
         return [
             'profile' => [...array_intersect_key($profile, array_flip(['xp', 'matches', 'wins', 'town_wins', 'cult_wins', 'roles_played'])),
                 'level' => $level, 'level_xp' => $profile['xp'] - (int) (config('progression.level_step') * $level * ($level - 1) / 2),
-                'next_level_xp' => config('progression.level_step') * $level, 'equipped' => $profile['customization']],
+                'next_level_xp' => config('progression.level_step') * $level, 'equipped' => $equipped],
+            'characters' => $characters,
             'season' => [...$season, 'xp' => $xp, 'matches' => $current->matches ?? 0, 'wins' => $current->wins ?? 0,
                 'tier' => ['id' => $tier['id'], 'name' => $tier['name']], 'next_tier_xp' => $next, 'tiers' => $tiers,
                 'history' => $seasons->filter(fn (PlayerSeason $s): bool => $s->season_id !== $season['id'])->map(fn (PlayerSeason $s): array => [
@@ -225,17 +284,19 @@ class AccountProgression
             $profile = $this->lockProfile($userId);
             $catalog = $this->catalog($this->level($profile->xp), $profile->achievements,
                 (int) (PlayerSeason::where('user_id', $userId)->max('xp') ?? 0));
-            $equipped = $profile->customization;
-            foreach (['title' => 'titles', 'frame' => 'frames', 'accent' => 'accents'] as $field => $category) {
-                $item = collect($catalog[$category])->firstWhere('id', $input[$field] ?? null);
+            $equipped = array_replace($this->defaults()['customization'], $profile->customization);
+            foreach (['title' => 'titles', 'frame' => 'frames', 'accent' => 'accents', 'background' => 'backgrounds'] as $field => $category) {
+                // Older clients omit backgrounds; keep the player's saved choice.
+                $value = $field === 'background' && ! array_key_exists($field, $input) ? $equipped[$field] : ($input[$field] ?? null);
+                $item = collect($catalog[$category])->firstWhere('id', $value);
                 if ($item === null || ! $item['unlocked']) {
                     throw ValidationException::withMessages([$field => 'Choose an unlocked '.$field.'.']);
                 }
                 $equipped[$field] = $item['id'];
             }
             $character = $input['character'] ?? null;
-            if ($character !== null && ! in_array($character, array_column(config('game.characters'), 'id'), true)) {
-                throw ValidationException::withMessages(['character' => 'Choose a village character.']);
+            if ($character !== null) {
+                $this->assertCharacterUnlocked($userId, $character);
             }
             $equipped['character'] = $character;
             $profile->customization = $equipped;
@@ -248,6 +309,7 @@ class AccountProgression
     public function rememberCharacter(int $userId, string $character): void
     {
         DB::transaction(function () use ($userId, $character): void {
+            $this->assertCharacterUnlocked($userId, $character);
             $profile = $this->lockProfile($userId);
             $profile->customization = [...$profile->customization, 'character' => $character];
             $profile->save();
@@ -256,7 +318,9 @@ class AccountProgression
 
     public function preferredCharacter(int $userId): ?string
     {
-        return PlayerProfile::find($userId)?->customization['character'] ?? null;
+        $character = PlayerProfile::find($userId)?->customization['character'] ?? null;
+
+        return $character !== null && $this->canUseCharacter($userId, $character) ? $character : null;
     }
 
     /** Safe public allowlist; no account identifier or private statistics.
@@ -265,7 +329,7 @@ class AccountProgression
     public function appearance(int $userId): array
     {
         $profile = PlayerProfile::find($userId);
-        $equipped = $profile->customization ?? $this->defaults()['customization'];
+        $equipped = array_replace($this->defaults()['customization'], $profile->customization ?? []);
         $titleName = 'Newcomer';
         foreach (config('progression.cosmetics.titles') as $title) {
             if ($title['id'] === $equipped['title']) {
@@ -274,6 +338,6 @@ class AccountProgression
         }
 
         return ['level' => $this->level($profile->xp ?? 0), 'title' => $equipped['title'], 'title_name' => $titleName,
-            'frame' => $equipped['frame'], 'accent' => $equipped['accent']];
+            'frame' => $equipped['frame'], 'accent' => $equipped['accent'], 'background' => $equipped['background']];
     }
 }

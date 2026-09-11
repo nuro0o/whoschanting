@@ -1,7 +1,10 @@
+import type { Character } from './chanting';
+
 export interface EquippedCosmetics {
     title: string;
     frame: string;
     accent: string;
+    background: string;
     character: string | null;
 }
 export interface PublicCustomization {
@@ -10,6 +13,7 @@ export interface PublicCustomization {
     title_name: string;
     frame: string;
     accent: string;
+    background?: string;
 }
 export interface MatchReward {
     match_id: string;
@@ -18,6 +22,7 @@ export interface MatchReward {
     won: boolean;
     earned_at: string;
     achievements: string[];
+    characters?: string[];
     level_before: number;
     level_after: number;
 }
@@ -28,6 +33,7 @@ export interface Cosmetic {
     unlocked: boolean;
 }
 export interface ProgressionData {
+    characters?: Character[];
     profile: {
         xp: number;
         level: number;
@@ -67,14 +73,27 @@ export interface ProgressionData {
         target: number;
         earned_at: string | null;
     }[];
-    cosmetics: { titles: Cosmetic[]; frames: Cosmetic[]; accents: Cosmetic[] };
+    cosmetics: {
+        titles: Cosmetic[];
+        frames: Cosmetic[];
+        accents: Cosmetic[];
+        backgrounds: Cosmetic[];
+    };
     recent_rewards: MatchReward[];
 }
 export const cosmeticAccents: Record<string, string> = {
     sea: '#a8bd9d',
+    storm: '#7eabb9',
+    clay: '#c69b88',
     moon: '#b7b6d0',
     ember: '#c77d61',
     gold: '#d2b46c',
+};
+export const cosmeticBackgrounds: Record<string, string> = {
+    plain: '#263831',
+    harbor: 'linear-gradient(145deg, #c0cebf, #526f73 52%, #213c42)',
+    dusk: 'linear-gradient(145deg, #aa859b, #55516b 52%, #252b40)',
+    candlelight: 'linear-gradient(145deg, #edd29a, #ac7947 52%, #593a2b)',
 };
 export function progressPercent(current: number, target: number): number {
     return Math.max(

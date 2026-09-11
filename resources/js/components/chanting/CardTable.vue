@@ -178,7 +178,6 @@ onBeforeUnmount(() => {
         :data-winner="winner"
         aria-label="The village card table"
     >
-        <slot name="briefing" />
         <div class="table-topline">
             <span class="eyebrow">THE VILLAGE TABLE</span>
             <button
@@ -267,6 +266,7 @@ onBeforeUnmount(() => {
                     :character="player.character"
                     :frame="player.customization?.frame"
                     :accent="player.customization?.accent"
+                    :background="player.customization?.background"
                     decorative
                 />
                 <span
@@ -316,6 +316,7 @@ onBeforeUnmount(() => {
                 >
             </component>
         </div>
+        <slot name="briefing" />
         <slot name="actions" />
         <div class="table-summoning-status">
             <Flame :size="15" aria-hidden="true" />
@@ -379,6 +380,7 @@ onBeforeUnmount(() => {
                         :character="player.character"
                         :frame="player.customization?.frame"
                         :accent="player.customization?.accent"
+                        :background="player.customization?.background"
                         decorative
                     />
                     <span
@@ -600,7 +602,9 @@ onBeforeUnmount(() => {
     overflow: visible;
 }
 .table-panel-immersive.has-actions .card-table {
-    flex: 1 0 clamp(240px, 38dvh, 480px);
+    /* Controls must not change the scene's size or consume its free margins. */
+    flex: 0 0 clamp(240px, 38svh, 480px);
+    margin: 0;
 }
 .table-panel-immersive.has-actions > :not(.card-table) {
     flex-shrink: 0;

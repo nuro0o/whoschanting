@@ -206,6 +206,9 @@ onMounted(() => {
                 >
                     <CharacterPortrait
                         :character="player.character"
+                        :frame="player.customization?.frame"
+                        :accent="player.customization?.accent"
+                        :background="player.customization?.background"
                         decorative
                     />
                     <span class="board-player-copy">

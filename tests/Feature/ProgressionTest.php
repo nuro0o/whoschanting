@@ -76,12 +76,31 @@ class ProgressionTest extends TestCase
         $this->assertSame([], $second['seat']['achievements']);
         $this->assertSame(1, $second['seat']['level_before']);
         $this->assertSame(2, $second['seat']['level_after']);
+        $this->assertSame(['tidecaller'], $second['seat']['characters']);
+        $this->assertSame($second, $this->award($next, $this->state($next, $user)));
         $view = $this->progression->view($user->id);
         $this->assertSame(30, $view['profile']['level_xp']);
         $this->assertSame(500, $view['profile']['next_level_xp']);
         $this->assertSame(280, $view['season']['xp']);
         $this->assertCount(2, $view['recent_rewards']);
         $this->assertIsArray($view['recent_rewards'][0]);
+    }
+
+    public function test_character_achievement_unlocks_are_awarded_once_and_survive_a_new_season(): void
+    {
+        $user = User::factory()->create();
+        $this->progression->rememberCharacter($user->id, 'archivist');
+        PlayerProfile::findOrFail($user->id)->update(['matches' => 24, 'roles_played' => ['oracle', 'warden', 'lamplighter', 'tracker']]);
+        $match = $this->archive();
+        $state = $this->state($match, $user);
+        $reward = $this->award($match, $state);
+        $this->assertSame(['maskmaker', 'drowned_regent'], $reward['seat']['characters']);
+        $this->assertSame($reward, $this->award($match, $state));
+        $this->travelTo(CarbonImmutable::parse('2027-01-02 12:00:00 UTC'));
+        $catalog = collect($this->progression->characterCatalog($user->id));
+        $this->assertTrue($catalog->firstWhere('id', 'maskmaker')['unlocked']);
+        $this->assertTrue($catalog->firstWhere('id', 'drowned_regent')['unlocked']);
+        $this->assertSame(0, $this->progression->view($user->id)['season']['xp']);
     }
 
     public function test_participation_requires_a_submitted_night_and_vote_but_abstaining_counts(): void
@@ -181,7 +200,7 @@ class ProgressionTest extends TestCase
         $this->getJson('/rooms/'.$room->code.'/state')->assertForbidden();
         $public = $engine->access($room->code, 'device-two', accountId: $user->id);
         $this->assertArrayNotHasKey('user_id', $public['players'][0]);
-        $this->assertSame(['level', 'title', 'title_name', 'frame', 'accent'], array_keys($public['players'][0]['customization']));
+        $this->assertSame(['level', 'title', 'title_name', 'frame', 'accent', 'background'], array_keys($public['players'][0]['customization']));
 
         $guest = $engine->create('guest', 'Guest');
         $engine->join($guest->code, 'guest', 'Guest', accountId: $other->id);

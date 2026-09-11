@@ -12,13 +12,16 @@ class ProgressionController extends Controller
 {
     public function show(Request $request, AccountProgression $progression): Response
     {
-        return Inertia::render('Progression', ['progression' => $progression->view($request->user()->id), 'characters' => config('game.characters')]);
+        $data = $progression->view($request->user()->id);
+
+        return Inertia::render('Progression', ['progression' => $data, 'characters' => $data['characters']]);
     }
 
     public function customize(Request $request, AccountProgression $progression): JsonResponse
     {
         $input = $request->validate(['title' => ['required', 'string', 'max:40'], 'frame' => ['required', 'string', 'max:40'],
-            'accent' => ['required', 'string', 'max:40'], 'character' => ['nullable', 'string', 'max:40']]);
+            'accent' => ['required', 'string', 'max:40'], 'background' => ['sometimes', 'string', 'max:40'],
+            'character' => ['nullable', 'string', 'max:40']]);
         $result = $progression->customize($request->user()->id, $input);
         $request->session()->forget('chanting.characters.'.$request->user()->id);
 

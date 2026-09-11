@@ -240,6 +240,8 @@ export interface RoomState {
 export interface Character {
     id: string;
     name: string;
+    unlocked?: boolean;
+    requirement?: string;
 }
 export const characterIds = [
     'mariner',
@@ -258,10 +260,26 @@ export const characterIds = [
     'locksmith',
     'prowler',
     'stranger',
+    'tidecaller',
+    'cartographer',
+    'maskmaker',
+    'drowned_regent',
 ];
+const characterRequirements: Record<string, string> = {
+    tidecaller: 'Reach level 2 (250 lifetime XP)',
+    cartographer: 'Reach level 3 (750 lifetime XP)',
+    maskmaker:
+        'Earn Many faces: complete qualifying matches as 5 different roles',
+    drowned_regent: 'Earn Village veteran: complete 25 qualifying matches',
+};
 export const defaultCharacters: Character[] = characterIds.map((id) => ({
     id,
-    name: `The ${id[0].toUpperCase()}${id.slice(1)}`,
+    name: `The ${id
+        .split('_')
+        .map((word) => word[0].toUpperCase() + word.slice(1))
+        .join(' ')}`,
+    unlocked: !characterRequirements[id],
+    requirement: characterRequirements[id],
 }));
 
 export const roles: Record<

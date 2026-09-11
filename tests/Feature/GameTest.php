@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Events\RoomUpdated;
+use App\Game\AccountProgression;
 use App\Game\CurseEngine;
 use App\Game\MatchEngine;
 use App\Models\GameMatch;
@@ -1140,7 +1141,7 @@ class GameTest extends TestCase
         $code = $this->postJson('/rooms', ['name' => 'Guest'])->assertCreated()->json('code');
         $view = $this->getJson('/rooms/'.$code.'/state')->assertOk()->json();
         $character = $view['me']['character'];
-        $this->assertContains($character, array_column(config('game.characters'), 'id'));
+        $this->assertContains($character, app(AccountProgression::class)->starterCharacterIds());
         $this->assertSame($character, $view['players'][0]['character']);
         $this->getJson('/rooms/'.$code.'/state')->assertJsonPath('me.character', $character);
         $this->postJson('/rooms/'.$code.'/actions', ['type' => 'character', 'character' => 'baker', 'phase_id' => 1])->assertUnprocessable();
@@ -1151,17 +1152,18 @@ class GameTest extends TestCase
         $this->assertCount(2, GameRoom::first()->state['players']);
     }
 
-    public function test_accounts_can_choose_every_character_and_change_only_in_lobby(): void
+    public function test_accounts_can_choose_every_starter_character_and_change_only_in_lobby(): void
     {
         $this->actingAs(User::factory()->create());
         $this->postJson('/rooms', ['name' => 'Neighbor', 'character' => 'invented'])->assertUnprocessable();
         $code = $this->postJson('/rooms', ['name' => 'Neighbor', 'character' => 'botanist'])->assertCreated()->json('code');
         $this->getJson('/rooms/'.$code.'/state')->assertJsonPath('me.character', 'botanist');
-        foreach (config('game.characters') as $character) {
-            $this->postJson('/rooms/'.$code.'/actions', ['type' => 'character', 'character' => $character['id'], 'phase_id' => 1])
-                ->assertOk()->assertJsonPath('me.character', $character['id']);
+        $starters = app(AccountProgression::class)->starterCharacterIds();
+        foreach ($starters as $character) {
+            $this->postJson('/rooms/'.$code.'/actions', ['type' => 'character', 'character' => $character, 'phase_id' => 1])
+                ->assertOk()->assertJsonPath('me.character', $character);
         }
-        $lastCharacter = collect(config('game.characters'))->last()['id'];
+        $lastCharacter = $starters[array_key_last($starters)];
         $nextCode = $this->postJson('/rooms', ['name' => 'Neighbor'])->assertCreated()->json('code');
         $this->getJson('/rooms/'.$nextCode.'/state')->assertJsonPath('me.character', $lastCharacter);
         $room = GameRoom::where('code', $code)->firstOrFail();
@@ -1193,7 +1195,7 @@ class GameTest extends TestCase
         $first = $this->engine->access($room->code, 'secret-0');
         $second = $this->engine->access($room->code, 'secret-0');
         $this->assertSame(array_column($first['players'], 'character'), array_column($second['players'], 'character'));
-        $this->assertContains($first['me']['character'], array_column(config('game.characters'), 'id'));
+        $this->assertContains($first['me']['character'], app(AccountProgression::class)->starterCharacterIds());
     }
 
     public function test_discussion_readiness_is_public_and_unanimous_readiness_starts_voting_once(): void

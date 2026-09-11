@@ -123,8 +123,9 @@
     letter-spacing: 1.5px;
 }
 .landing-hero {
+    --hero-art-height: 765px;
     position: relative;
-    min-height: 765px;
+    min-height: var(--hero-art-height);
     padding: 58px max(6%, calc((100% - 1440px) / 2 + 6%)) 64px;
     overflow: hidden;
 }
@@ -186,7 +187,8 @@
     left: 0;
     right: 0;
     top: -10px;
-    bottom: 0;
+    /* Keep the scene scale independent of expanding room settings. */
+    height: calc(var(--hero-art-height) + 10px);
     background: radial-gradient(
         ellipse at 78% 38%,
         #36545466,
@@ -1206,7 +1208,7 @@
 }
 @media (min-width: 1441px) {
     .landing-hero {
-        min-height: 805px;
+        --hero-art-height: 805px;
     }
     .hero-content h1 {
         font-size: 76px;

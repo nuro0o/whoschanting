@@ -11,9 +11,10 @@ import {
 } from '@lucide/vue';
 import { computed, reactive, ref } from 'vue';
 import CharacterPortrait from '@/components/chanting/CharacterPortrait.vue';
-import { roomRequest, type Character } from '@/lib/chanting';
+import { characterIds, roomRequest, type Character } from '@/lib/chanting';
 import {
     cosmeticAccents,
+    cosmeticBackgrounds,
     progressPercent,
     recordDate,
     type ProgressionData,
@@ -25,10 +26,24 @@ const props = defineProps<{
 }>();
 const page = usePage();
 const data = ref(props.progression);
-const draft = reactive({ ...data.value.profile.equipped });
+const characters = computed(() => data.value.characters ?? props.characters);
+const originalCharacters = computed(() =>
+    characters.value.filter((item) => characterIds.indexOf(item.id) < 16),
+);
+const earnedCharacters = computed(() =>
+    characters.value.filter((item) => characterIds.indexOf(item.id) >= 16),
+);
+const availableCharacters = computed(
+    () => characters.value.filter((item) => item.unlocked !== false).length,
+);
+const draft = reactive({
+    ...data.value.profile.equipped,
+    background: data.value.profile.equipped.background ?? 'plain',
+});
 const pending = ref(false);
 const error = ref('');
 const saved = ref(false);
+const previewElement = ref<HTMLElement | null>(null);
 const tab = ref<'wardrobe' | 'achievements' | 'season'>('wardrobe');
 const tabs = [
     { id: 'wardrobe', name: 'Wardrobe' },
@@ -51,10 +66,52 @@ const earned = computed(
     () => data.value.achievements.filter((item) => item.earned_at).length,
 );
 const groups = [
-    { field: 'title', catalog: 'titles', name: 'Your title' },
-    { field: 'frame', catalog: 'frames', name: 'Portrait frame' },
     { field: 'accent', catalog: 'accents', name: 'Accent color' },
+    { field: 'background', catalog: 'backgrounds', name: 'Portrait backdrop' },
+    { field: 'frame', catalog: 'frames', name: 'Portrait frame' },
+    { field: 'title', catalog: 'titles', name: 'Your title' },
 ] as const;
+const previewCharacter = computed(
+    () => draft.character ?? characters.value[0]?.id ?? 'fisherman',
+);
+const characterName = computed(
+    () =>
+        characters.value.find((item) => item.id === previewCharacter.value)
+            ?.name ?? 'The Fisherman',
+);
+function revert() {
+    if (pending.value) return;
+    Object.assign(draft, data.value.profile.equipped);
+    error.value = '';
+    saved.value = false;
+}
+function revealFocusedControl(event: FocusEvent) {
+    const target = event.target;
+    if (
+        !(target instanceof HTMLElement) ||
+        !target.closest('.wardrobe-controls')
+    )
+        return;
+    // Native focus scrolling does not account for a sticky sibling above the form.
+    requestAnimationFrame(() => {
+        if (
+            document.activeElement !== target ||
+            !window.matchMedia('(max-width: 850px)').matches
+        )
+            return;
+        const preview = previewElement.value?.getBoundingClientRect();
+        if (!preview) return;
+        const control = (
+            target.closest('label') ?? target
+        ).getBoundingClientRect();
+        if (control.top < preview.bottom + 16) {
+            window.scrollBy({
+                top: control.top - preview.bottom - 16,
+                behavior: 'instant',
+            });
+        }
+    });
+}
 async function save() {
     if (pending.value || !changed.value) return;
     pending.value = true;
@@ -123,6 +180,7 @@ function moveTab(event: KeyboardEvent, index: number) {
                     "
                     :frame="draft.frame"
                     :accent="draft.accent"
+                    :background="draft.background"
                     class="passport-portrait"
                 />
                 <h2>{{ page.props.auth.user.name }}</h2>
@@ -237,7 +295,7 @@ function moveTab(event: KeyboardEvent, index: number) {
         <section
             v-show="tab === 'wardrobe'"
             id="progression-panel-wardrobe"
-            class="reputation-panel"
+            class="reputation-panel wardrobe-panel"
             role="tabpanel"
             aria-labelledby="progression-tab-wardrobe"
             tabindex="0"
@@ -246,126 +304,306 @@ function moveTab(event: KeyboardEvent, index: number) {
                 <p class="account-kicker">02 / Familiar face, new details</p>
                 <h2>Dress for suspicion.</h2>
                 <p>
-                    Titles, frames, and colors are cosmetic. Your character
-                    never reveals your role, and unlocks never make you
-                    stronger.
+                    Make an unlocked character your own with accent colors,
+                    backdrops, frames, and a title. Every detail is cosmetic;
+                    your role stays a secret.
                 </p>
             </div>
             <form
                 class="wardrobe-form"
                 :aria-busy="pending"
                 @submit.prevent="save"
+                @focusin="revealFocusedControl"
             >
-                <fieldset
-                    v-for="group in groups"
-                    :key="group.field"
-                    :disabled="pending"
-                    class="wardrobe-fieldset"
+                <aside
+                    ref="previewElement"
+                    class="wardrobe-preview"
+                    aria-label="Live character preview"
+                    :style="{
+                        '--identity-accent':
+                            cosmeticAccents[draft.accent] ??
+                            cosmeticAccents.sea,
+                    }"
                 >
-                    <legend>{{ group.name }}</legend>
-                    <div class="wardrobe-options">
-                        <label
-                            v-for="item in data.cosmetics[group.catalog]"
-                            :key="item.id"
-                            class="wardrobe-choice"
-                            :class="{
-                                'is-selected': draft[group.field] === item.id,
-                                'is-locked': !item.unlocked,
-                            }"
-                            ><input
-                                v-model="draft[group.field]"
-                                type="radio"
-                                :name="group.field"
-                                :value="item.id"
-                                :disabled="!item.unlocked"
-                                @change="saved = false" /><span
-                                v-if="group.field === 'accent'"
-                                class="accent-swatch"
-                                :style="{
-                                    background:
-                                        cosmeticAccents[item.id] ??
-                                        cosmeticAccents.sea,
-                                }"
-                                aria-hidden="true"
-                            ></span
-                            ><span class="wardrobe-choice-copy"
-                                ><strong>{{ item.name }}</strong
-                                ><small>{{
-                                    item.unlocked
-                                        ? draft[group.field] === item.id
-                                            ? 'Selected'
-                                            : 'Unlocked'
-                                        : item.requirement
-                                }}</small></span
-                            ><LockKeyhole
-                                v-if="!item.unlocked"
-                                :size="13"
-                                aria-label="Locked" /><Check
-                                v-else-if="draft[group.field] === item.id"
-                                :size="14"
-                                aria-hidden="true"
-                        /></label>
-                    </div>
-                </fieldset>
-                <fieldset class="wardrobe-fieldset" :disabled="pending">
-                    <legend>Preferred character</legend>
-                    <p class="wardrobe-help">
-                        A familiar face for your next room. You can still change
-                        it in the lobby.
-                    </p>
-                    <div class="wardrobe-characters">
-                        <label
-                            class="wardrobe-character"
-                            :class="{ 'is-selected': draft.character === null }"
-                            ><input
-                                v-model="draft.character"
-                                type="radio"
-                                name="character"
-                                :value="null"
-                                @change="saved = false"
-                            /><span class="character-any"
-                                ><Sparkles :size="24" /></span
-                            ><span>No preference</span></label
-                        ><label
-                            v-for="character in characters"
-                            :key="character.id"
-                            class="wardrobe-character"
-                            :class="{
-                                'is-selected': draft.character === character.id,
-                            }"
-                            ><input
-                                v-model="draft.character"
-                                type="radio"
-                                name="character"
-                                :value="character.id"
-                                @change="saved = false"
-                            /><CharacterPortrait
-                                :character="character.id"
-                                decorative
-                            /><span>{{ character.name }}</span></label
+                    <div class="preview-heading">
+                        <span>YOUR VILLAGE IDENTITY</span
+                        ><span
+                            class="preview-status"
+                            :class="{ 'is-unsaved': changed }"
+                            >{{ changed ? 'Unsaved' : 'Equipped' }}</span
                         >
                     </div>
-                </fieldset>
-                <p v-if="error" class="wardrobe-error" role="alert">
-                    {{ error }}
-                </p>
-                <div class="wardrobe-save">
-                    <p role="status">
-                        {{
-                            saved && !changed
-                                ? 'Your customization is saved.'
-                                : changed
-                                  ? 'You have unsaved changes.'
-                                  : 'Your equipped details appear beside you in the village.'
-                        }}
+                    <div class="preview-portraits">
+                        <figure class="preview-full">
+                            <CharacterPortrait
+                                :character="previewCharacter"
+                                :frame="draft.frame"
+                                :accent="draft.accent"
+                                :background="draft.background"
+                            />
+                            <figcaption>Portrait</figcaption>
+                        </figure>
+                        <figure class="preview-table">
+                            <CharacterPortrait
+                                :character="previewCharacter"
+                                :frame="draft.frame"
+                                :accent="draft.accent"
+                                :background="draft.background"
+                            />
+                            <figcaption>At the table</figcaption>
+                        </figure>
+                    </div>
+                    <h3>{{ page.props.auth.user.name }}</h3>
+                    <p class="preview-title">{{ titleName }}</p>
+                    <p class="preview-character">{{ characterName }}</p>
+                    <p v-if="draft.character === null" class="preview-note">
+                        Example portrait. No preference chooses a random
+                        original character when you join.
                     </p>
-                    <button type="submit" :disabled="pending || !changed">
-                        {{ pending ? 'Saving…' : 'Save customization'
-                        }}<Check
-                            v-if="saved && !changed"
-                            :size="16"
-                        /><ArrowRight v-else :size="16" />
-                    </button>
+                    <p v-else class="preview-note">
+                        Your saved look appears when you join a room. Active
+                        matches keep their current look.
+                    </p>
+                    <a href="#wardrobe-save" class="preview-save-link"
+                        >{{
+                            changed ? 'Review & save changes' : 'Save controls'
+                        }}
+                        <ArrowRight :size="13"
+                    /></a>
+                </aside>
+                <div class="wardrobe-controls">
+                    <fieldset class="wardrobe-fieldset" :disabled="pending">
+                        <legend>
+                            Base character
+                            <span class="character-count"
+                                >{{ availableCharacters }} /
+                                {{ characters.length }} available</span
+                            >
+                        </legend>
+                        <p class="wardrobe-help">
+                            A familiar face for your next room. You can still
+                            change it in the lobby. No preference picks randomly
+                            from the original 16 characters.
+                        </p>
+                        <div class="wardrobe-characters">
+                            <label
+                                class="wardrobe-character"
+                                :class="{
+                                    'is-selected': draft.character === null,
+                                }"
+                                ><input
+                                    v-model="draft.character"
+                                    type="radio"
+                                    name="character"
+                                    :value="null"
+                                    @change="saved = false"
+                                /><span class="character-any"
+                                    ><Sparkles :size="24" /></span
+                                ><span>No preference</span></label
+                            ><label
+                                v-for="character in originalCharacters"
+                                :key="character.id"
+                                class="wardrobe-character"
+                                :class="{
+                                    'is-selected':
+                                        draft.character === character.id,
+                                }"
+                                ><input
+                                    v-model="draft.character"
+                                    type="radio"
+                                    name="character"
+                                    :value="character.id"
+                                    @change="saved = false"
+                                /><CharacterPortrait
+                                    :character="character.id"
+                                    :accent="draft.accent"
+                                    :background="draft.background"
+                                    decorative
+                                /><span>{{ character.name }}</span></label
+                            >
+                        </div>
+                        <template v-if="earnedCharacters.length">
+                            <h3 class="wardrobe-unlock-heading">
+                                Earned in the village
+                            </h3>
+                            <p class="wardrobe-help">
+                                New faces, earned through play. Every character
+                                is cosmetic.
+                            </p>
+                            <div
+                                class="wardrobe-characters wardrobe-characters--earned"
+                            >
+                                <label
+                                    v-for="character in earnedCharacters"
+                                    :key="character.id"
+                                    class="wardrobe-character"
+                                    :class="{
+                                        'is-selected':
+                                            draft.character === character.id,
+                                        'is-locked':
+                                            character.unlocked === false,
+                                    }"
+                                >
+                                    <input
+                                        v-model="draft.character"
+                                        type="radio"
+                                        name="character"
+                                        :value="character.id"
+                                        :disabled="character.unlocked === false"
+                                        :aria-label="character.name"
+                                        :aria-describedby="`wardrobe-${character.id}-requirement`"
+                                        @change="saved = false"
+                                    />
+                                    <CharacterPortrait
+                                        :character="character.id"
+                                        :accent="draft.accent"
+                                        :background="draft.background"
+                                        decorative
+                                    />
+                                    <span class="wardrobe-character-name">{{
+                                        character.name
+                                    }}</span>
+                                    <small
+                                        :id="`wardrobe-${character.id}-requirement`"
+                                        class="wardrobe-character-requirement"
+                                    >
+                                        <LockKeyhole
+                                            v-if="character.unlocked === false"
+                                            :size="12"
+                                            aria-hidden="true"
+                                        />
+                                        <Check
+                                            v-else
+                                            :size="12"
+                                            aria-hidden="true"
+                                        />
+                                        {{
+                                            character.unlocked === false
+                                                ? `Locked · ${character.requirement}`
+                                                : 'Unlocked · ready to wear'
+                                        }}
+                                    </small>
+                                </label>
+                            </div>
+                        </template>
+                    </fieldset>
+                    <fieldset
+                        v-for="group in groups"
+                        :key="group.field"
+                        :disabled="pending"
+                        class="wardrobe-fieldset"
+                    >
+                        <legend>{{ group.name }}</legend>
+                        <p
+                            v-if="group.field === 'background'"
+                            class="wardrobe-help"
+                        >
+                            A colored mat around your portrait, keeping the
+                            original artwork intact.
+                        </p>
+                        <div
+                            class="wardrobe-options"
+                            :class="`wardrobe-options--${group.field}`"
+                        >
+                            <label
+                                v-for="item in data.cosmetics[group.catalog]"
+                                :key="item.id"
+                                class="wardrobe-choice"
+                                :class="{
+                                    'is-selected':
+                                        draft[group.field] === item.id,
+                                    'is-locked': !item.unlocked,
+                                }"
+                                ><input
+                                    v-model="draft[group.field]"
+                                    type="radio"
+                                    :name="group.field"
+                                    :value="item.id"
+                                    :disabled="!item.unlocked"
+                                    :aria-describedby="`cosmetic-${group.field}-${item.id}`"
+                                    @change="saved = false" /><span
+                                    v-if="group.field === 'accent'"
+                                    class="accent-swatch"
+                                    :style="{
+                                        background:
+                                            cosmeticAccents[item.id] ??
+                                            cosmeticAccents.sea,
+                                    }"
+                                    aria-hidden="true"
+                                ></span
+                                ><span
+                                    v-else-if="group.field === 'background'"
+                                    class="backdrop-swatch"
+                                    :style="{
+                                        background:
+                                            cosmeticBackgrounds[item.id],
+                                    }"
+                                    aria-hidden="true"
+                                    ><i></i></span
+                                ><CharacterPortrait
+                                    v-else-if="group.field === 'frame'"
+                                    class="frame-swatch"
+                                    :character="previewCharacter"
+                                    :frame="item.id"
+                                    :accent="draft.accent"
+                                    :background="draft.background"
+                                    decorative /><span
+                                    class="wardrobe-choice-copy"
+                                    ><strong>{{ item.name }}</strong
+                                    ><small
+                                        :id="`cosmetic-${group.field}-${item.id}`"
+                                        >{{
+                                            item.unlocked
+                                                ? draft[group.field] === item.id
+                                                    ? 'Selected'
+                                                    : 'Unlocked'
+                                                : item.requirement
+                                        }}</small
+                                    ></span
+                                ><LockKeyhole
+                                    v-if="!item.unlocked"
+                                    :size="13"
+                                    aria-label="Locked" /><Check
+                                    v-else-if="draft[group.field] === item.id"
+                                    :size="14"
+                                    aria-hidden="true"
+                            /></label>
+                        </div>
+                    </fieldset>
+                    <p v-if="error" class="wardrobe-error" role="alert">
+                        {{ error }}
+                    </p>
+                    <div id="wardrobe-save" class="wardrobe-save">
+                        <p role="status">
+                            {{
+                                saved && !changed
+                                    ? 'Your customization is saved.'
+                                    : changed
+                                      ? 'You have unsaved changes.'
+                                      : 'Your equipped details appear beside you in the village.'
+                            }}
+                        </p>
+                        <div class="wardrobe-save-actions">
+                            <button
+                                type="button"
+                                class="wardrobe-revert"
+                                :disabled="pending || !changed"
+                                @click="revert"
+                            >
+                                Revert changes
+                            </button>
+                            <button
+                                type="submit"
+                                :disabled="pending || !changed"
+                            >
+                                {{ pending ? 'Saving…' : 'Save customization'
+                                }}<Check
+                                    v-if="saved && !changed"
+                                    :size="16"
+                                /><ArrowRight v-else :size="16" />
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </form>
         </section>
@@ -858,6 +1096,59 @@ progress::-moz-progress-bar {
     text-align: center;
     line-height: 1.5;
 }
+.character-count {
+    display: inline-block;
+    margin-left: 8px;
+    color: var(--account-muted);
+    font:
+        11px 'DM Sans',
+        sans-serif;
+}
+.wardrobe-unlock-heading {
+    margin: 24px 0 12px;
+    padding-top: 20px;
+    border-top: 1px solid var(--account-line);
+    font-size: 20px;
+}
+.wardrobe-characters.wardrobe-characters--earned {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.wardrobe-characters--earned .wardrobe-character {
+    padding: 17px 12px 14px;
+    gap: 10px;
+    min-width: 0;
+    text-align: center;
+}
+.wardrobe-characters--earned .character-portrait {
+    width: 64px;
+    height: 74px;
+    border-radius: 36px 36px 2px 2px;
+}
+.wardrobe-character.is-locked {
+    cursor: not-allowed;
+}
+.wardrobe-character.is-locked .character-portrait {
+    filter: saturate(0.7);
+}
+.wardrobe-character:focus-within {
+    outline: 2px solid var(--account-green);
+    outline-offset: 2px;
+}
+.wardrobe-character-name {
+    font-size: 13px;
+    line-height: 1.4;
+}
+.wardrobe-character-requirement {
+    color: var(--account-muted);
+    font-size: 11px;
+    line-height: 1.6;
+    overflow-wrap: anywhere;
+}
+.wardrobe-character-requirement svg {
+    display: inline;
+    vertical-align: -1px;
+    margin-right: 3px;
+}
 .wardrobe-save {
     display: flex;
     align-items: center;
@@ -1142,6 +1433,283 @@ progress::-moz-progress-bar {
     }
     .reputation-rules p {
         font-size: 10px;
+    }
+}
+
+.wardrobe-panel {
+    display: block;
+}
+.wardrobe-panel > .reputation-section-intro {
+    max-width: 650px;
+    margin-bottom: 30px;
+}
+.wardrobe-form {
+    display: grid;
+    grid-template-columns: 280px minmax(0, 1fr);
+    gap: 38px;
+    align-items: start;
+}
+.wardrobe-controls {
+    min-width: 0;
+}
+.wardrobe-preview {
+    position: sticky;
+    top: 24px;
+    background: #15272b;
+    border: 1px solid #61736b;
+    padding: 20px;
+    color: #f1ecdb;
+    box-shadow: 4px 4px 0 var(--account-deep);
+    text-align: center;
+}
+.preview-heading {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    text-align: left;
+    font-size: 8px;
+    letter-spacing: 1px;
+    color: #c2cdbb;
+}
+.preview-status {
+    color: #b8cfaa;
+    font-size: 9px;
+    letter-spacing: 0;
+}
+.preview-status.is-unsaved {
+    color: #e0ba82;
+}
+.preview-portraits {
+    display: flex;
+    align-items: end;
+    justify-content: center;
+    gap: 26px;
+    margin: 28px 0 21px;
+}
+.preview-portraits figure {
+    margin: 0;
+}
+.preview-full .character-portrait {
+    width: 116px;
+    height: 132px;
+    border-radius: 65px 65px 3px 3px;
+}
+.preview-table .character-portrait {
+    width: 61px;
+    height: 61px;
+    border-radius: 20px 20px 7px 7px;
+    border-width: 2px;
+}
+.preview-portraits figcaption {
+    margin-top: 16px;
+    font-size: 9px;
+    color: #bac8be;
+}
+.wardrobe-preview h3 {
+    font-size: 25px;
+    overflow-wrap: anywhere;
+}
+.preview-title {
+    margin: 7px 0;
+    color: var(--identity-accent);
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    font-size: 10px;
+}
+.preview-character {
+    color: #c7d1c6;
+    font-size: 11px;
+}
+.preview-note {
+    font-size: 10px;
+    color: #b8c5bc;
+    line-height: 1.7;
+    margin-top: 18px;
+    padding-top: 15px;
+    border-top: 1px solid #51635a;
+}
+.preview-save-link {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 9px;
+    color: #d1dcbc;
+    font-size: 11px;
+    margin-top: 16px;
+    min-height: 30px;
+}
+.wardrobe-choice:focus-within {
+    outline: 2px solid var(--account-green);
+    outline-offset: 2px;
+}
+.wardrobe-choice:not(.is-locked):hover {
+    border-color: var(--account-green);
+}
+.wardrobe-choice:has(input:disabled) {
+    cursor: not-allowed;
+}
+.backdrop-swatch {
+    display: grid;
+    place-items: center;
+    width: 30px;
+    height: 35px;
+    border-radius: 16px 16px 2px 2px;
+    flex-shrink: 0;
+    border: 1px solid #778174;
+}
+.backdrop-swatch i {
+    width: 62%;
+    height: 71%;
+    border-radius: inherit;
+    background: #1d3238;
+    border: 1px solid #d9dfc14d;
+}
+.frame-swatch.character-portrait {
+    width: 28px;
+    height: 32px;
+    margin: 7px 8px;
+    border-radius: 16px 16px 2px 2px;
+}
+.wardrobe-save {
+    flex-wrap: wrap;
+    scroll-margin-top: 24px;
+}
+.wardrobe-save-actions {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+}
+.wardrobe-save .wardrobe-revert {
+    background: transparent;
+    border: 1px solid var(--account-line);
+    color: var(--account-text);
+}
+.wardrobe-save button:not(:disabled):hover {
+    filter: brightness(1.12);
+}
+.wardrobe-save button:focus-visible,
+.preview-save-link:focus-visible {
+    outline: 2px solid var(--account-green);
+    outline-offset: 3px;
+}
+@media (max-width: 1100px) {
+    .wardrobe-form {
+        grid-template-columns: 245px minmax(0, 1fr);
+        gap: 26px;
+    }
+    .wardrobe-preview {
+        padding: 16px;
+    }
+    .preview-portraits {
+        gap: 20px;
+    }
+    .preview-full .character-portrait {
+        width: 100px;
+        height: 116px;
+    }
+}
+@media (max-width: 850px) {
+    .wardrobe-form {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 24px;
+    }
+    .wardrobe-preview {
+        z-index: 3;
+        top: 8px;
+        display: grid;
+        grid-template-columns: 140px minmax(0, 1fr);
+        gap: 3px 16px;
+        align-items: center;
+        text-align: left;
+        padding: 12px 16px;
+    }
+    .preview-heading {
+        grid-column: 1 / -1;
+        margin-bottom: 7px;
+    }
+    .preview-portraits {
+        grid-column: 1;
+        grid-row: 2 / 6;
+        gap: 18px;
+        margin: 6px 0;
+        align-items: center;
+    }
+    .preview-full .character-portrait {
+        width: 64px;
+        height: 74px;
+        border-radius: 35px 35px 3px 3px;
+    }
+    .preview-table .character-portrait {
+        width: 49px;
+        height: 49px;
+        border-radius: 18px 18px 5px 5px;
+    }
+    .preview-portraits figcaption {
+        margin-top: 10px;
+        font-size: 8px;
+    }
+    .wardrobe-preview h3 {
+        font-size: 19px;
+        grid-column: 2;
+        grid-row: 2;
+    }
+    .preview-title,
+    .preview-character {
+        margin: 0;
+        grid-column: 2;
+        font-size: 9px;
+    }
+    .preview-save-link {
+        grid-column: 2;
+        grid-row: 5;
+        justify-content: start;
+        font-size: 9px;
+        min-height: 24px;
+        margin: 0;
+    }
+    .preview-note {
+        grid-column: 1 / -1;
+        grid-row: 6;
+        font-size: 9px;
+        padding-top: 8px;
+        margin-top: 5px;
+    }
+    .wardrobe-save {
+        scroll-margin-top: 230px;
+    }
+    .wardrobe-controls input,
+    .wardrobe-controls button,
+    .wardrobe-choice,
+    .wardrobe-character {
+        scroll-margin-top: 230px;
+        scroll-margin-bottom: 24px;
+    }
+}
+@media (max-width: 400px) {
+    .wardrobe-preview {
+        grid-template-columns: 121px minmax(0, 1fr);
+        padding: 10px;
+        gap: 3px 12px;
+    }
+    .preview-portraits {
+        gap: 12px;
+    }
+    .preview-full .character-portrait {
+        width: 58px;
+        height: 68px;
+    }
+    .preview-table .character-portrait {
+        width: 43px;
+        height: 43px;
+    }
+    .wardrobe-choice {
+        gap: 7px;
+        padding: 11px 8px;
+    }
+    .wardrobe-options--frame,
+    .wardrobe-options--background {
+        grid-template-columns: minmax(0, 1fr);
     }
 }
 </style>

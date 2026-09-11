@@ -5,6 +5,12 @@ return [
     'win_xp' => 40,
     'attendance_xp' => 20,
     'level_step' => 250,
+    'character_unlocks' => [
+        'tidecaller' => ['level' => 2],
+        'cartographer' => ['level' => 3],
+        'maskmaker' => ['achievement' => 'many_faces', 'description' => 'Complete qualifying matches as 5 different roles.'],
+        'drowned_regent' => ['achievement' => 'veteran', 'description' => 'Participate in 25 qualifying completed matches.'],
+    ],
     'season_tiers' => [
         ['id' => 'unranked', 'name' => 'New arrival', 'xp' => 0],
         ['id' => 'bronze', 'name' => 'Bronze lantern', 'xp' => 250],
@@ -38,9 +44,17 @@ return [
         ],
         'accents' => [
             ['id' => 'sea', 'name' => 'Sea glass', 'level' => 1],
+            ['id' => 'storm', 'name' => 'Storm blue', 'level' => 1],
+            ['id' => 'clay', 'name' => 'Rose clay', 'level' => 1],
             ['id' => 'moon', 'name' => 'Moon mist', 'level' => 2],
             ['id' => 'ember', 'name' => 'Ember', 'achievement' => 'cult_victory'],
             ['id' => 'gold', 'name' => 'Old gold', 'level' => 5],
+        ],
+        'backgrounds' => [
+            ['id' => 'plain', 'name' => 'Original', 'level' => 1],
+            ['id' => 'harbor', 'name' => 'Harbor fog', 'level' => 1],
+            ['id' => 'dusk', 'name' => 'Dusk', 'level' => 2],
+            ['id' => 'candlelight', 'name' => 'Candlelight', 'level' => 3],
         ],
     ],
 ];

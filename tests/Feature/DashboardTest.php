@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Game\AccountProgression;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -57,7 +58,7 @@ class DashboardTest extends TestCase
             ->assertHeader('Cache-Control', 'max-age=0, no-store, private')
             ->assertInertia(fn (Assert $page) => $page
                 ->component('Dashboard')
-                ->where('characters', config('game.characters'))
+                ->where('characters', app(AccountProgression::class)->characterCatalog($user->id))
                 ->where('preferredCharacter', 'ferryman')
                 ->where('rules.min_players', config('game.min_players'))
                 ->where('rules.max_players', config('game.max_players'))

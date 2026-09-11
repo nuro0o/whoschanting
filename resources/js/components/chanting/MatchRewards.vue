@@ -1,8 +1,16 @@
 <script setup lang="ts">
 import { Link, usePage } from '@inertiajs/vue3';
 import { ArrowRight, Sparkles } from '@lucide/vue';
+import { computed } from 'vue';
+import CharacterPortrait from './CharacterPortrait.vue';
+import { defaultCharacters } from '@/lib/chanting';
 import type { MatchReward } from '@/lib/progression';
-defineProps<{ linked: boolean; reward?: MatchReward | null }>();
+const props = defineProps<{ linked: boolean; reward?: MatchReward | null }>();
+const unlockedCharacters = computed(() =>
+    defaultCharacters.filter((character) =>
+        props.reward?.characters?.includes(character.id),
+    ),
+);
 const page = usePage();
 </script>
 <template>
@@ -26,6 +34,33 @@ const page = usePage();
                         : ''
                 }}Your lifetime and season records are updated.
             </p>
+            <div v-if="unlockedCharacters.length" class="character-rewards">
+                <h4>
+                    New
+                    {{
+                        unlockedCharacters.length === 1
+                            ? 'character'
+                            : 'characters'
+                    }}
+                    unlocked
+                </h4>
+                <ul>
+                    <li
+                        v-for="character in unlockedCharacters"
+                        :key="character.id"
+                    >
+                        <CharacterPortrait
+                            :character="character.id"
+                            decorative
+                        />
+                        <span>{{ character.name }}</span>
+                    </li>
+                </ul>
+                <p>
+                    Ready to wear in your next room. Choose your new look in the
+                    wardrobe.
+                </p>
+            </div>
             <Link href="/progression"
                 >View your progression <ArrowRight :size="14"
             /></Link>
@@ -94,5 +129,36 @@ const page = usePage();
     margin-top: 12px;
     text-decoration: underline;
     text-underline-offset: 4px;
+}
+.match-rewards > div {
+    min-width: 0;
+}
+.character-rewards {
+    margin-top: 18px;
+    padding-top: 16px;
+    border-top: 1px solid #b9cda833;
+}
+.character-rewards h4 {
+    font-size: 16px;
+    color: var(--sage, #b9cda8);
+}
+.character-rewards ul {
+    list-style: none;
+    padding: 0;
+    margin: 12px 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px 22px;
+}
+.character-rewards li {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 12px;
+}
+.character-rewards .character-portrait {
+    width: 44px;
+    height: 50px;
+    flex-shrink: 0;
 }
 </style>

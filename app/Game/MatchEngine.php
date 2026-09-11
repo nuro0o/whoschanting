@@ -57,8 +57,10 @@ class MatchEngine
     /** @return array<string, mixed> */
     private function seat(string $id, string $identity, string $name, ?string $character = null, ?int $accountId = null): array
     {
-        $characters = array_column(config('game.characters'), 'id');
-        $this->ensure($character === null || in_array($character, $characters, true), 'Choose a character from the village.');
+        $characters = $this->progression->starterCharacterIds();
+        if ($character !== null) {
+            $this->progression->assertCharacterUnlocked($accountId, $character);
+        }
         $this->ensure($accountId === null || User::whereKey($accountId)->whereNotNull('email_verified_at')->exists(), 'Verify your account before joining.');
 
         return ['id' => $id, 'identity' => hash('sha256', $identity), 'name' => $name,
@@ -76,7 +78,9 @@ class MatchEngine
             if ($existing !== null) {
                 if ($accountId !== null && $s['phase'] === 'lobby') {
                     $this->ensure(User::whereKey($accountId)->whereNotNull('email_verified_at')->exists(), 'Verify your account before joining.');
-                    $this->ensure($character === null || in_array($character, array_column(config('game.characters'), 'id'), true), 'Choose a character from the village.');
+                    if ($character !== null) {
+                        $this->progression->assertCharacterUnlocked($accountId, $character);
+                    }
                     $s['players'][$existing]['user_id'] = $accountId;
                     $s['players'][$existing]['customization'] = $this->progression->appearance($accountId);
                     if ($character !== null) {
@@ -204,6 +208,7 @@ class MatchEngine
         if ($type === 'character') {
             $this->ensure($s['phase'] === 'lobby', 'Choose your character before the match begins.');
             $this->ensure(in_array($a['character'] ?? null, array_column(config('game.characters'), 'id'), true), 'Choose a character from the village.');
+            $this->progression->assertCharacterUnlocked($s['players'][$id]['user_id'] ?? null, $a['character']);
             $s['players'][$id]['character'] = $a['character'];
 
             return;
@@ -847,7 +852,7 @@ class MatchEngine
      */
     private function character(array $player): string
     {
-        $characters = array_column(config('game.characters'), 'id');
+        $characters = $this->progression->starterCharacterIds();
 
         return $player['character'] ?? $characters[hexdec(substr(hash('sha256', $player['id']), 0, 6)) % count($characters)];
     }
