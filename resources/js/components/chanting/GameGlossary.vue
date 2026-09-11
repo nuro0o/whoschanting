@@ -70,7 +70,7 @@ const terms = [
     ],
     [
         'Oracle',
-        'A town role. Investigates one other living player each night and privately learns their apparent alignment at dawn.',
+        'A town role. Once per match, investigates another living player and privately learns their apparent alignment at dawn. Can keep watch to save the investigation. It is spent on submission, even if disrupted.',
     ],
     [
         'Townsperson',
@@ -98,7 +98,7 @@ const terms = [
     ],
     [
         'Eldritch curse',
-        'A private affliction placed by a cultist. It takes hold at dawn and expires at the following dawn. The caster chooses Soul Bind, Mind Mist, or Misdirection (unlocked at ritual level 3). Level 1 curses have three easy seals, level 2 has two moderate seals, and level 3 has one harder challenge. Cleared seals stay cleared across refreshes. Being cursed does not reveal your alignment.',
+        'A private affliction placed by a cultist. It takes hold at dawn and expires at the following dawn. The caster chooses Soul Bind, Mind Mist, or Misdirection (unlocked at ritual level 3). Every new curse has three seals. Higher ritual levels add more pieces and closer tower heights; lanterns have random numbers and decoys without next-step hints. Cleared seals stay cleared across refreshes. Being cursed does not reveal your alignment.',
     ],
     [
         'Soul Bind',

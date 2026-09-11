@@ -5,13 +5,19 @@ import { roles, type Player, type RoomState } from '@/lib/chanting';
 import CharacterPortrait from './CharacterPortrait.vue';
 import RitualTableScene from './RitualTableScene.vue';
 import { ritualSceneState } from '@/lib/ritualSceneState';
+import type { RitualTableDisplay } from '@/lib/ritualSceneState';
+import { createTableChat, type TableChatBubble } from '@/lib/tableChat';
 
 // The table uses public seats and ritual progress. A selection and wax seal are
 // local to this browser; final roles are read only from public player fields.
 const props = defineProps<{
     players: Player[];
+    messages?: RoomState['messages'];
+    serverTime?: string;
+    chatSuppressed?: boolean;
     phase: RoomState['phase'];
     phaseId: number;
+    display?: RitualTableDisplay;
     meId: string;
     submitted: boolean;
     actionSerial: number;
@@ -29,6 +35,32 @@ const projectedSeats = ref<{ left: string; top: string }[]>([]);
 const visualMode = ref<'3d' | 'simple'>('simple');
 const sceneReady = ref(false);
 const sceneUnavailable = ref(false);
+const chat = createTableChat();
+const chatBubbles = ref<TableChatBubble[]>([]);
+let chatExpiry: ReturnType<typeof setTimeout> | undefined;
+function expireChat() {
+    clearTimeout(chatExpiry);
+    chatBubbles.value = chat.expire(Date.now());
+    const deadline = Math.min(
+        ...chatBubbles.value.map((bubble) => bubble.expiresAt),
+    );
+    if (Number.isFinite(deadline))
+        chatExpiry = setTimeout(expireChat, Math.max(1, deadline - Date.now()));
+}
+watch(
+    () => [props.messages, props.players, props.chatSuppressed],
+    () => {
+        chatBubbles.value = chat.update(
+            props.messages ?? [],
+            props.players,
+            props.serverTime ?? '',
+            !!props.chatSuppressed,
+            Date.now(),
+        );
+        expireChat();
+    },
+    { immediate: true },
+);
 const sceneState = computed(() =>
     ritualSceneState({
         phase: props.phase,
@@ -41,6 +73,7 @@ const sceneSeats = computed(() =>
     props.players.map((player, index) => {
         const position = seatStyle(index);
         return {
+            id: player.id,
             x: Number.parseFloat(position.left) / 100,
             y: Number.parseFloat(position.top) / 100,
             alive: player.alive,
@@ -62,6 +95,7 @@ function unavailable() {
     visualMode.value = 'simple';
 }
 onMounted(() => {
+    document.addEventListener('visibilitychange', expireChat);
     try {
         visualMode.value =
             localStorage.getItem('chanting-table-visuals') === 'simple'
@@ -195,6 +229,8 @@ watch(
     },
 );
 onBeforeUnmount(() => {
+    clearTimeout(chatExpiry);
+    document.removeEventListener('visibilitychange', expireChat);
     timers.forEach(clearTimeout);
 });
 </script>
@@ -204,11 +240,13 @@ onBeforeUnmount(() => {
         class="table-panel table-panel-immersive"
         :class="{
             'phase-arriving': phaseChanging,
+            'has-actions': !!$slots.briefing || !!$slots.actions,
         }"
         :data-phase="phase"
         :data-winner="winner"
         aria-label="The village card table"
     >
+        <slot name="briefing" />
         <div class="table-topline">
             <span class="eyebrow">THE VILLAGE TABLE</span>
             <div class="table-visuals" role="group" aria-label="Table visuals">
@@ -256,6 +294,8 @@ onBeforeUnmount(() => {
                 interactive
                 :state="sceneState"
                 :seats="sceneSeats"
+                :display="display"
+                :bubbles="chatBubbles"
                 @positions="projectedSeats = $event"
                 @ready="sceneReady = $event"
                 @unavailable="unavailable"
@@ -389,6 +429,7 @@ onBeforeUnmount(() => {
                 >
             </component>
         </div>
+        <slot name="actions" />
         <div v-if="sceneReady" class="table-summoning-status">
             <Flame :size="15" aria-hidden="true" />
             <span
@@ -622,6 +663,25 @@ onBeforeUnmount(() => {
     height: auto;
     width: 100%;
     max-width: none;
+}
+.table-panel-immersive.has-actions {
+    height: auto;
+    min-height: 100%;
+    overflow: visible;
+}
+.table-panel-immersive.has-actions .card-table {
+    flex: 1 0 clamp(240px, 38dvh, 480px);
+}
+.table-panel-immersive.has-actions > :not(.card-table) {
+    flex-shrink: 0;
+}
+@media (max-width: 900px) {
+    .table-panel-immersive.has-actions {
+        min-height: 0;
+    }
+    .table-panel-immersive.has-actions .card-table {
+        flex: 0 0 230px;
+    }
 }
 .table-panel-immersive .table-seat {
     z-index: 1;

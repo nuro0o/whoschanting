@@ -146,18 +146,27 @@ class IllusionRolesTest extends TestCase
         }
     }
 
-    public function test_forgery_can_frame_town_as_cult_and_fades_the_next_night(): void
+    public function test_forgery_can_frame_town_as_cult(): void
     {
         $this->act('counterfeiter', 'night', ['target' => $this->ids['exorcist'], 'use_ability' => true, 'forged_alignment' => 'cult']);
         $this->act('oracle', 'night', ['target' => $this->ids['exorcist']]);
         $this->expire();
         $this->assertSame('cult', $this->stateFor('oracle')['me']['results'][0]['alignment']);
         $this->assertNull($this->stateFor('exorcist')['me']['curse']);
+    }
+
+    public function test_forgery_fades_before_a_saved_oracle_investigation_the_next_night(): void
+    {
+        $this->act('counterfeiter', 'night', ['target' => $this->ids['exorcist'], 'use_ability' => true, 'forged_alignment' => 'cult']);
+        $this->act('oracle', 'night');
+        $this->expire();
+        $this->assertFalse($this->stateFor('oracle')['me']['ability_used']);
+        $this->assertSame([], $this->stateFor('oracle')['me']['results']);
         $this->expire();
         $this->expire();
         $this->act('oracle', 'night', ['target' => $this->ids['exorcist']]);
         $this->expire();
-        $this->assertSame('town', $this->stateFor('oracle')['me']['results'][1]['alignment']);
+        $this->assertSame('town', $this->stateFor('oracle')['me']['results'][0]['alignment']);
     }
 
     public function test_stale_and_missed_night_abilities_remain_available(): void

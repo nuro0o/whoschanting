@@ -41,7 +41,15 @@ export function ritualSceneState(input: RitualSceneInput) {
 }
 
 export type RitualSceneState = ReturnType<typeof ritualSceneState>;
+/** Public display copy; the renderer never owns a countdown or game clock. */
+export interface RitualTableDisplay {
+    phase: string;
+    value: string;
+    detail: string;
+    urgent: boolean;
+}
 export interface RitualSceneSeat {
+    id?: string;
     x: number;
     y: number;
     alive: boolean;

@@ -1,13 +1,20 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import type { RitualSceneSeat, RitualSceneState } from '@/lib/ritualSceneState';
+import type {
+    RitualSceneSeat,
+    RitualSceneState,
+    RitualTableDisplay,
+} from '@/lib/ritualSceneState';
 import type { RitualTableRenderer } from '@/lib/ritualTableRenderer';
+import type { TableChatBubble } from '@/lib/tableChat';
 
 const props = defineProps<{
     enabled: boolean;
     state: RitualSceneState;
     seats: RitualSceneSeat[];
     interactive?: boolean;
+    display?: RitualTableDisplay;
+    bubbles?: TableChatBubble[];
 }>();
 const emit = defineEmits<{
     ready: [ready: boolean];
@@ -44,7 +51,9 @@ async function start() {
             },
             props.interactive,
             (positions) => emit('positions', positions),
+            props.display,
         );
+        renderer.updateBubbles(props.bubbles ?? []);
         emit('ready', true);
     } catch {
         if (!mounted || current !== generation) return;
@@ -54,6 +63,14 @@ async function start() {
 }
 watch(() => [props.enabled, props.interactive], start);
 defineExpose({ resetView: () => renderer?.resetView() });
+watch(
+    () => props.bubbles,
+    () => renderer?.updateBubbles(props.bubbles ?? []),
+);
+watch(
+    () => props.display,
+    () => renderer?.updateDisplay(props.display),
+);
 watch(
     () => [props.state, props.seats],
     () => renderer?.update(props.state, props.seats),

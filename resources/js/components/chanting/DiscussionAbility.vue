@@ -95,20 +95,35 @@ const available = computed(() =>
 
 <style scoped>
 .discussion-ability {
-    margin-block: 20px;
-    padding-block: 18px;
-    border-block: 1px solid var(--line);
+    display: flex;
+    align-items: end;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid var(--line);
 }
 h3 {
-    margin-bottom: 8px;
+    width: 100%;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 14px;
+    font-weight: 600;
+}
+p {
+    width: 100%;
+    color: #b9c5b8;
+    font-size: 12px;
+    line-height: 1.5;
 }
 label {
     display: grid;
+    flex: 1 1 220px;
     gap: 8px;
-    margin-block: 12px;
+    font-size: 12px;
 }
 select {
     width: 100%;
+    min-height: 46px;
     padding: 10px;
     background: var(--panel, #152226);
     color: var(--text, #eee);

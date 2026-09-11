@@ -1,5 +1,6 @@
 import type { ChaosEvent, ModeSetup } from './gameModes';
 import type { MatchReward, PublicCustomization } from './progression';
+import type { TableChatMessage } from './tableChat';
 
 export class RoomError extends Error {
     constructor(
@@ -218,7 +219,7 @@ export interface RoomState {
         curse: Curse | null;
         curse_notice: string | null;
     };
-    messages: { id: string; name: string; body: string; day: number }[];
+    messages: TableChatMessage[];
     log: string[];
     rules: {
         min_players: number;
@@ -323,7 +324,7 @@ export const roles: Record<
         name: 'The Oracle',
         subtitle: 'Town · seeker of secrets',
         description:
-            'Each night, investigate another living player’s alignment. Beware: the Veilweaver can reverse a reading, and the Counterfeiter can forge one when that role is in play.',
+            'Once per match, investigate another living player at night to learn their apparent alignment. Keep watch to save your investigation for later. Submitting it spends the ability even if disrupted. Beware: the Veilweaver can reverse a reading, and the Counterfeiter can forge one when that role is in play.',
         symbol: '☾',
     },
     townsperson: {

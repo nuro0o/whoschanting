@@ -1,9 +1,21 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import type { RitualSceneSeat, RitualSceneState } from './ritualSceneState';
+import {
+    placeTableChatBubble,
+    wrapTableChat,
+    type TableChatBubble,
+    type TableChatRect,
+} from './tableChat';
+import type {
+    RitualSceneSeat,
+    RitualSceneState,
+    RitualTableDisplay,
+} from './ritualSceneState';
 
 export interface RitualTableRenderer {
     update: (state: RitualSceneState, seats: RitualSceneSeat[]) => void;
+    updateDisplay: (display?: RitualTableDisplay) => void;
+    updateBubbles: (bubbles: TableChatBubble[]) => void;
     dispose: () => void;
     resetView: () => void;
 }
@@ -16,6 +28,7 @@ export function createRitualTable(
     failed: () => void,
     interactive = false,
     projectSeats?: (positions: { left: string; top: string }[]) => void,
+    initialDisplay?: RitualTableDisplay,
 ): RitualTableRenderer {
     const canvas = document.createElement('canvas');
     canvas.setAttribute('aria-hidden', 'true');
@@ -41,6 +54,7 @@ export function createRitualTable(
     let clock = 0;
     let state = initial;
     let seats = initialSeats;
+    let display = initialDisplay;
     let projectionKey = '';
     let darkness = initial.night ? 1 : 0;
     let emergence = initial.emergence;
@@ -175,6 +189,273 @@ export function createRitualTable(
         canvas.addEventListener('webglcontextlost', contextLost);
         host.append(canvas);
 
+        const speech = new Map<
+            string,
+            {
+                bubble: TableChatBubble;
+                sprite: THREE.Sprite;
+                texture: THREE.CanvasTexture;
+                ink: CanvasRenderingContext2D;
+                lines: string[];
+                lineLimit: number;
+                leader: THREE.Line<
+                    THREE.BufferGeometry,
+                    THREE.LineBasicMaterial
+                >;
+            }
+        >();
+        function removeSpeech(id: string) {
+            const entry = speech.get(id);
+            if (!entry) return;
+            scene.remove(entry.sprite, entry.leader);
+            entry.leader.geometry.dispose();
+            entry.leader.material.dispose();
+            geometries.delete(entry.leader.geometry);
+            materials.delete(entry.leader.material);
+            entry.sprite.material.dispose();
+            entry.texture.dispose();
+            materials.delete(entry.sprite.material);
+            textures.delete(entry.texture);
+            speech.delete(id);
+        }
+        function paintSpeech(
+            entry: typeof speech extends Map<string, infer T> ? T : never,
+        ) {
+            const { ink, lines, bubble } = entry;
+            const width = ink.canvas.width;
+            const height = ink.canvas.height;
+            ink.clearRect(0, 0, width, height);
+            ink.fillStyle = '#eee3c8';
+            ink.strokeStyle = '#bda46b';
+            ink.lineWidth = 3;
+            ink.beginPath();
+            ink.roundRect(3, 3, width - 6, height - 6, 22);
+            ink.fill();
+            ink.stroke();
+            ink.fillStyle = '#435e56';
+            ink.font = 'bold 28px Georgia, serif';
+            ink.textBaseline = 'top';
+            ink.fillText(
+                wrapTableChat(
+                    bubble.name,
+                    (text) => ink.measureText(text).width,
+                    450,
+                    1,
+                )[0] ?? '',
+                28,
+                21,
+            );
+            ink.fillStyle = '#243c36';
+            ink.font = '34px Georgia, serif';
+            lines.forEach((line, index) =>
+                ink.fillText(line, 28, 64 + index * 43),
+            );
+            entry.texture.needsUpdate = true;
+        }
+        function updateBubbles(next: TableChatBubble[]) {
+            if (disposed) return;
+            for (const [id] of speech) {
+                if (!next.some((bubble) => bubble.id === id)) removeSpeech(id);
+            }
+            for (const bubble of next) {
+                if (speech.has(bubble.id) || bubble.expiresAt <= Date.now())
+                    continue;
+                const paper = document.createElement('canvas');
+                paper.width = 512;
+                const ink = paper.getContext('2d');
+                if (!ink) continue;
+                ink.font = '34px Georgia, serif';
+                const lines = wrapTableChat(
+                    bubble.body,
+                    (text) => ink.measureText(text).width,
+                    456,
+                    3,
+                );
+                paper.height = 80 + lines.length * 43;
+                const texture = new THREE.CanvasTexture(paper);
+                texture.colorSpace = THREE.SRGBColorSpace;
+                const material = new THREE.SpriteMaterial({
+                    map: texture,
+                    depthTest: false,
+                    depthWrite: false,
+                    toneMapped: false,
+                });
+                materials.add(material);
+                textures.add(texture);
+                const sprite = new THREE.Sprite(material);
+                sprite.renderOrder = 20;
+                sprite.center.set(0.5, 0);
+                const leaderGeometry = new THREE.BufferGeometry();
+                leaderGeometry.setAttribute(
+                    'position',
+                    new THREE.Float32BufferAttribute(new Float32Array(6), 3),
+                );
+                const leaderMaterial = new THREE.LineBasicMaterial({
+                    color: 0xd5bd85,
+                    depthTest: false,
+                    depthWrite: false,
+                    toneMapped: false,
+                    transparent: true,
+                    opacity: 0.95,
+                });
+                const leader = new THREE.Line(leaderGeometry, leaderMaterial);
+                leader.frustumCulled = false;
+                leader.renderOrder = 19;
+                geometries.add(leaderGeometry);
+                materials.add(leaderMaterial);
+                scene.add(sprite, leader);
+                const entry = {
+                    bubble,
+                    sprite,
+                    texture,
+                    ink,
+                    lines,
+                    lineLimit: 3,
+                    leader,
+                };
+                speech.set(bubble.id, entry);
+                paintSpeech(entry);
+            }
+            schedule();
+        }
+        function positionSpeech() {
+            const width = Math.max(1, host.clientWidth);
+            const height = Math.max(1, host.clientHeight);
+            const mobile = window.innerWidth <= 900;
+            const worldPerPixel =
+                (camera.top - camera.bottom) / height / camera.zoom;
+            const up = new THREE.Vector3(0, 1, 0).applyQuaternion(
+                camera.quaternion,
+            );
+            const right = new THREE.Vector3(1, 0, 0).applyQuaternion(
+                camera.quaternion,
+            );
+            const project = (point: THREE.Vector3) => {
+                const projected = point.clone().project(camera);
+                return {
+                    x: ((projected.x + 1) * width) / 2,
+                    y: ((1 - projected.y) * height) / 2,
+                };
+            };
+            const seatPoint = (seat: RitualSceneSeat) =>
+                new THREE.Vector3(
+                    (seat.x - 0.5) * 10,
+                    0.9,
+                    (seat.y - 0.5) * 7.2,
+                );
+            const obstacles: TableChatRect[] = mobile
+                ? []
+                : seats.map((seat) => {
+                      const point = project(seatPoint(seat));
+                      return {
+                          x: point.x - 48,
+                          y: point.y - 53,
+                          width: 96,
+                          height: 108,
+                      };
+                  });
+            // Protect the whole brass dial, including its foreshortened text.
+            if (display) {
+                const points = Array.from({ length: 16 }, (_, index) => {
+                    const angle = (index / 16) * Math.PI * 2;
+                    return project(
+                        new THREE.Vector3(
+                            Math.cos(angle) * 1.35,
+                            0.36,
+                            Math.sin(angle) * 1.35,
+                        ),
+                    );
+                });
+                const x = Math.min(...points.map((point) => point.x));
+                const y = Math.min(...points.map((point) => point.y));
+                obstacles.push({
+                    x,
+                    y,
+                    width: Math.max(...points.map((point) => point.x)) - x,
+                    height: Math.max(...points.map((point) => point.y)) - y,
+                });
+            }
+            let shown = 0;
+            // Newest speech gets first choice of space. Compact tables show one
+            // complete message; older entries remain in the ordinary transcript.
+            for (const [id, entry] of [...speech].reverse()) {
+                const seat = seats.find(
+                    (seat) => seat.id === entry.bubble.playerId,
+                );
+                if (!seat || entry.bubble.expiresAt <= Date.now()) {
+                    removeSpeech(id);
+                    continue;
+                }
+                const { sprite, leader } = entry;
+                const lineLimit = mobile ? 2 : 3;
+                if (entry.lineLimit !== lineLimit) {
+                    entry.ink.font = '34px Georgia, serif';
+                    entry.lines = wrapTableChat(
+                        entry.bubble.body,
+                        (text) => entry.ink.measureText(text).width,
+                        456,
+                        lineLimit,
+                    );
+                    entry.ink.canvas.height = 80 + entry.lines.length * 43;
+                    entry.lineLimit = lineLimit;
+                    paintSpeech(entry);
+                }
+                sprite.visible = leader.visible = false;
+                if (mobile && shown >= 1) continue;
+                const pixels = Math.min(
+                    width - 16,
+                    (mobile ? 184 : 194) * camera.zoom,
+                );
+                const bubbleHeight = (pixels * entry.ink.canvas.height) / 512;
+                const anchorWorld = seatPoint(seat).addScaledVector(
+                    up,
+                    (mobile ? 8 : 53) * worldPerPixel,
+                );
+                const anchor = project(anchorWorld);
+                const placed = placeTableChatBubble(
+                    anchor,
+                    { width: pixels, height: bubbleHeight },
+                    { width, height },
+                    obstacles,
+                );
+                if (!placed) continue;
+                shown++;
+                obstacles.push(placed);
+                sprite.visible = leader.visible = true;
+                sprite.scale.set(
+                    pixels * worldPerPixel,
+                    bubbleHeight * worldPerPixel,
+                    1,
+                );
+                sprite.position
+                    .copy(anchorWorld)
+                    .addScaledVector(
+                        right,
+                        (placed.x + pixels / 2 - anchor.x) * worldPerPixel,
+                    )
+                    .addScaledVector(
+                        up,
+                        (anchor.y - placed.y - bubbleHeight) * worldPerPixel,
+                    );
+                const endX = Math.max(
+                    placed.x + 12,
+                    Math.min(placed.x + pixels - 12, anchor.x),
+                );
+                const endY = Math.max(
+                    placed.y + 8,
+                    Math.min(placed.y + bubbleHeight - 2, anchor.y),
+                );
+                const end = anchorWorld
+                    .clone()
+                    .addScaledVector(right, (endX - anchor.x) * worldPerPixel)
+                    .addScaledVector(up, (anchor.y - endY) * worldPerPixel);
+                const vertices = leader.geometry.getAttribute('position');
+                vertices.setXYZ(0, anchorWorld.x, anchorWorld.y, anchorWorld.z);
+                vertices.setXYZ(1, end.x, end.y, end.z);
+                vertices.needsUpdate = true;
+            }
+        }
+
         const ambient = new THREE.HemisphereLight(0xc6ded0, 0x20252b, 2.2);
         scene.add(ambient);
         const warm = new THREE.DirectionalLight(0xffd39a, 3.5);
@@ -283,6 +564,98 @@ export function createRitualTable(
         const portal = mesh(new THREE.CircleGeometry(0.73, 64), portalMaterial);
         portal.rotation.x = -Math.PI / 2;
         portal.position.y = 0.242;
+
+        // An enamel dial set into the seal. Only its ink rotates toward the
+        // viewer: it remains a physical surface, with normal depth and zoom.
+        const dial = new THREE.Group();
+        scene.add(dial);
+        dial.visible = !!display;
+        dial.scale.set(1.22, 1, 1.22);
+        const dialBase = mesh(
+            new THREE.CylinderGeometry(1.24, 1.3, 0.09, 96),
+            black,
+            dial,
+        );
+        dialBase.position.y = 0.29;
+        const dialRim = mesh(
+            new THREE.TorusGeometry(1.25, 0.035, 8, 96),
+            brass,
+            dial,
+        );
+        dialRim.rotation.x = Math.PI / 2;
+        dialRim.position.y = 0.34;
+        const dialCanvas = document.createElement('canvas');
+        dialCanvas.width = dialCanvas.height = 1024;
+        const dialInk = dialCanvas.getContext('2d');
+        if (!dialInk) throw new Error('Table dial unavailable');
+        const dialTexture = new THREE.CanvasTexture(dialCanvas);
+        dialTexture.colorSpace = THREE.SRGBColorSpace;
+        dialTexture.anisotropy = Math.min(
+            4,
+            renderer.capabilities.getMaxAnisotropy(),
+        );
+        textures.add(dialTexture);
+        const dialFace = mesh(
+            new THREE.CircleGeometry(1.23, 96),
+            new THREE.MeshBasicMaterial({
+                map: dialTexture,
+                toneMapped: false,
+            }),
+            dial,
+        );
+        dialFace.rotation.x = -Math.PI / 2;
+        dialFace.position.y = 0.342;
+        let displayKey = '';
+        function drawDial() {
+            if (!display) return;
+            const nextKey = JSON.stringify(display);
+            if (nextKey === displayKey) return;
+            displayKey = nextKey;
+            const ink = dialInk!;
+            ink.fillStyle = '#132526';
+            ink.fillRect(0, 0, 1024, 1024);
+            ink.strokeStyle = '#a99665';
+            ink.lineWidth = 3;
+            ink.beginPath();
+            ink.arc(512, 512, 478, 0, Math.PI * 2);
+            ink.stroke();
+            for (let i = 0; i < 60; i++) {
+                const angle = (i / 60) * Math.PI * 2;
+                const inner = i % 5 === 0 ? 432 : 450;
+                ink.strokeStyle = i % 5 === 0 ? '#d0b980' : '#6d7154';
+                ink.lineWidth = i % 5 === 0 ? 5 : 2;
+                ink.beginPath();
+                ink.moveTo(
+                    512 + Math.sin(angle) * inner,
+                    512 + Math.cos(angle) * inner,
+                );
+                ink.lineTo(
+                    512 + Math.sin(angle) * 465,
+                    512 + Math.cos(angle) * 465,
+                );
+                ink.stroke();
+            }
+            ink.textAlign = 'center';
+            ink.textBaseline = 'middle';
+            ink.fillStyle = '#e1c990';
+            ink.font = '600 104px Georgia, serif';
+            ink.fillText(display.phase.toUpperCase(), 512, 305, 710);
+            ink.fillStyle = display.urgent ? '#ffb797' : '#fff0cc';
+            ink.font = /^\d+:\d{2}$/.test(display.value)
+                ? 'bold 240px Georgia, serif'
+                : 'bold 148px Georgia, serif';
+            ink.fillText(display.value, 512, 510, 830);
+            ink.strokeStyle = '#a99665';
+            ink.lineWidth = 2;
+            ink.beginPath();
+            ink.moveTo(360, 672);
+            ink.lineTo(664, 672);
+            ink.stroke();
+            ink.fillStyle = '#c2d0b6';
+            ink.font = '600 62px Georgia, serif';
+            ink.fillText(display.detail.toUpperCase(), 512, 755, 690);
+            dialTexture.needsUpdate = true;
+        }
         const runes: THREE.MeshStandardMaterial[] = [];
         const runeGroup = new THREE.Group();
         scene.add(runeGroup);
@@ -490,6 +863,22 @@ export function createRitualTable(
 
         function render(delta = 0) {
             if (disposed) return;
+            drawDial();
+            const sealScale = display ? 1.62 : 1;
+            seal.scale.set(sealScale, 1, sealScale);
+            sealRing.scale.setScalar(sealScale);
+            runeGroup.scale.set(display ? 1.7 : 1, 1, display ? 1.7 : 1);
+            innerSeal.visible = !display;
+            portal.visible = !display;
+            const azimuth = controls.getAzimuthalAngle();
+            dial.rotation.y = azimuth;
+            // Keep the ritual visible beyond the dial, leaving its face clear
+            // even when the creature fully emerges or the camera is orbited.
+            tentacles.position.set(
+                display ? -Math.sin(azimuth) * 1.9 : 0,
+                0.25,
+                display ? -Math.cos(azimuth) * 1.9 : 0,
+            );
             const blend = motion.matches ? 1 : 1 - Math.exp(-delta * 2);
             darkness += ((state.night ? 1 : 0) - darkness) * blend;
             emergence += (state.emergence - emergence) * blend;
@@ -502,7 +891,9 @@ export function createRitualTable(
                 : 0.04 + state.progress * 0.26;
             crackMaterial.opacity = state.cracks * 0.6;
             tentacles.visible = emergence > 0.005;
-            tentacles.scale.setScalar(Math.max(0.001, emergence));
+            tentacles.scale.setScalar(
+                Math.max(0.001, emergence * (display ? 0.65 : 1)),
+            );
             tentacles.children.forEach((arm, i) => {
                 arm.rotation.z = motion.matches
                     ? 0
@@ -512,9 +903,11 @@ export function createRitualTable(
             wisps.forEach((wisp, i) => {
                 const time = motion.matches ? 0 : clock * 0.15;
                 wisp.position.set(
-                    Math.sin(i * 2.4 + time) * 0.95,
+                    Math.sin(i * 2.4 + time) * 0.95 -
+                        (display ? Math.sin(azimuth) * 1.9 : 0),
                     0.5 + Math.sin(i + time) * 0.2,
-                    Math.cos(i * 2.4 + time) * 0.95,
+                    Math.cos(i * 2.4 + time) * 0.95 -
+                        (display ? Math.cos(azimuth) * 1.9 : 0),
                 );
             });
             runes.forEach((material, i) => {
@@ -529,6 +922,7 @@ export function createRitualTable(
             dust.rotation.y = motion.matches
                 ? 0
                 : Math.sin(clock * 0.035) * 0.12;
+            positionSpeech();
             renderer.render(scene, camera);
             if (interactive && projectSeats) {
                 const positions = seats.map((seat) => {
@@ -627,6 +1021,13 @@ export function createRitualTable(
                 schedule();
             },
             dispose,
+            updateBubbles,
+            updateDisplay(next) {
+                if (disposed) return;
+                display = next;
+                dial.visible = !!display;
+                schedule();
+            },
             resetView: () => {
                 controls.reset();
                 schedule();

@@ -27,7 +27,7 @@ class CurseEngine
         $puzzles = ['rings', 'towers'];
 
         return ['id' => (string) Str::uuid(), 'type' => $type, 'level' => $level, 'day' => $day,
-            'stage' => 1, 'stages' => 4 - $level,
+            'stage' => 1, 'stages' => 3,
             ...$this->challenge(match ($type) {
                 'mist' => 'lanterns',
                 'misdirection' => 'rings',
@@ -219,15 +219,15 @@ class CurseEngine
         shuffle($runes);
         $options = [];
         $solution = [];
-        $scene = ['kind' => $kind, 'difficulty' => $level, 'guided' => $level === 1];
+        $scene = ['kind' => $kind, 'difficulty' => $level, 'guided' => false];
 
         if ($kind === 'rings') {
             $title = 'The astral lock';
             $instruction = 'Rotate each ring until its glowing notch points to the north beacon. Every touch turns a ring one quarter clockwise.';
             $clues = ['Align every notch with NORTH, then break the curse. Rings are numbered from the inside out.'];
             $scene['rings'] = [];
-            for ($ring = 0; $ring < [1 => 2, 2 => 3, 3 => 5][$level]; $ring++) {
-                $start = $level === 1 ? 3 : random_int($level === 2 ? 2 : 1, 3);
+            for ($ring = 0; $ring < [1 => 3, 2 => 4, 3 => 5][$level]; $ring++) {
+                $start = random_int(1, 2);
                 $ids = [];
                 for ($turn = 0; $turn < 4; $turn++) {
                     $id = (string) Str::uuid();
@@ -242,18 +242,14 @@ class CurseEngine
                 $title = 'The sunken spires';
                 $instruction = 'Wake the stone towers from shortest to tallest. Turn the scene to compare their heights, then touch each tower in order.';
                 $clues = ['Judge the height of the stone, not how high its label appears on your screen. Each tower is used once.'];
-                $labels = array_slice($runes, 0, [1 => 3, 2 => 4, 3 => 6][$level]);
+                $labels = array_slice($runes, 0, [1 => 4, 2 => 5, 3 => 6][$level]);
             } else {
                 $title = 'Lanterns in the mist';
-                $instruction = $level === 1
-                    ? 'Light lantern 1, then 2, then 3. Follow the numbers, not their heights. Each light pushes back the mist.'
-                    : 'Light the lanterns by number, smallest number first. Ignore words; lantern height does not matter. Each light pushes back the mist.';
+                $instruction = 'Light the lanterns by number, smallest number first. Ignore words; lantern height does not matter. Each light pushes back the mist.';
                 $clues = ['Orbit the scene to find the lanterns. Follow their numbers, not their heights.'];
-                $numbers = range(1, [1 => 3, 2 => 20, 3 => 90][$level]);
-                if ($level > 1) {
-                    shuffle($numbers);
-                }
-                $labels = [...array_map(strval(...), array_slice($numbers, 0, [1 => 3, 2 => 5, 3 => 8][$level])), ...array_slice($runes, 0, $level - 1)];
+                $numbers = range(1, [1 => 30, 2 => 60, 3 => 90][$level]);
+                shuffle($numbers);
+                $labels = [...array_map(strval(...), array_slice($numbers, 0, [1 => 5, 2 => 6, 3 => 8][$level])), ...array_slice($runes, 0, $level)];
             }
             shuffle($labels);
             $heights = range(0, count($labels) - 1);
@@ -266,7 +262,7 @@ class CurseEngine
                 $angle = 2 * M_PI * $index / count($labels);
                 $radius = $index % 2 === 0 ? 2.8 : 2.0;
                 $height = $kind === 'towers'
-                    ? round(0.6 + $heights[$index] * [1 => 0.85, 2 => 0.6, 3 => 0.35][$level], 2)
+                    ? round(0.6 + $heights[$index] * [1 => 0.55, 2 => 0.4, 3 => 0.3][$level], 2)
                     : round(0.9 + $heights[$index] * [1 => 0, 2 => 0.12, 3 => 0.17][$level], 2);
                 // Short lanterns in separated rows keep numbers readable on phones.
                 $columns = $level === 3 ? 4 : 3;

@@ -38,6 +38,7 @@ export function privateResultText(result: PrivateNightResult): string {
 
 export function hasLimitedAbility(role: string | null): boolean {
     return [
+        'oracle',
         'medium',
         'dreamweaver',
         'bellkeeper',
@@ -79,6 +80,8 @@ export function nightActionLabel(
     useAbility: boolean,
     target: string | null,
 ): string {
+    if (useAbility && state.me.role === 'oracle')
+        return 'Confirm investigation';
     if (useAbility && state.me.role === 'herbalist')
         return 'Protect the village';
     if (state.me.role === 'tracker') return 'Confirm tracking';
@@ -92,7 +95,6 @@ export function nightActionLabel(
             : state.me.role === 'dreamweaver'
               ? 'Disrupt instead of chanting'
               : 'Ring the bell';
-    if (state.me.role === 'oracle') return 'Confirm investigation';
     if (state.me.role === 'warden')
         return target ? 'Confirm protection' : 'Confirm skipped protection';
     if (state.me.role === 'lamplighter') return 'Confirm observation';

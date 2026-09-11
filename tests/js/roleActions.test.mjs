@@ -87,6 +87,34 @@ await test('limited abilities switch target pools only when selected and availab
     assert.equal(nightActionLabel(bell, false, null), 'Keep watch tonight');
 });
 
+await test('Oracle can save its investigation and cannot target at night after spending it', () => {
+    const oracle = {
+        ...state,
+        me: {
+            id: 'me',
+            role: 'oracle',
+            alignment: 'town',
+            ability_used: false,
+        },
+    };
+    assert.deepEqual(eligibleTargets(oracle), []);
+    assert.equal(nightActionLabel(oracle, false, null), 'Keep watch tonight');
+    assert.deepEqual(
+        eligibleTargets(oracle, true).map((p) => p.id),
+        ['previous', 'neighbor'],
+    );
+    assert.equal(
+        nightActionLabel(oracle, true, 'neighbor'),
+        'Confirm investigation',
+    );
+    const spent = { ...oracle, me: { ...oracle.me, ability_used: true } };
+    assert.deepEqual(eligibleTargets(spent, true), []);
+    assert.deepEqual(
+        eligibleTargets({ ...spent, phase: 'voting' }).map((p) => p.id),
+        ['previous', 'neighbor'],
+    );
+});
+
 await test('private ability results distinguish true alignment, failed actions, and prevented progress', () => {
     const result = { day: 2, target: 'Mara' };
     assert.equal(

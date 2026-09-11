@@ -8,6 +8,8 @@ const props = defineProps<{
     state: RoomState;
     pending: boolean;
     timeLabel: string;
+    revealed: boolean;
+    roleRead: boolean;
 }>();
 const step = computed(() => {
     const { phase, me } = props.state;
@@ -18,13 +20,20 @@ const step = computed(() => {
         ];
     if (phase === 'finished')
         return [
-            'Match complete',
-            'Review the revealed roles and start another game.',
+            props.state.winner === 'cult'
+                ? 'The cult prevails.'
+                : 'The town prevails.',
+            props.state.win_reason ||
+                'Every role is now face-up around the table.',
         ];
     if (!me.alive)
         return [
             'You are watching',
-            'Follow the chat and public events until the next match.',
+            phase === 'night'
+                ? 'The living are making their moves. Wait for dawn.'
+                : phase === 'voting'
+                  ? 'The living are deciding who to banish. The result arrives shortly.'
+                  : 'Follow the chat and public events until the next match.',
         ];
     if (me.submitted)
         return phase === 'reveal'
@@ -40,12 +49,16 @@ const step = computed(() => {
     if (phase === 'reveal')
         return [
             'Read your private role',
-            'Open My role, read your objective, then confirm you are ready.',
+            props.roleRead
+                ? 'Keep your objective, ability and team secret. Confirm when ready.'
+                : 'Reveal your card and read your objective, ability and team first.',
         ];
     if (phase === 'night')
         return [
             'Make your night move',
-            'Reveal your secrets to choose and confirm your private action.',
+            props.revealed
+                ? 'Choose your action below, then confirm. Your choice is final.'
+                : 'Your role and night action stay hidden until you reveal them.',
         ];
     if (props.state.ritual.final_vote)
         return phase === 'discussion'
@@ -60,7 +73,7 @@ const step = computed(() => {
     if (phase === 'discussion')
         return [
             'Discuss with the village',
-            'Compare stories in Chat, then mark yourself ready for voting.',
+            'Compare stories in chat or on a call. Voting starts when everyone is ready or the timer ends.',
         ];
     return [
         'Choose, then confirm your vote',
@@ -76,21 +89,112 @@ const step = computed(() => {
         aria-labelledby="turn-heading"
         tabindex="-1"
     >
-        <div class="turn-heading">
-            <p class="eyebrow">
-                <Check v-if="state.me.submitted" :size="14" /> YOUR TURN
-            </p>
-            <span class="turn-pending" role="status">
-                {{ pending ? 'Sending…' : '' }}
-            </span>
-            <span v-if="timeLabel" class="turn-time"
-                ><Clock3 :size="14" /> {{ timeLabel }} left</span
-            >
-        </div>
-        <div class="turn-status" role="status" aria-atomic="true">
-            <h2 id="turn-heading">{{ step[0] }}</h2>
-            <p>{{ step[1] }}</p>
+        <h2 v-if="state.phase === 'lobby'" id="turn-heading" class="sr-only">
+            Get everyone ready
+        </h2>
+        <div v-else id="current-action" class="phase-control-row" tabindex="-1">
+            <div class="phase-summary">
+                <div class="turn-heading">
+                    <p class="eyebrow">
+                        <Check v-if="state.me.submitted" :size="12" />
+                        {{
+                            state.phase === 'finished'
+                                ? 'MATCH COMPLETE'
+                                : state.phase
+                        }}
+                    </p>
+                    <span v-if="pending" class="turn-pending" role="status"
+                        >Sending…</span
+                    >
+                    <span v-if="timeLabel" class="turn-time">
+                        <Clock3 :size="12" /> {{ timeLabel }} left
+                    </span>
+                </div>
+                <div class="turn-status" role="status" aria-atomic="true">
+                    <h2 id="turn-heading">{{ step[0] }}</h2>
+                    <p>{{ step[1] }}</p>
+                    <p
+                        v-if="state.phase === 'discussion' && state.me.alive"
+                        class="phase-readiness"
+                    >
+                        {{
+                            state.players.filter(
+                                (player) =>
+                                    player.alive && player.discussion_ready,
+                            ).length
+                        }}
+                        of
+                        {{
+                            state.players.filter((player) => player.alive)
+                                .length
+                        }}
+                        ready for voting. This choice is final.
+                    </p>
+                    <p
+                        v-if="
+                            state.phase === 'finished' &&
+                            state.host_id !== state.me.id
+                        "
+                    >
+                        Your host can start a new gathering. Your seat is saved.
+                    </p>
+                </div>
+            </div>
+            <div class="phase-buttons"><slot name="controls" /></div>
         </div>
         <slot />
     </section>
 </template>
+
+<style scoped>
+.phase-control-row {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 16px 24px;
+}
+.phase-summary {
+    flex: 1 1 240px;
+    min-width: 0;
+}
+.turn-heading {
+    justify-content: flex-start;
+    flex-wrap: wrap;
+    gap: 8px 14px;
+    margin-bottom: 6px;
+}
+.turn-heading .eyebrow {
+    color: #b7c6a7;
+    font-size: 9px;
+    letter-spacing: 1.6px;
+    text-transform: uppercase;
+}
+.turn-time,
+.turn-pending {
+    min-width: 0;
+    margin: 0;
+    color: #b9c5b8;
+    font-size: 10px;
+}
+.phase-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+    max-width: 100%;
+}
+.phase-buttons:empty {
+    display: none;
+}
+@media (max-width: 900px) {
+    .phase-control-row {
+        gap: 14px;
+    }
+    .phase-buttons {
+        flex: 1 1 100%;
+    }
+    .phase-buttons :deep(.button) {
+        flex: 1;
+    }
+}
+</style>

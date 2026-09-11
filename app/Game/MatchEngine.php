@@ -213,7 +213,8 @@ class MatchEngine
             $this->ensure($p['alive'] || $s['phase'] === 'finished', 'Banished players may only watch.');
             $body = trim($a['body'] ?? '');
             $this->ensure($body !== '' && mb_strlen($body) <= 280, 'Write a message of 1–280 characters.');
-            $s['messages'][] = ['id' => (string) Str::uuid(), 'name' => $p['name'], 'body' => $body, 'day' => $s['day']];
+            $s['messages'][] = ['id' => (string) Str::uuid(), 'player_id' => $id, 'name' => $p['name'],
+                'body' => $body, 'day' => $s['day'], 'sent_at' => now()->toISOString()];
             $s['messages'] = array_slice($s['messages'], -100);
 
             return;
@@ -308,9 +309,10 @@ class MatchEngine
         }
         $this->ensure(! isset($s['actions'][$id]), 'Your action is already sealed for this phase.');
         $target = $a['target'] ?? null;
-        $useAbility = (bool) ($a['use_ability'] ?? false);
-        $this->ensure(! $useAbility || ($type === 'night' && in_array($p['role'], ['medium', 'dreamweaver', 'bellkeeper', 'phantasm', 'counterfeiter', 'herbalist'], true)), 'This action cannot use a once-per-match ability.');
-        $this->ensure(! $useAbility || ! ($p['ability_used'] ?? false), 'Your once-per-match ability has already been used.');
+        // Older clients submit Oracle investigations with just a target.
+        $useAbility = (bool) ($a['use_ability'] ?? false) || ($type === 'night' && $p['role'] === 'oracle' && $target !== null);
+        $this->ensure(! $useAbility || ($type === 'night' && in_array($p['role'], ['oracle', 'medium', 'dreamweaver', 'bellkeeper', 'phantasm', 'counterfeiter', 'herbalist'], true)), 'This action cannot use a once-per-match ability.');
+        $this->ensure(! $useAbility || ! $this->abilityUsed($p), 'Your once-per-match ability has already been used.');
         $forgedAlignment = $a['forged_alignment'] ?? null;
         $this->ensure($forgedAlignment === null || ($type === 'night' && $p['role'] === 'counterfeiter' && $useAbility), 'Only a Counterfeiter using their ability can forge a reading.');
         $this->ensure(! ($p['role'] === 'counterfeiter' && $useAbility) || in_array($forgedAlignment, ['town', 'cult'], true), 'Choose the forged alignment.');
@@ -323,7 +325,6 @@ class MatchEngine
             $this->ensure($target === null, 'Readiness does not target another player.');
         } elseif ($type === 'night') {
             $this->ensure($s['phase'] === 'night', 'Night has ended.');
-            $this->ensure($p['role'] !== 'oracle' || $target !== null, 'Choose someone to investigate.');
             $this->ensure($p['role'] !== 'lamplighter' || $target !== null, 'Choose someone to watch.');
             $this->ensure($p['role'] !== 'tracker' || $target !== null, 'Choose someone to track.');
             $this->ensure(! $useAbility || in_array($p['role'], ['bellkeeper', 'herbalist'], true) || $target !== null, 'Choose a target for your ability.');
@@ -472,7 +473,7 @@ class MatchEngine
             }
         }
         foreach ($effective as $id => $a) {
-            if ($s['players'][$id]['role'] === 'oracle') {
+            if ($s['players'][$id]['role'] === 'oracle' && $a['target'] !== null) {
                 $target = $a['target'];
                 $investigated[] = $target;
                 $alignment = $s['players'][$target]['alignment'];
@@ -566,7 +567,7 @@ class MatchEngine
             }
             $submitted = isset($s['actions'][$id]);
             $target = $s['actions'][$id]['target'] ?? null;
-            $reading = $player['role'] === 'oracle' && isset($effective[$id]) ? end($player['results']) : null;
+            $reading = $player['role'] === 'oracle' && isset($effective[$id]) && $target !== null ? end($player['results']) : null;
             $canCurse = in_array($player['role'], ['veilweaver', 'acolyte'], true) && isset($effective[$id]);
             $actions[] = ['player_id' => $id, 'role' => $player['role'], 'target_id' => $target,
                 'chosen_target_id' => $s['actions'][$id]['chosen_target'] ?? $target,
@@ -765,7 +766,7 @@ class MatchEngine
                 'curse' => $this->curses->view($me['curse'] ?? null),
                 'curse_notice' => $me['curse_notice'] ?? null,
                 'previous_protection_target' => $this->previousProtection($me, $s['day']),
-                'ability_used' => $me['ability_used'] ?? false,
+                'ability_used' => $this->abilityUsed($me),
                 'haunting' => $s['phase'] === 'discussion' ? ($me['haunting'] ?? null) : null,
                 'oath_protected' => $s['phase'] === 'night' && ($me['oath_protection_day'] ?? null) === $s['day'],
                 'mission' => $me['alignment'] === 'cult' ? $s['mission'] : null,
@@ -834,6 +835,16 @@ class MatchEngine
     {
         return $player['role'] === 'warden' && ($player['last_protection']['day'] ?? null) === $day - 1
             ? $player['last_protection']['target'] : null;
+    }
+
+    /** Existing Oracle readings also consume the charge in rooms created before this rule.
+     * @param  array<string, mixed>  $player
+     */
+    private function abilityUsed(array $player): bool
+    {
+        return ($player['ability_used'] ?? false)
+            || (($player['role'] ?? null) === 'oracle' && count(array_filter($player['results'] ?? [],
+                fn (array $result): bool => ! isset($result['kind']) && isset($result['alignment']))) > 0);
     }
 
     private function ensure(bool $condition, string $message): void
