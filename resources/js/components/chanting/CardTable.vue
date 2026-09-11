@@ -1,8 +1,10 @@
 ﻿<script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { Check, Flame, LockKeyhole } from '@lucide/vue';
 import { roles, type Player, type RoomState } from '@/lib/chanting';
 import CharacterPortrait from './CharacterPortrait.vue';
+import RitualTableScene from './RitualTableScene.vue';
+import { ritualSceneState } from '@/lib/ritualSceneState';
 
 // The table uses public seats and ritual progress. A selection and wax seal are
 // local to this browser; final roles are read only from public player fields.
@@ -22,6 +24,51 @@ const props = defineProps<{
     hauntedSeatId?: string | null;
 }>();
 const emit = defineEmits<{ select: [id: string] }>();
+const visualMode = ref<'3d' | 'simple'>('simple');
+const sceneReady = ref(false);
+const sceneUnavailable = ref(false);
+const sceneState = computed(() =>
+    ritualSceneState({
+        phase: props.phase,
+        tokens: props.ritualTokens,
+        threshold: props.ritualThreshold,
+        winner: props.winner,
+    }),
+);
+const sceneSeats = computed(() =>
+    props.players.map((player, index) => {
+        const position = seatStyle(index);
+        return {
+            x: Number.parseFloat(position.left) / 100,
+            y: Number.parseFloat(position.top) / 100,
+            alive: player.alive,
+        };
+    }),
+);
+function chooseVisuals(mode: '3d' | 'simple') {
+    sceneUnavailable.value = false;
+    visualMode.value = mode;
+    try {
+        localStorage.setItem('chanting-table-visuals', mode);
+    } catch {
+        /* Storage may be unavailable in private browsers. */
+    }
+}
+function unavailable() {
+    sceneUnavailable.value = true;
+    sceneReady.value = false;
+    visualMode.value = 'simple';
+}
+onMounted(() => {
+    try {
+        visualMode.value =
+            localStorage.getItem('chanting-table-visuals') === 'simple'
+                ? 'simple'
+                : '3d';
+    } catch {
+        visualMode.value = '3d';
+    }
+});
 const phaseChanging = ref(false);
 const newlyLit = ref<number[]>([]);
 const extinguished = ref<string[]>([]);
@@ -160,11 +207,27 @@ onBeforeUnmount(() => {
     >
         <div class="table-topline">
             <span class="eyebrow">THE VILLAGE TABLE</span>
-            <span
-                >{{ players.filter((player) => player.alive).length }} seated in
-                the light</span
-            >
+            <div class="table-visuals" role="group" aria-label="Table visuals">
+                <span>View</span>
+                <button
+                    type="button"
+                    :aria-pressed="visualMode === '3d'"
+                    @click="chooseVisuals('3d')"
+                >
+                    3D
+                </button>
+                <button
+                    type="button"
+                    :aria-pressed="visualMode === 'simple'"
+                    @click="chooseVisuals('simple')"
+                >
+                    Simple
+                </button>
+            </div>
         </div>
+        <p v-if="sceneUnavailable" class="table-visual-notice" role="status">
+            3D is unavailable right now. The simple table is ready to play.
+        </p>
         <div
             class="card-table"
             :class="{
@@ -172,8 +235,16 @@ onBeforeUnmount(() => {
                 'is-small': players.length <= 4,
                 'is-crowded': crowded,
                 'is-haunted': !!hauntedSeatId,
+                'is-three': sceneReady,
             }"
         >
+            <RitualTableScene
+                :enabled="visualMode === '3d'"
+                :state="sceneState"
+                :seats="sceneSeats"
+                @ready="sceneReady = $event"
+                @unavailable="unavailable"
+            />
             <div class="table-surface" aria-hidden="true">
                 <div class="table-inlay"></div>
             </div>
@@ -184,6 +255,7 @@ onBeforeUnmount(() => {
                 aria-hidden="true"
             ></div>
             <div
+                v-if="!sceneReady"
                 class="table-ritual"
                 :class="{ 'ritual-awakening': newlyLit.length > 0 }"
                 role="img"
@@ -298,11 +370,116 @@ onBeforeUnmount(() => {
                 >
             </component>
         </div>
+        <div v-if="sceneReady" class="table-summoning-status">
+            <Flame :size="15" aria-hidden="true" />
+            <span
+                ><strong
+                    >{{
+                        phase === 'lobby'
+                            ? ritualThreshold || '—'
+                            : ritualTokens
+                    }}<small v-if="phase !== 'lobby'">
+                        / {{ ritualThreshold }}</small
+                    ></strong
+                >
+                {{ ritualLabel }}</span
+            >
+            <span class="summoning-state">{{
+                sceneState.calmed
+                    ? 'The seal holds'
+                    : phase === 'finished' && winner === 'cult'
+                      ? 'The deep has risen'
+                      : sceneState.progress === 1
+                        ? 'One final vote remains'
+                        : sceneState.emergence > 0
+                          ? 'Something stirs below'
+                          : sceneState.progress > 0
+                            ? 'The circle awakens'
+                            : 'The circle lies quiet'
+            }}</span>
+        </div>
         <p class="table-caption">{{ caption }}</p>
     </section>
 </template>
 
 <style scoped>
+.table-visuals {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    color: #b8c3b4;
+    font-size: 10px;
+}
+.table-visuals > span {
+    margin-right: 5px;
+}
+.table-visuals button {
+    padding: 5px 9px;
+    color: #c4cbbb;
+    border: 1px solid transparent;
+    border-radius: 3px;
+    font: inherit;
+    cursor: pointer;
+    background: transparent;
+}
+.table-visuals button[aria-pressed='true'] {
+    background: #bfba8a18;
+    border-color: #afa67d70;
+    color: #f1e7c4;
+}
+.table-visuals button:hover {
+    background: #c4c2a52b;
+}
+.table-visuals button:focus-visible {
+    outline: 2px solid #dec784;
+    outline-offset: 2px;
+}
+.table-visual-notice {
+    padding: 8px 18px 0;
+    margin: 0;
+    color: #c5cbbb;
+    font-size: 11px;
+}
+.is-three .table-surface,
+.is-three .table-atmosphere {
+    visibility: hidden;
+}
+.is-three .seat-candle {
+    display: none;
+}
+.table-summoning-status {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    color: #c3cbaa;
+    padding: 3px 14px 7px;
+    font-size: 10px;
+}
+.table-summoning-status strong {
+    color: #efe8ca;
+    font-size: 17px;
+    font-family: 'Fraunces', Georgia, serif;
+    margin-right: 5px;
+}
+.table-summoning-status small {
+    color: #b8c1ae;
+    font-size: 12px;
+}
+.summoning-state {
+    border-left: 1px solid #a6b69a40;
+    padding-left: 9px;
+    color: #b4c5b7;
+}
+@media (max-width: 420px) {
+    .table-summoning-status {
+        font-size: 9px;
+        gap: 5px;
+    }
+    .summoning-state {
+        padding-left: 6px;
+    }
+}
 .phantom-face {
     --phantom-size: 57px;
     pointer-events: none;

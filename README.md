@@ -52,6 +52,14 @@ Recorded music lives in `public/assets/Music/`. Add files named `day1.mp3`, `day
 
 Night uses the night playlist; the lobby, role reveal, discussion and voting use the day playlist. Each playlist shuffles through every track before repeating, avoids immediate repeats when there are multiple tracks, and repeats a single available track. Daytime phase changes keep the current song playing. Music stops after victory, pauses when sound is off or the tab is hidden, and stays softer throughout discussion and voting. The saved **Music** volume is independent of effects and ambience. Missing or unsupported recordings are skipped for that page session; an empty playlist is silent.
 
+## 3D ritual table
+
+The room's **3D / Simple** selector chooses between a Three.js scene and the illustrated CSS table. The choice is remembered on that browser. The 3D scene adds a wooden table, brass inlay, candles, drifting motes, illuminated carvings and an emerging summoning. Player portraits, targeting, sealed actions and the ritual counter remain accessible HTML controls above the scene.
+
+The scene follows public ritual progress across all room sizes and modes. Cracks, mist and tentacles grow as the ritual advances. Filling the ritual still leaves the village its final discussion and vote; full emergence is reserved for a confirmed Cult victory. A Town victory seals the summoning, and a new gathering clears the previous ritual. Visual effects never reveal hidden roles, teammates or actions and add no sound.
+
+Three.js loads only when 3D is selected. Browsers without WebGL2, or whose graphics context fails, retain the Simple table and normal gameplay. Rendering pauses when the table is offscreen or the tab is hidden; reduced-motion preferences show a static scene that updates with game state. Pixel density and animation rate are capped to limit graphics work. No extra backend service, database migration or 3D asset download is needed; install dependencies and rebuild the frontend as usual.
+
 ## First-match rules (provisional)
 
 - **3–10 players**: 3–4 players have **1 cultist**, 5–6 have **2**, 7–8 have **3**, and 9–10 have **4**. In the Classic roster, exactly one cultist is the Veilweaver. A Dreamweaver replaces one Acolyte at 7+ players; remaining cultists are Acolytes. There is always one Oracle. A Warden joins at 5+ players, a Lamplighter at 7+, a Medium at 8+, and a Bellkeeper at 10, each replacing a Townsperson; remaining town seats stay Townspeople. Cultists know all their teammates. In 5–10-player matches they receive the same randomly selected mission. **Small Gathering (3–4 players)** gives the lone Veilweaver **A voice below**: each submitted chant advances the ritual by one step, even when investigated. The lobby previews the current roster and ritual goal before players ready up.
