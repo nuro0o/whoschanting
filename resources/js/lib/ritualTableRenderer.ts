@@ -1,6 +1,11 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import {
+    poseRimTentacle,
+    rimTentacleCount,
+    rimTentaclePath,
+} from './ritualTentacles';
+import {
     placeTableChatBubble,
     wrapTableChat,
     type TableChatBubble,
@@ -724,26 +729,16 @@ export function createRitualTable(
         }
 
         const tentacles = new THREE.Group();
-        tentacles.position.y = 0.25;
         scene.add(tentacles);
         const skin = standard(0x436855, 0.22, 0.42);
         skin.emissive.set(0x193e2c);
         skin.emissiveIntensity = 0.4;
         const underside = standard(0x8dab78, 0.25, 0.5);
-        for (let i = 0; i < 6; i++) {
+        for (let i = 0; i < rimTentacleCount; i++) {
             const arm = new THREE.Group();
-            arm.rotation.y = (i / 6) * Math.PI * 2;
             tentacles.add(arm);
-            const height = 1.7 + (i % 3) * 0.35;
-            const path = new THREE.CatmullRomCurve3([
-                new THREE.Vector3(0.18, 0, 0),
-                new THREE.Vector3(0.48, height * 0.35, 0.09),
-                new THREE.Vector3(0.95, height * 0.7, 0.18),
-                new THREE.Vector3(0.82, height, 0.12),
-                new THREE.Vector3(0.52, height * 0.96, 0.02),
-                new THREE.Vector3(0.57, height * 0.8, 0),
-            ]);
-            const tube = new THREE.TubeGeometry(path, 40, 0.17, 8, false);
+            const path = rimTentaclePath(i);
+            const tube = new THREE.TubeGeometry(path, 40, 0.14, 8, false);
             const positions = tube.getAttribute('position');
             for (let segment = 0; segment <= 40; segment++) {
                 const center = path.getPointAt(segment / 40);
@@ -831,10 +826,9 @@ export function createRitualTable(
             opacity: 0,
         });
         materials.add(mistMaterial);
-        const wisps = Array.from({ length: 9 }, (_, i) => {
+        const wisps = Array.from({ length: 9 }, () => {
             const sprite = new THREE.Sprite(mistMaterial);
-            sprite.scale.set(1.4, 0.65, 1);
-            sprite.position.set(Math.sin(i * 2.4), 0.4, Math.cos(i * 2.4));
+            sprite.scale.set(1.1, 0.45, 1);
             scene.add(sprite);
             return sprite;
         });
@@ -872,13 +866,6 @@ export function createRitualTable(
             portal.visible = !display;
             const azimuth = controls.getAzimuthalAngle();
             dial.rotation.y = azimuth;
-            // Keep the ritual visible beyond the dial, leaving its face clear
-            // even when the creature fully emerges or the camera is orbited.
-            tentacles.position.set(
-                display ? -Math.sin(azimuth) * 1.9 : 0,
-                0.25,
-                display ? -Math.cos(azimuth) * 1.9 : 0,
-            );
             const blend = motion.matches ? 1 : 1 - Math.exp(-delta * 2);
             darkness += ((state.night ? 1 : 0) - darkness) * blend;
             emergence += (state.emergence - emergence) * blend;
@@ -891,23 +878,16 @@ export function createRitualTable(
                 : 0.04 + state.progress * 0.26;
             crackMaterial.opacity = state.cracks * 0.6;
             tentacles.visible = emergence > 0.005;
-            tentacles.scale.setScalar(
-                Math.max(0.001, emergence * (display ? 0.65 : 1)),
-            );
             tentacles.children.forEach((arm, i) => {
-                arm.rotation.z = motion.matches
-                    ? 0
-                    : Math.sin(clock * 0.45 + i) * 0.045;
+                poseRimTentacle(arm, i, emergence, clock, motion.matches);
             });
             mistMaterial.opacity = state.mist * 0.48;
             wisps.forEach((wisp, i) => {
                 const time = motion.matches ? 0 : clock * 0.15;
                 wisp.position.set(
-                    Math.sin(i * 2.4 + time) * 0.95 -
-                        (display ? Math.sin(azimuth) * 1.9 : 0),
-                    0.5 + Math.sin(i + time) * 0.2,
-                    Math.cos(i * 2.4 + time) * 0.95 -
-                        (display ? Math.cos(azimuth) * 1.9 : 0),
+                    Math.sin(i * 2.4 + time) * 4.95,
+                    0.15 + Math.sin(i + time) * 0.05,
+                    Math.cos(i * 2.4 + time) * 3.6,
                 );
             });
             runes.forEach((material, i) => {
