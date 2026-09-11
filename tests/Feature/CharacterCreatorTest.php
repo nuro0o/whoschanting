@@ -35,10 +35,11 @@ class CharacterCreatorTest extends TestCase
     public function test_mirror_catalog_and_a_new_character_persist_into_rooms_and_lobby_selection(): void
     {
         $user = User::factory()->create();
-        $look = $this->look(['face' => 'keen', 'hair' => 'braid', 'hat' => 'widebrim', 'outfit' => 'scholar', 'skin' => 'deep', 'outfit_color' => 'wine']);
+        $look = $this->look(['body_type' => 'type2', 'pose' => 'three_quarter', 'face' => 'keen', 'hair' => 'braid', 'hat' => 'widebrim', 'outfit' => 'scholar', 'skin' => 'deep', 'outfit_color' => 'wine']);
         $this->actingAs($user)->get('/progression')->assertInertia(fn (Assert $page) => $page
             ->where('progression.profile.equipped.creator', null)
-            ->has('progression.creator.options.face', 4)->has('progression.creator.options.hat', 6));
+            ->has('progression.creator.options.face', 4)->has('progression.creator.options.hat', 6)
+            ->has('progression.creator.options.body_type', 2)->has('progression.creator.options.pose', 3));
         $this->postJson('/account/customization', $look)->assertOk()->assertJsonPath('progression.profile.equipped.creator', $look['creator']);
         $this->flushSession();
         $this->actingAs($user)->get('/dashboard')->assertInertia(fn (Assert $page) => $page
@@ -61,7 +62,8 @@ class CharacterCreatorTest extends TestCase
         $user = User::factory()->create();
         $this->actingAs($user);
         foreach ([['version' => 2], ['face' => 'unknown'], ['hat' => 'antlers'], ['hat' => 'tricorn'], ['outfit' => 'ritual'], ['detail' => 'brooch'],
-            ['hair_color' => '#ffffff'], ['skin' => ['warm']], ['url' => 'https://example.test/image.png']] as $invalid) {
+            ['hair_color' => '#ffffff'], ['skin' => ['warm']], ['body_type' => 'unknown'], ['body_type' => null],
+            ['pose' => 'sideways'], ['pose' => ['front']], ['pose' => null], ['url' => 'https://example.test/image.png']] as $invalid) {
             $this->postJson('/account/customization', $this->look($invalid))->assertUnprocessable();
             $this->assertDatabaseCount('player_profiles', 0);
         }
@@ -134,7 +136,7 @@ class CharacterCreatorTest extends TestCase
         $user = User::factory()->create();
         $progression = app(AccountProgression::class);
         $engine = app(MatchEngine::class);
-        $look = $this->look(['hair' => 'waves', 'hat' => 'watchcap']);
+        $look = $this->look(['body_type' => 'type2', 'pose' => 'defiant', 'hair' => 'waves', 'hat' => 'watchcap']);
         $progression->customize($user->id, $look);
         $room = $engine->create('host', 'Mirror player', 'custom', ['mode' => 'custom', 'roles' => ['townsperson' => 2, 'veilweaver' => 1]], $user->id);
         $engine->join($room->code, 'guest-1', 'Guest one');
@@ -145,7 +147,7 @@ class CharacterCreatorTest extends TestCase
         $act('guest-1', null, 'ready');
         $act('guest-2', null, 'ready');
         $act('host', $user->id, 'start');
-        $progression->customize($user->id, $this->look(['hair' => 'braid', 'outfit_color' => 'wine']));
+        $progression->customize($user->id, $this->look(['body_type' => 'type1', 'pose' => 'three_quarter', 'hair' => 'braid', 'outfit_color' => 'wine']));
         $engine->join($room->code, 'new-device', 'Mirror player', accountId: $user->id);
         $this->assertSame($look['creator'], $engine->access($room->code, 'new-device', accountId: $user->id)['me']['customization']['creator']);
         $progression->customize($user->id, [...$look, 'character' => 'mariner', 'creator' => null]);
@@ -166,5 +168,39 @@ class CharacterCreatorTest extends TestCase
         $this->assertNull($progression->preferredCharacter($user->id));
         $this->assertFalse($progression->canUseCharacter($user->id, 'custom'));
         $this->assertNull(app(CharacterCreator::class)->saved(['version' => 99], 1));
+    }
+
+    public function test_both_body_types_and_all_poses_are_available_without_unlocks_and_persist(): void
+    {
+        $this->withoutMiddleware(ThrottleRequests::class);
+        $user = User::factory()->create();
+        $this->actingAs($user);
+        foreach (['type1', 'type2'] as $bodyType) {
+            foreach (['front', 'three_quarter', 'defiant'] as $pose) {
+                $look = $this->look(['body_type' => $bodyType, 'pose' => $pose]);
+                $this->postJson('/account/customization', $look)->assertOk()
+                    ->assertJsonPath('progression.profile.equipped.creator', $look['creator']);
+                $this->assertSame($look['creator'], PlayerProfile::findOrFail($user->id)->customization['creator']);
+            }
+        }
+    }
+
+    public function test_legacy_saved_designs_and_submissions_default_to_the_original_body_and_pose(): void
+    {
+        $user = User::factory()->create();
+        $look = $this->look(['face' => 'weathered', 'hair' => 'waves', 'skin' => 'deep']);
+        $legacy = $look['creator'];
+        unset($legacy['body_type'], $legacy['pose']);
+        $this->actingAs($user)->postJson('/account/customization', [...$look, 'creator' => $legacy])->assertOk()
+            ->assertJsonPath('progression.profile.equipped.creator', $look['creator']);
+
+        // Exercise records that have never passed through the new save endpoint.
+        $profile = PlayerProfile::findOrFail($user->id);
+        $profile->update(['customization' => [...$profile->customization, 'creator' => $legacy]]);
+        $this->assertSame($look['creator'], app(AccountProgression::class)->view($user->id)['profile']['equipped']['creator']);
+        $room = app(MatchEngine::class)->create('legacy', 'Legacy villager', 'custom', accountId: $user->id);
+        $snapshot = $room->state['players'][$room->state['host_id']]['customization']['creator'];
+        $this->assertSame($look['creator'], $snapshot);
+        $this->assertSame($legacy, $profile->fresh()->customization['creator'], 'Reading a legacy design must not rewrite it.');
     }
 }

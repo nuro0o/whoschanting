@@ -1,5 +1,7 @@
 # Mirror character creator art
 
+The current body types and expressive pose artwork are documented in [character-creator-poses-art.md](character-creator-poses-art.md). The original face and outfit sheets below are retained as historical assets; the renderer now uses the six coordinated body/pose sets. Front-facing hair, hats and details remain in use.
+
 Generated using the built-in `image_gen.imagegen` tool on 2026-09-12. No CLI/API fallback, external image services, or programmatic image editing was used. Alpha transparency was inspected from the generated files. Source portraits were visually inspected for painterly style; no existing portrait was edited.
 
 ## Faces — `public/assets/chanting/creator/faces.png`

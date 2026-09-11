@@ -1,9 +1,18 @@
 <?php
 
 return [
-    'default' => ['version' => 1, 'face' => 'harbor', 'hair' => 'cropped', 'hat' => 'none', 'outfit' => 'mariner',
+    'default' => ['version' => 1, 'body_type' => 'type1', 'pose' => 'front', 'face' => 'harbor', 'hair' => 'cropped', 'hat' => 'none', 'outfit' => 'mariner',
         'detail' => 'none', 'skin' => 'warm', 'hair_color' => 'ink', 'outfit_color' => 'sea'],
     'options' => [
+        'body_type' => [
+            ['id' => 'type1', 'name' => 'Body Type 1', 'level' => 1],
+            ['id' => 'type2', 'name' => 'Body Type 2', 'level' => 1],
+        ],
+        'pose' => [
+            ['id' => 'front', 'name' => 'Classic', 'level' => 1],
+            ['id' => 'three_quarter', 'name' => 'Three-quarter', 'level' => 1],
+            ['id' => 'defiant', 'name' => 'Defiant', 'level' => 1],
+        ],
         'face' => [
             ['id' => 'harbor', 'name' => 'Harbor soul', 'level' => 1],
             ['id' => 'weathered', 'name' => 'Weathered witness', 'level' => 1],

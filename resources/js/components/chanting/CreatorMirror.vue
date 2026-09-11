@@ -13,6 +13,7 @@ import CreatedCharacter from './CreatedCharacter.vue';
 import {
     creatorLockedOptions,
     creatorPalettes,
+    defaultCreator,
     type CreatorCatalog,
     type CreatorField,
     type CreatorRecipe,
@@ -50,7 +51,8 @@ const locked = computed(() =>
 );
 function selected(field: CreatorField) {
     return props.catalog.options[field].find(
-        (option) => option.id === recipe.value[field],
+        (option) =>
+            option.id === (recipe.value[field] ?? defaultCreator[field]),
     );
 }
 function choose(field: CreatorField, value: string) {
@@ -60,7 +62,9 @@ function choose(field: CreatorField, value: string) {
 }
 function cycle(field: CreatorField, direction: number) {
     const options = props.catalog.options[field];
-    const index = options.findIndex((item) => item.id === recipe.value[field]);
+    const index = options.findIndex(
+        (item) => item.id === (recipe.value[field] ?? defaultCreator[field]),
+    );
     choose(
         field,
         options[(index + direction + options.length) % options.length].id,
@@ -74,7 +78,7 @@ function randomize() {
             (item) => item.unlocked,
         );
         if (options.length)
-            next[field] =
+            (next[field] as string) =
                 options[Math.floor(Math.random() * options.length)].id;
     }
     recipe.value = next;
@@ -88,6 +92,27 @@ function randomize() {
             <h3 id="mirror-heading">Who looks back?</h3>
             <p>A face of your making. A secret still your own.</p>
         </header>
+        <fieldset class="mirror-body-types" :disabled="disabled">
+            <legend>Body type</legend>
+            <label v-for="body in catalog.options.body_type" :key="body.id">
+                <input
+                    type="radio"
+                    :name="`${controlId}-body-type`"
+                    :value="body.id"
+                    :checked="
+                        (recipe.body_type ?? defaultCreator.body_type) ===
+                        body.id
+                    "
+                    @change="choose('body_type', body.id)"
+                />
+                <span
+                    >{{ body.id === 'type1' ? 'Body type 1' : 'Body type 2'
+                    }}<small>{{
+                        body.id === 'type1' ? 'Male' : 'Female'
+                    }}</small></span
+                >
+            </label>
+        </fieldset>
         <div class="mirror-workshop">
             <figure class="mirror-reflection">
                 <div class="mirror-crest" aria-hidden="true">✦</div>
@@ -109,7 +134,41 @@ function randomize() {
                         ></span>
                     </div>
                 </div>
-                <figcaption>Only the reflection changes.</figcaption>
+                <figcaption class="mirror-pose-control">
+                    <span class="mirror-part-label">Pose</span>
+                    <div class="mirror-stepper">
+                        <button
+                            type="button"
+                            :disabled="disabled"
+                            aria-label="Previous pose"
+                            @click="cycle('pose', -1)"
+                        >
+                            <ChevronLeft :size="19" aria-hidden="true" />
+                        </button>
+                        <span aria-live="polite" aria-atomic="true"
+                            ><strong>{{ selected('pose')?.name }}</strong
+                            ><small
+                                >{{
+                                    catalog.options.pose.findIndex(
+                                        (option) =>
+                                            option.id ===
+                                            (recipe.pose ??
+                                                defaultCreator.pose),
+                                    ) + 1
+                                }}
+                                / {{ catalog.options.pose.length }}</small
+                            ></span
+                        >
+                        <button
+                            type="button"
+                            :disabled="disabled"
+                            aria-label="Next pose"
+                            @click="cycle('pose', 1)"
+                        >
+                            <ChevronRight :size="19" aria-hidden="true" />
+                        </button>
+                    </div>
+                </figcaption>
             </figure>
             <div
                 class="mirror-mobile-categories"
@@ -335,6 +394,70 @@ function randomize() {
 .mirror-heading > p:last-child {
     font-size: 11px;
     color: var(--mirror-muted);
+}
+.mirror-body-types {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    border: 0;
+    margin: 22px auto 4px;
+    padding: 0;
+}
+.mirror-body-types legend {
+    width: 100%;
+    text-align: center;
+    margin-bottom: 9px;
+    color: var(--mirror-brass);
+    text-transform: uppercase;
+    letter-spacing: 1.8px;
+    font-size: 9px;
+}
+.mirror-body-types label {
+    position: relative;
+    cursor: pointer;
+}
+.mirror-body-types input {
+    position: absolute;
+    opacity: 0;
+}
+.mirror-body-types label > span {
+    display: block;
+    min-width: 118px;
+    padding: 9px 20px;
+    text-align: center;
+    font-size: 11px;
+    border: 1px solid #71816a77;
+    background: #13282b;
+}
+.mirror-body-types small {
+    display: block;
+    margin-top: 3px;
+    color: var(--mirror-muted);
+    font-size: 9px;
+}
+.mirror-body-types input:checked + span {
+    border-color: var(--mirror-brass);
+    background: #c4a87920;
+}
+.mirror-body-types input:focus-visible + span {
+    outline: 2px solid #e7d59f;
+    outline-offset: 3px;
+}
+.mirror-body-types:disabled {
+    opacity: 0.45;
+}
+.mirror-pose-control .mirror-part-label {
+    display: block;
+    margin: 0 0 7px;
+}
+.mirror-pose-control .mirror-stepper {
+    min-height: 50px;
+}
+.mirror-pose-control .mirror-stepper strong {
+    font-size: 16px;
+}
+.mirror-pose-control .mirror-stepper button {
+    min-width: 34px;
 }
 .mirror-workshop {
     display: grid;

@@ -2,6 +2,8 @@ import type { Cosmetic } from './progression';
 
 export interface CreatorRecipe {
     version: 1;
+    body_type: 'type1' | 'type2';
+    pose: 'front' | 'three_quarter' | 'defiant';
     face: string;
     hair: string;
     hat: string;
@@ -18,6 +20,8 @@ export interface CreatorCatalog {
 }
 export const defaultCreator: CreatorRecipe = {
     version: 1,
+    body_type: 'type1',
+    pose: 'front',
     face: 'harbor',
     hair: 'cropped',
     hat: 'none',

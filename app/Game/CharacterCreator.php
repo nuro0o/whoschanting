@@ -29,6 +29,13 @@ class CharacterCreator
             || array_diff(array_keys($recipe), array_keys(config('character_creator.default'))) !== []) {
             throw ValidationException::withMessages(['creator' => 'Choose a supported character design.']);
         }
+        // Version 1 designs saved before body types and poses retain their
+        // original stance. Explicit invalid values still fail validation.
+        foreach (['body_type', 'pose'] as $field) {
+            if (! array_key_exists($field, $recipe)) {
+                $recipe[$field] = config('character_creator.default.'.$field);
+            }
+        }
         $clean = ['version' => 1];
         foreach ($this->catalog($level)['options'] as $field => $items) {
             $value = $recipe[$field] ?? null;
@@ -42,7 +49,7 @@ class CharacterCreator
         return $clean;
     }
 
-    /** Older or malformed stored recipes safely fall back to the ordinary cast.
+    /** Legacy designs are normalized; malformed recipes fall back to the cast.
      * @return array<string, int|string>|null
      */
     public function saved(mixed $recipe, int $level): ?array

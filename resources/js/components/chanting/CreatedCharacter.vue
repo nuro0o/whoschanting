@@ -3,7 +3,6 @@ import { computed, useId } from 'vue';
 import { defaultCreator, type CreatorRecipe } from '@/lib/creator';
 import {
     creatorLayers,
-    creatorChest,
     creatorViews,
     type CreatorView,
 } from '@/lib/creatorLayout';
@@ -11,8 +10,15 @@ const props = withDefaults(
     defineProps<{ recipe?: CreatorRecipe | null; mode?: CreatorView }>(),
     { mode: 'portrait' },
 );
-const identity = useId();
 const appearance = computed(() => ({ ...defaultCreator, ...props.recipe }));
+const identity = useId();
+const neckClip = computed(() =>
+    appearance.value.pose === 'defiant'
+        ? 'M0 0H400V232H255L232 250V270H169V250L139 232H0Z'
+        : appearance.value.pose === 'three_quarter'
+          ? 'M0 0H400V232H270L232 250V270H169V250L151 232H0Z'
+          : 'M0 0H400V208H246Q237 229 231 250V270H169V250Q163 229 154 208H0Z',
+);
 const colorFilters: Record<string, Record<string, string>> = {
     face: {
         porcelain:
@@ -36,10 +42,30 @@ const colorFilters: Record<string, Record<string, string>> = {
 };
 
 const layers = computed(() => creatorLayers(appearance.value));
-const face = computed(
-    () => layers.value.find((layer) => layer.field === 'face')!.crop,
-);
-const chest = computed(() => creatorChest(appearance.value));
+const paintedLayers = computed(() => {
+    const outfit = layers.value.find((layer) => layer.field === 'outfit')!;
+    const face = layers.value.find((layer) => layer.field === 'face')!;
+    const hair = layers.value.find((layer) => layer.field === 'hair');
+    const hood = layers.value.find(
+        (layer) => layer.field === 'hat' && layer.value === 'hood',
+    );
+    return [
+        { ...outfit, pass: 'back' },
+        ...(hair ? [{ ...hair, pass: 'hair-back' }] : []),
+        ...(hood ? [{ ...hood, pass: 'hood-back' }] : []),
+        { ...face, pass: 'head' },
+        { ...outfit, pass: 'collar' },
+        ...(hair ? [{ ...hair, pass: 'hair-front' }] : []),
+        ...(hood ? [{ ...hood, pass: 'hood-front' }] : []),
+        ...layers.value
+            .filter(
+                (layer) =>
+                    (layer.field === 'hat' && layer.value !== 'hood') ||
+                    layer.field === 'detail',
+            )
+            .map((layer) => ({ ...layer, pass: layer.field })),
+    ];
+});
 const viewBox = computed(() => {
     const view = creatorViews[props.mode];
     return `${view.x} ${view.y} ${view.width} ${view.height}`;
@@ -52,7 +78,9 @@ function filter(field: string) {
             : field === 'hair'
               ? recipe.hair_color
               : recipe.outfit_color;
-    return colorFilters[field]?.[color];
+    return colorFilters[field]?.[color]
+        ? `grayscale(1) ${colorFilters[field][color]}`
+        : undefined;
 }
 </script>
 <template>
@@ -63,68 +91,89 @@ function filter(field: string) {
             preserveAspectRatio="xMidYMid meet"
         >
             <defs>
-                <linearGradient
-                    :id="`${identity}-neck-fade`"
-                    gradientUnits="userSpaceOnUse"
-                    :x1="face.x"
-                    :y1="face.y + face.height * 0.8"
-                    :x2="face.x"
-                    :y2="face.y + face.height"
-                >
-                    <stop offset="0" stop-color="white" />
-                    <stop offset="1" stop-color="black" />
-                </linearGradient>
-                <mask
-                    :id="`${identity}-neck-mask`"
-                    maskUnits="userSpaceOnUse"
-                    :x="face.x"
-                    :y="face.y"
-                    :width="face.width"
-                    :height="face.height"
-                >
-                    <rect v-bind="face" :fill="`url(#${identity}-neck-fade)`" />
-                </mask>
-                <clipPath :id="`${identity}-chest`">
-                    <path d="M174 244 H226 L238 266 V352 H162 V266Z" />
+                <clipPath :id="`${identity}-neck`">
+                    <path :d="neckClip" />
                 </clipPath>
-            </defs>
-            <g :clip-path="`url(#${identity}-chest)`">
-                <svg
-                    v-bind="chest.destination"
-                    :viewBox="chest.crop.join(' ')"
-                    preserveAspectRatio="xMidYMid slice"
-                    overflow="hidden"
-                    :style="{ filter: filter('face') }"
+                <mask
+                    :id="`${identity}-collar`"
+                    maskUnits="userSpaceOnUse"
+                    x="0"
+                    y="0"
+                    width="400"
+                    height="650"
                 >
+                    <rect width="400" height="650" fill="white" />
+                    <path d="M169 0H231V248Q200 270 169 248Z" fill="black" />
+                </mask>
+                <mask
+                    :id="`${identity}-hair`"
+                    maskUnits="userSpaceOnUse"
+                    x="0"
+                    y="0"
+                    width="400"
+                    height="650"
+                >
+                    <rect width="400" height="650" fill="white" />
+                    <rect
+                        x="119"
+                        y="132"
+                        width="162"
+                        height="127"
+                        rx="8"
+                        fill="black"
+                    />
+                </mask>
+            </defs>
+            <g
+                v-for="layer in paintedLayers"
+                :key="layer.pass"
+                :clip-path="
+                    layer.field === 'face'
+                        ? `url(#${identity}-neck)`
+                        : undefined
+                "
+                :mask="
+                    layer.pass === 'collar'
+                        ? `url(#${identity}-collar)`
+                        : layer.pass === 'hair-front' ||
+                            layer.pass === 'hood-front'
+                          ? `url(#${identity}-hair)`
+                          : undefined
+                "
+            >
+                <svg
+                    class="created-character-layer"
+                    :class="`creator-layer-${layer.field} creator-part-${layer.value}`"
+                    v-bind="layer.destination"
+                    :viewBox="`${layer.crop.x} ${layer.crop.y} ${layer.crop.width} ${layer.crop.height}`"
+                    preserveAspectRatio="xMidYMid meet"
+                    overflow="hidden"
+                    :style="{ filter: filter(layer.field) }"
+                    :transform="
+                        layer.rotation
+                            ? `rotate(${layer.rotation} 200 100)`
+                            : layer.mirrored
+                              ? `translate(400 0) scale(-1 1)`
+                              : undefined
+                    "
+                >
+                    <defs v-if="layer.sourceClip">
+                        <clipPath :id="`${identity}-${layer.pass}-crop`">
+                            <path :d="layer.sourceClip" />
+                        </clipPath>
+                    </defs>
                     <image
-                        href="/assets/chanting/creator/faces.png"
-                        width="1122"
-                        height="1402"
+                        :clip-path="
+                            layer.sourceClip
+                                ? `url(#${identity}-${layer.pass}-crop)`
+                                : undefined
+                        "
+                        :href="`/assets/chanting/creator/${layer.file}.png`"
+                        :width="layer.atlas.width"
+                        :height="layer.atlas.height"
                     />
                 </svg>
             </g>
-            <svg
-                v-for="layer in layers"
-                :key="layer.field"
-                class="created-character-layer"
-                :class="`creator-layer-${layer.field} creator-part-${layer.value}`"
-                v-bind="layer.destination"
-                :viewBox="`${layer.crop.x} ${layer.crop.y} ${layer.crop.width} ${layer.crop.height}`"
-                preserveAspectRatio="xMidYMid meet"
-                overflow="hidden"
-                :style="{ filter: filter(layer.field) }"
-            >
-                <image
-                    :mask="
-                        layer.field === 'face'
-                            ? `url(#${identity}-neck-mask)`
-                            : undefined
-                    "
-                    :href="`/assets/chanting/creator/${layer.file}.png`"
-                    :width="layer.atlas.width"
-                    :height="layer.atlas.height"
-                />
-            </svg>
         </svg>
     </span>
 </template>
