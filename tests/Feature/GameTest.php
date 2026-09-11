@@ -100,11 +100,14 @@ class GameTest extends TestCase
         $this->assertCount($cultistCount, $cult);
         $roles = array_count_values(array_column($players, 'role'));
         $this->assertSame(1, $roles['veilweaver']);
-        $this->assertSame($cultistCount - 1, $roles['acolyte'] ?? 0);
+        $this->assertSame($cultistCount - 1 - (int) ($playerCount >= 7), $roles['acolyte'] ?? 0);
+        $this->assertSame($playerCount >= 7 ? 1 : 0, $roles['dreamweaver'] ?? 0);
         $this->assertSame(1, $roles['oracle']);
         $this->assertSame($playerCount >= 5 ? 1 : 0, $roles['warden'] ?? 0);
         $this->assertSame($playerCount >= 7 ? 1 : 0, $roles['lamplighter'] ?? 0);
-        $this->assertSame($playerCount - $cultistCount - 1 - (int) ($playerCount >= 5) - (int) ($playerCount >= 7), $roles['townsperson']);
+        $this->assertSame($playerCount >= 8 ? 1 : 0, $roles['medium'] ?? 0);
+        $this->assertSame($playerCount >= 10 ? 1 : 0, $roles['bellkeeper'] ?? 0);
+        $this->assertSame($playerCount - $cultistCount - 1 - (int) ($playerCount >= 5) - (int) ($playerCount >= 7) - (int) ($playerCount >= 8) - (int) ($playerCount >= 10), $roles['townsperson']);
         foreach ($identities as $id => $identity) {
             $view = $this->engine->access($room->code, $identity);
             foreach ($view['players'] as $public) {
@@ -148,7 +151,7 @@ class GameTest extends TestCase
         $this->act($room, $identities[$r['oracle']], 'night', ['target' => $target]);
         foreach ($room->fresh()->state['players'] as $id => $player) {
             if ($player['alignment'] === 'cult') {
-                $this->act($room, $identities[$id], 'night', ['target' => $target]);
+                $this->act($room, $identities[$id], 'night', ['target' => $player['role'] === 'dreamweaver' ? null : $target]);
             }
         }
         if (! $protectFirst) {
@@ -183,7 +186,7 @@ class GameTest extends TestCase
         $this->expire($room);
         $this->expire($room);
         $recap = $this->engine->access($room->code, 'secret-0')['recap'];
-        $this->assertSame('village-watch-v1', $recap['rules_version']);
+        $this->assertSame('midnight-abilities-v1', $recap['rules_version']);
         $actions = array_column($recap['rounds'][0]['night']['actions'], null, 'player_id');
         $this->assertTrue($actions[$r['warden']]['prevented_curse']);
         $this->assertTrue($actions[$r['lamplighter']]['visited']);
@@ -365,6 +368,266 @@ class GameTest extends TestCase
         $this->assertRejected(fn () => $this->act($room, $identities[$r['oracle']], 'night', ['target' => $r['acolyte']]));
         $this->expire($room);
         $this->assertNull($room->state['players'][$r['oracle']]['curse']);
+    }
+
+    public static function disruptionTargets(): array
+    {
+        $cases = [];
+        foreach (['oracle', 'warden', 'lamplighter', 'medium', 'bellkeeper', 'veilweaver', 'acolyte'] as $role) {
+            $cases[$role.' first'] = [$role, true];
+            $cases[$role.' last'] = [$role, false];
+        }
+
+        return $cases;
+    }
+
+    #[DataProvider('disruptionTargets')]
+    public function test_disruption_precedes_other_abilities_and_chants_without_leaking_the_actor(string $role, bool $first): void
+    {
+        [$room, $identities] = $this->match(mission: 'shadows', playerCount: 10);
+        $r = $this->roles($room);
+        $s = $room->fresh()->state;
+        $s['players'][$r['townsperson']]['alive'] = false;
+        $room->update(['state' => $s]);
+        $this->expire($room);
+        $target = match ($role) {
+            'medium' => $r['townsperson'], 'bellkeeper' => null,
+            'oracle' => $r['warden'], default => $r['oracle'],
+        };
+        $ability = in_array($role, ['medium', 'bellkeeper']);
+        $disrupt = fn () => $this->act($room, $identities[$r['dreamweaver']], 'night', ['target' => $r[$role], 'use_ability' => true]);
+        if ($first) {
+            $disrupt();
+        }
+        $this->act($room, $identities[$r[$role]], 'night', ['target' => $target, 'use_ability' => $ability]);
+        if (! $first) {
+            $disrupt();
+        }
+        // All remaining cultists chant. A disrupted Oracle cannot defeat Shadows.
+        foreach ($room->fresh()->state['players'] as $id => $p) {
+            if ($p['alignment'] === 'cult' && ! in_array($id, [$r['dreamweaver'], $r[$role]])) {
+                $this->act($room, $identities[$id], 'night', ['target' => $role === 'warden' && $p['role'] === 'veilweaver' ? $target : null]);
+            }
+        }
+        $this->expire($room);
+        $view = $this->engine->access($room->code, $identities[$r[$role]]);
+        $this->assertSame([['kind' => 'disrupted', 'day' => 1, 'target' => $s['players'][$r[$role]]['name']]], $view['me']['results']);
+        $this->assertSame($ability, $view['me']['ability_used']);
+        $this->assertNull($view['recap']);
+        $this->assertSame(in_array($role, ['acolyte', 'veilweaver']) ? 2 : 3, $room->state['tokens']);
+        $actions = array_column($room->state['rounds'][1]['night']['actions'], null, 'player_id');
+        $this->assertTrue($actions[$r[$role]]['disrupted']);
+        $this->assertNull($actions[$r[$role]]['apparent_alignment']);
+        $this->assertNull($actions[$r[$role]]['true_alignment']);
+        $this->assertNull($actions[$r[$role]]['visited']);
+        $this->assertNull($actions[$r[$role]]['curse_type']);
+        $this->assertFalse($actions[$r['dreamweaver']]['contributed']);
+        $this->assertNull($actions[$r['dreamweaver']]['curse_type']);
+        if ($role === 'warden') {
+            $this->assertArrayNotHasKey('last_protection', $room->state['players'][$r['warden']]);
+            $this->assertNotNull($room->state['players'][$target]['curse']);
+        }
+        $this->engine->resolve($room->id);
+        $this->assertCount(1, $this->engine->access($room->code, $identities[$r[$role]])['me']['results']);
+    }
+
+    public function test_disruption_bypasses_protection_and_lamplighter_sees_attempted_visits(): void
+    {
+        [$room, $identities] = $this->match(playerCount: 7);
+        $r = $this->roles($room);
+        $this->expire($room);
+        $this->act($room, $identities[$r['warden']], 'night', ['target' => $r['oracle']]);
+        $this->act($room, $identities[$r['oracle']], 'night', ['target' => $r['townsperson']]);
+        $this->act($room, $identities[$r['lamplighter']], 'night', ['target' => $r['townsperson']]);
+        $this->act($room, $identities[$r['dreamweaver']], 'night', ['target' => $r['oracle'], 'use_ability' => true]);
+        $this->expire($room);
+        $this->assertSame('disrupted', $room->state['players'][$r['oracle']]['results'][0]['kind']);
+        $this->assertTrue($room->state['players'][$r['lamplighter']]['results'][0]['visited']);
+    }
+
+    public function test_dreamweaver_can_save_ability_and_chant_but_disruption_breaks_concord(): void
+    {
+        [$room, $identities] = $this->match(playerCount: 7);
+        $r = $this->roles($room);
+        $this->expire($room);
+        foreach ($room->fresh()->state['players'] as $id => $p) {
+            if ($p['alignment'] === 'cult') {
+                $this->act($room, $identities[$id], 'night');
+            }
+        }
+        $this->expire($room);
+        $this->assertSame(3, $room->state['tokens']);
+        $this->assertFalse($this->engine->access($room->code, $identities[$r['dreamweaver']])['me']['ability_used']);
+        $this->expire($room);
+        $this->expire($room);
+        foreach ($room->fresh()->state['players'] as $id => $p) {
+            if ($p['alignment'] === 'cult') {
+                $this->act($room, $identities[$id], 'night', $p['role'] === 'dreamweaver' ? ['use_ability' => true, 'target' => $r['oracle']] : []);
+            }
+        }
+        $this->expire($room);
+        $this->assertSame(3, $room->state['tokens']);
+        $this->assertSame(0, $room->state['rounds'][2]['night']['gained']);
+        // A player who missed their action gets no fabricated failure result.
+        $this->assertSame([], $room->state['players'][$r['oracle']]['results']);
+    }
+
+    public function test_medium_uses_only_banished_targets_and_misdirection_preserves_that_pool(): void
+    {
+        [$room, $identities] = $this->match(playerCount: 8);
+        $r = $this->roles($room);
+        $medium = $identities[$r['medium']];
+        $this->expire($room);
+        $this->assertRejected(fn () => $this->act($room, $medium, 'night', ['use_ability' => true]));
+        $this->assertRejected(fn () => $this->act($room, $medium, 'night', ['use_ability' => true, 'target' => $r['oracle']]));
+        $this->assertFalse($this->engine->access($room->code, $medium)['me']['ability_used']);
+        $this->act($room, $medium, 'night');
+        $this->expire($room);
+        $this->expire($room);
+        $this->expire($room);
+        $s = $room->fresh()->state;
+        $s['players'][$r['townsperson']]['alive'] = false;
+        $s['players'][$r['acolyte']]['alive'] = false;
+        $room->update(['state' => $s]);
+        $this->assertRejected(fn () => $this->act($room, $medium, 'night', ['target' => $r['townsperson']]));
+        $this->afflict($room, $r['medium'], 'misdirection');
+        $used = $this->act($room, $medium, 'night', ['target' => $r['townsperson'], 'use_ability' => true]);
+        $this->assertTrue($used['me']['ability_used']);
+        $this->assertSame($r['acolyte'], $room->fresh()->state['actions'][$r['medium']]['target']);
+        $this->assertRejected(fn () => $this->act($room, $medium, 'night', ['target' => $r['acolyte'], 'use_ability' => true]));
+        $this->expire($room);
+        $this->assertSame([['kind' => 'spirit', 'day' => 2, 'target' => $s['players'][$r['acolyte']]['name'], 'alignment' => 'cult']], $this->engine->access($room->code, $medium)['me']['results']);
+        foreach ($identities as $id => $identity) {
+            $view = $this->engine->access($room->code, $identity);
+            if ($id !== $r['medium']) {
+                $this->assertSame([], $view['me']['results']);
+            }
+            $this->assertNull($view['recap']);
+            foreach ($view['players'] as $player) {
+                $this->assertArrayNotHasKey('ability_used', $player);
+            }
+        }
+        $this->expire($room);
+        $this->expire($room);
+        $this->assertRejected(fn () => $this->act($room, $medium, 'night', ['target' => $r['acolyte'], 'use_ability' => true]));
+        $this->act($room, $medium, 'night');
+    }
+
+    public static function bellNights(): array
+    {
+        return ['quiet night' => [0], 'one step' => [1], 'several steps' => [3]];
+    }
+
+    #[DataProvider('bellNights')]
+    public function test_bell_prevents_at_most_one_new_step_and_is_spent_even_on_a_quiet_night(int $chants): void
+    {
+        [$room, $identities] = $this->match(mission: 'shadows', playerCount: 10);
+        $r = $this->roles($room);
+        $bell = $identities[$r['bellkeeper']];
+        $this->expire($room);
+        $s = $room->fresh()->state;
+        $s['tokens'] = $s['threshold'] - 1;
+        $room->update(['state' => $s]);
+        $this->assertRejected(fn () => $this->act($room, $bell, 'night', ['use_ability' => true, 'target' => $r['oracle']]));
+        $this->act($room, $bell, 'night', ['use_ability' => true]);
+        $cult = array_keys(array_filter($s['players'], fn ($p) => $p['alignment'] === 'cult'));
+        foreach (array_slice($cult, 0, $chants) as $id) {
+            $this->act($room, $identities[$id], 'night');
+        }
+        $this->expire($room);
+        $this->assertSame($s['tokens'] + max(0, $chants - 1), $room->state['tokens']);
+        $view = $this->engine->access($room->code, $bell);
+        $this->assertSame($chants > 1, $view['ritual']['final_vote']);
+        $this->assertSame([['kind' => 'bell', 'day' => 1, 'target' => 'The ritual', 'prevented' => min(1, $chants)]], $view['me']['results']);
+        $this->assertTrue($view['me']['ability_used']);
+        $this->assertSame(max(0, $chants - 1), $room->state['rounds'][1]['night']['gained']);
+        $this->assertSame(min(1, $chants), count(array_filter($room->state['rounds'][1]['night']['actions'], fn ($a) => $a['ritual_blocked'])));
+    }
+
+    public function test_limited_abilities_validate_http_payloads_and_stale_actions_without_spending_them(): void
+    {
+        [$room, $identities] = $this->match(playerCount: 10);
+        $r = $this->roles($room);
+        $this->expire($room);
+        $phase = $room->fresh()->state['phase_id'];
+        $this->withSession(['chanting.identity' => $identities[$r['bellkeeper']]])
+            ->postJson('/rooms/'.$room->code.'/actions', ['type' => 'night', 'phase_id' => $phase, 'use_ability' => 'yes'])->assertUnprocessable();
+        $this->assertRejected(fn () => $this->act($room, $identities[$r['oracle']], 'night', ['target' => $r['warden'], 'use_ability' => true]));
+        $this->assertRejected(fn () => $this->engine->access($room->code, $identities[$r['bellkeeper']], ['type' => 'night', 'phase_id' => $phase - 1, 'use_ability' => true]));
+        foreach (['bellkeeper', 'medium', 'dreamweaver'] as $role) {
+            $this->assertFalse($this->engine->access($room->code, $identities[$r[$role]])['me']['ability_used']);
+        }
+        $this->withSession(['chanting.identity' => $identities[$r['bellkeeper']]])
+            ->postJson('/rooms/'.$room->code.'/actions', ['type' => 'night', 'phase_id' => $phase, 'use_ability' => true])->assertOk()->assertJsonPath('me.ability_used', true);
+    }
+
+    public static function limitedRoles(): array
+    {
+        return ['medium' => ['medium'], 'dreamweaver' => ['dreamweaver'], 'bellkeeper' => ['bellkeeper']];
+    }
+
+    #[DataProvider('limitedRoles')]
+    public function test_limited_abilities_obey_curses_and_cannot_be_reused_on_later_nights(string $role): void
+    {
+        [$room, $identities] = $this->match(playerCount: 10);
+        $r = $this->roles($room);
+        $identity = $identities[$r[$role]];
+        $this->expire($room);
+        $s = $room->fresh()->state;
+        $s['players'][$r['townsperson']]['alive'] = false;
+        $room->update(['state' => $s]);
+        $target = match ($role) {
+            'medium' => $r['townsperson'], 'dreamweaver' => $r['oracle'], default => null
+        };
+        $ability = ['use_ability' => true, 'target' => $target];
+        $curse = $this->afflict($room, $r[$role], 'puzzle');
+        $this->assertRejected(fn () => $this->act($room, $identity, 'night', $ability));
+        $this->assertFalse($this->engine->access($room->code, $identity)['me']['ability_used']);
+        $this->act($room, $identity, 'solve_curse', ['curse_id' => $curse['id'], 'answer' => $curse['solution']]);
+        $this->act($room, $identity, 'night');
+        $this->expire($room);
+        $this->expire($room);
+        $this->expire($room);
+        $this->assertFalse($this->engine->access($room->code, $identity)['me']['ability_used']);
+        $this->act($room, $identity, 'night', $ability);
+        $this->assertRejected(fn () => $this->act($room, $identity, 'night', $ability));
+        $this->expire($room);
+        $this->expire($room);
+        $this->expire($room);
+        $this->assertTrue(app(MatchEngine::class)->access($room->code, $identity)['me']['ability_used']);
+        $this->assertRejected(fn () => $this->act($room, $identity, 'night', $ability));
+        $this->act($room, $identity, 'night');
+    }
+
+    public function test_limited_ability_recaps_archive_and_rematches_restore_uses(): void
+    {
+        [$room, $identities] = $this->match(playerCount: 10);
+        $r = $this->roles($room);
+        $this->expire($room);
+        $s = $room->fresh()->state;
+        $s['players'][$r['townsperson']]['alive'] = false;
+        $room->update(['state' => $s]);
+        $this->act($room, $identities[$r['medium']], 'night', ['use_ability' => true, 'target' => $r['townsperson']]);
+        $this->act($room, $identities[$r['bellkeeper']], 'night', ['use_ability' => true]);
+        $this->act($room, $identities[$r['dreamweaver']], 'night', ['use_ability' => true, 'target' => $r['bellkeeper']]);
+        $this->expire($room);
+        $s = $room->state;
+        $s['tokens'] = $s['threshold'];
+        $room->update(['state' => $s]);
+        $this->expire($room);
+        $this->expire($room);
+        $recap = $this->engine->access($room->code, 'secret-0')['recap'];
+        $actions = array_column($recap['rounds'][0]['night']['actions'], null, 'player_id');
+        $this->assertSame('town', $actions[$r['medium']]['true_alignment']);
+        $this->assertTrue($actions[$r['bellkeeper']]['disrupted']);
+        $this->assertTrue($actions[$r['dreamweaver']]['used_ability']);
+        $this->assertSame($recap['rounds'], GameMatch::firstOrFail()->getAttribute('recap')['rounds']);
+        $this->act($room, 'secret-0', 'rematch');
+        foreach ($identities as $identity) {
+            $view = $this->engine->access($room->code, $identity);
+            $this->assertFalse($view['me']['ability_used']);
+            $this->assertSame([], $view['me']['results']);
+        }
     }
 
     public function test_three_player_town_can_win_by_banishing_the_lone_cultist(): void

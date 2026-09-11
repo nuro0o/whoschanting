@@ -171,7 +171,7 @@ class MatchEngine
             $this->ensure($id === $s['host_id'] && $s['phase'] === 'finished', 'Only the host can start a new gathering after victory.');
             foreach ($s['players'] as &$player) {
                 $player = array_replace($player, ['ready' => false, 'alive' => true, 'role' => null, 'alignment' => null, 'results' => [], 'curse' => null, 'curse_notice' => null]);
-                unset($player['last_protection']);
+                unset($player['last_protection'], $player['ability_used']);
             }
             unset($player);
             $s = array_replace($s, ['day' => 0, 'tokens' => 0, 'threshold' => 0, 'winner' => null, 'win_reason' => null,
@@ -190,6 +190,12 @@ class MatchEngine
             $this->ensure(count(array_filter($s['players'], fn (array $p): bool => ! $p['ready'])) === 0, 'Every player must be ready.');
             $ids = array_keys($s['players']);
             shuffle($ids);
+            $cultRoles = ['veilweaver'];
+            foreach (config('game.cult_roles_min_players') as $role => $minimum) {
+                if ($count >= $minimum && count($cultRoles) < $cultistCount) {
+                    $cultRoles[] = $role;
+                }
+            }
             $townRoles = ['oracle'];
             foreach (config('game.town_roles_min_players') as $role => $minimum) {
                 if ($count >= $minimum && count($townRoles) < $count - $cultistCount) {
@@ -198,8 +204,7 @@ class MatchEngine
             }
             foreach ($ids as $index => $pid) {
                 $s['players'][$pid]['role'] = match (true) {
-                    $index === 0 => 'veilweaver',
-                    $index < $cultistCount => 'acolyte',
+                    $index < $cultistCount => $cultRoles[$index] ?? 'acolyte',
                     default => $townRoles[$index - $cultistCount] ?? 'townsperson',
                 };
                 $s['players'][$pid]['alignment'] = $index < $cultistCount ? 'cult' : 'town';
@@ -244,8 +249,12 @@ class MatchEngine
         }
         $this->ensure(! isset($s['actions'][$id]), 'Your action is already sealed for this phase.');
         $target = $a['target'] ?? null;
+        $useAbility = (bool) ($a['use_ability'] ?? false);
+        $this->ensure(! $useAbility || ($type === 'night' && in_array($p['role'], ['medium', 'dreamweaver', 'bellkeeper'], true)), 'This action cannot use a once-per-match ability.');
+        $this->ensure(! $useAbility || ! ($p['ability_used'] ?? false), 'Your once-per-match ability has already been used.');
+        $deadTarget = $type === 'night' && $p['role'] === 'medium' && $useAbility;
         if ($target !== null) {
-            $this->ensure(isset($s['players'][$target]) && $s['players'][$target]['alive'] && $target !== $id, 'Choose another living player.');
+            $this->ensure(isset($s['players'][$target]) && $s['players'][$target]['alive'] !== $deadTarget && $target !== $id, $deadTarget ? 'Choose a banished player.' : 'Choose another living player.');
         }
         if ($type === 'discussion_ready') {
             $this->ensure($s['phase'] === 'discussion', 'You can be ready for voting only during discussion.');
@@ -254,7 +263,9 @@ class MatchEngine
             $this->ensure($s['phase'] === 'night', 'Night has ended.');
             $this->ensure($p['role'] !== 'oracle' || $target !== null, 'Choose someone to investigate.');
             $this->ensure($p['role'] !== 'lamplighter' || $target !== null, 'Choose someone to watch.');
-            $this->ensure(in_array($p['role'], ['oracle', 'veilweaver', 'acolyte', 'warden', 'lamplighter']) || $target === null, 'Your role does not target another player.');
+            $this->ensure(! $useAbility || $p['role'] === 'bellkeeper' || $target !== null, 'Choose a target for your ability.');
+            $canTarget = in_array($p['role'], ['oracle', 'veilweaver', 'acolyte', 'warden', 'lamplighter']) || ($useAbility && in_array($p['role'], ['medium', 'dreamweaver']));
+            $this->ensure($canTarget || $target === null, 'Your chosen action does not target another player.');
             $this->ensure($target === null || $target !== $this->previousProtection($p, $s['day']), 'You cannot protect the same player on consecutive nights.');
         } elseif ($type === 'vote') {
             $this->ensure($s['phase'] === 'voting', 'Voting is not open.');
@@ -266,7 +277,7 @@ class MatchEngine
             $curseType = $p['curse']['type'] ?? null;
             if ($curseType === 'misdirection') {
                 $excludedProtection = $type === 'night' ? $this->previousProtection($p, $s['day']) : null;
-                $alternatives = array_keys(array_filter($s['players'], fn (array $player): bool => $player['alive'] && $player['id'] !== $id && $player['id'] !== $target && $player['id'] !== $excludedProtection));
+                $alternatives = array_keys(array_filter($s['players'], fn (array $player): bool => $player['alive'] !== $deadTarget && $player['id'] !== $id && $player['id'] !== $target && $player['id'] !== $excludedProtection));
                 if ($alternatives !== []) {
                     $target = $alternatives[random_int(0, count($alternatives) - 1)];
                     $s['players'][$id]['curse'] = null;
@@ -274,7 +285,11 @@ class MatchEngine
                 }
             }
         }
-        $s['actions'][$id] = ['type' => $type, 'target' => $target, 'chosen_target' => $chosenTarget];
+        if ($useAbility) {
+            // Committing the action spends the ability even if it is disrupted later.
+            $s['players'][$id]['ability_used'] = true;
+        }
+        $s['actions'][$id] = ['type' => $type, 'target' => $target, 'chosen_target' => $chosenTarget, 'use_ability' => $useAbility];
         $this->advanceIfComplete($room, $s);
     }
 
@@ -325,11 +340,29 @@ class MatchEngine
             $player['curse'] = null;
         }
         unset($player);
+        // Disruptions resolve first, independent of submission order.
+        $disruptions = [];
+        $disrupted = [];
+        foreach ($s['actions'] as $id => $action) {
+            if ($s['players'][$id]['role'] === 'dreamweaver' && ($action['use_ability'] ?? false)) {
+                $disruptions[$id] = $action['target'];
+                $disrupted[$action['target']] = true;
+                $s['players'][$id]['results'][] = ['kind' => 'disruption', 'day' => $s['day'], 'target' => $s['players'][$action['target']]['name']];
+            }
+        }
+        // Simultaneous disruptions cannot undo one another after resolving.
+        $disrupted = array_diff_key($disrupted, $disruptions);
+        foreach ($disrupted as $id => $_) {
+            if (isset($s['actions'][$id])) {
+                $s['players'][$id]['results'][] = ['kind' => 'disrupted', 'day' => $s['day'], 'target' => $s['players'][$id]['name']];
+            }
+        }
+        $effective = array_diff_key($s['actions'], $disrupted);
         $veiled = [];
         $protected = [];
         $investigated = [];
         $cult = array_filter($s['players'], fn (array $p): bool => $p['alive'] && $p['alignment'] === 'cult');
-        foreach ($s['actions'] as $id => $a) {
+        foreach ($effective as $id => $a) {
             if ($s['players'][$id]['role'] === 'veilweaver' && $a['target'] !== null) {
                 $veiled[] = $a['target'];
             }
@@ -339,7 +372,7 @@ class MatchEngine
                 $s['players'][$id]['results'][] = ['kind' => 'protection', 'day' => $s['day'], 'target' => $s['players'][$a['target']]['name']];
             }
         }
-        foreach ($s['actions'] as $id => $a) {
+        foreach ($effective as $id => $a) {
             if ($s['players'][$id]['role'] === 'oracle') {
                 $target = $a['target'];
                 $investigated[] = $target;
@@ -361,12 +394,24 @@ class MatchEngine
                 }
                 $s['players'][$id]['results'][] = ['kind' => 'visits', 'day' => $s['day'], 'target' => $s['players'][$a['target']]['name'], 'visited' => $visited];
             }
+            if ($s['players'][$id]['role'] === 'medium' && ($a['use_ability'] ?? false)) {
+                $s['players'][$id]['results'][] = ['kind' => 'spirit', 'day' => $s['day'], 'target' => $s['players'][$a['target']]['name'], 'alignment' => $s['players'][$a['target']]['alignment']];
+            }
         }
-        $allChanted = count(array_intersect(array_keys($cult), array_keys($s['actions']))) === count($cult);
+        $chants = array_diff_key(array_intersect_key($effective, $cult), $disruptions);
+        $allChanted = count($chants) === count($cult);
+        $bells = [];
+        foreach ($effective as $id => $action) {
+            if ($s['players'][$id]['role'] === 'bellkeeper' && ($action['use_ability'] ?? false)) {
+                $bells[$id] = 0;
+            }
+        }
+        $unusedBells = array_keys($bells);
+        $ritualBlocked = [];
         $gained = 0;
         $contributors = [];
         foreach ($cult as $id => $player) {
-            $eligible = isset($s['actions'][$id]) && match ($s['mission']['id']) {
+            $eligible = isset($chants[$id]) && match ($s['mission']['id']) {
                 'solitary' => true,
                 'concord' => $allChanted,
                 'shadows' => ! in_array($id, $investigated),
@@ -376,17 +421,27 @@ class MatchEngine
             $key = $s['day'].':'.$id;
             if ($eligible && ! isset($s['awards'][$key])) {
                 $s['awards'][$key] = true;
+                if ($unusedBells !== []) {
+                    $bell = array_shift($unusedBells);
+                    $bells[$bell] = 1;
+                    $ritualBlocked[$id] = true;
+
+                    continue;
+                }
                 $s['tokens']++;
                 $gained++;
                 $contributors[] = $id;
             }
         }
+        foreach ($bells as $id => $prevented) {
+            $s['players'][$id]['results'][] = ['kind' => 'bell', 'day' => $s['day'], 'target' => 'The ritual', 'prevented' => $prevented];
+        }
         // One affliction per victim per dawn, even if multiple cultists chose them.
         $cursed = [];
         $blockedCurses = [];
-        foreach ($s['actions'] as $id => $action) {
+        foreach ($effective as $id => $action) {
             $target = $action['target'] ?? null;
-            if (isset($cult[$id]) && $target !== null && ! isset($cursed[$target])) {
+            if (isset($cult[$id]) && ! isset($disruptions[$id]) && $target !== null && ! isset($cursed[$target])) {
                 if (isset($protected[$target])) {
                     $blockedCurses[$target] = true;
 
@@ -403,13 +458,19 @@ class MatchEngine
             }
             $submitted = isset($s['actions'][$id]);
             $target = $s['actions'][$id]['target'] ?? null;
-            $reading = $player['role'] === 'oracle' && $submitted ? end($player['results']) : null;
+            $reading = $player['role'] === 'oracle' && isset($effective[$id]) ? end($player['results']) : null;
+            $canCurse = in_array($player['role'], ['veilweaver', 'acolyte'], true) && isset($effective[$id]);
             $actions[] = ['player_id' => $id, 'role' => $player['role'], 'target_id' => $target,
                 'chosen_target_id' => $s['actions'][$id]['chosen_target'] ?? $target,
-                'curse_type' => isset($cult[$id]) && $target !== null ? ($s['players'][$target]['curse']['type'] ?? null) : null,
-                'curse_blocked' => isset($cult[$id]) && $target !== null && isset($blockedCurses[$target]),
-                'prevented_curse' => $player['role'] === 'warden' && $target !== null && isset($blockedCurses[$target]),
-                'visited' => $player['role'] === 'lamplighter' && $submitted ? end($player['results'])['visited'] : null,
+                'curse_type' => $canCurse && $target !== null ? ($s['players'][$target]['curse']['type'] ?? null) : null,
+                'curse_blocked' => $canCurse && $target !== null && isset($blockedCurses[$target]),
+                'prevented_curse' => $player['role'] === 'warden' && isset($effective[$id]) && $target !== null && isset($blockedCurses[$target]),
+                'visited' => $player['role'] === 'lamplighter' && isset($effective[$id]) ? end($player['results'])['visited'] : null,
+                'used_ability' => $s['actions'][$id]['use_ability'] ?? false,
+                'disrupted' => $submitted && isset($disrupted[$id]),
+                'ritual_blocked' => isset($ritualBlocked[$id]),
+                'prevented_steps' => $bells[$id] ?? null,
+                'true_alignment' => $player['role'] === 'medium' && isset($effective[$id]) && ($effective[$id]['use_ability'] ?? false) ? $s['players'][$target]['alignment'] : null,
                 'submitted' => $submitted, 'contributed' => in_array($id, $contributors, true),
                 'apparent_alignment' => $reading ? $reading['alignment'] : null,
                 'veiled' => $reading && in_array($target, $veiled, true)];
@@ -553,6 +614,7 @@ class MatchEngine
                 'curse' => $this->curses->view($me['curse'] ?? null),
                 'curse_notice' => $me['curse_notice'] ?? null,
                 'previous_protection_target' => $this->previousProtection($me, $s['day']),
+                'ability_used' => $me['ability_used'] ?? false,
                 'mission' => $me['alignment'] === 'cult' ? $s['mission'] : null,
                 'allies' => $allies, 'submitted' => isset($s['actions'][$id]),
             ]),
@@ -560,7 +622,7 @@ class MatchEngine
                 ? array_map(fn (array $message): array => array_replace($message, ['body' => $this->curses->garble($message['body'], $me['curse']['id'].$message['id'])]), $s['messages'])
                 : $s['messages'], 'log' => $s['log'],
             'recap' => $s['phase'] === 'finished' ? $this->recap($s) : null,
-            'rules' => array_replace(array_intersect_key($this->rules(), array_flip(['min_players', 'max_players', 'seconds', 'ritual_goals', 'cultists_by_player_count', 'small_gathering_max_players', 'town_roles_min_players'])),
+            'rules' => array_replace(array_intersect_key($this->rules(), array_flip(['min_players', 'max_players', 'seconds', 'ritual_goals', 'cultists_by_player_count', 'small_gathering_max_players', 'town_roles_min_players', 'cult_roles_min_players'])),
                 isset($s['match_rules']['seconds']) ? ['seconds' => $s['match_rules']['seconds']] : []),
         ];
     }

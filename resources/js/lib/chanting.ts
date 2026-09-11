@@ -78,11 +78,20 @@ export interface RecapNightAction {
     curse_blocked?: boolean;
     prevented_curse?: boolean;
     visited?: boolean | null;
+    used_ability?: boolean;
+    disrupted?: boolean;
+    ritual_blocked?: boolean;
+    prevented_steps?: number | null;
+    true_alignment?: string | null;
 }
 export type PrivateNightResult = { day: number; target: string } & (
     | { kind?: 'alignment'; alignment: string }
     | { kind: 'visits'; visited: boolean }
     | { kind: 'protection' }
+    | { kind: 'spirit'; alignment: string }
+    | { kind: 'bell'; prevented: number }
+    | { kind: 'disruption' }
+    | { kind: 'disrupted' }
 );
 
 export interface MatchRecapData {
@@ -158,6 +167,7 @@ export interface RoomState {
         allies: { id: string; name: string; role: string }[];
         results: PrivateNightResult[];
         previous_protection_target?: string | null;
+        ability_used?: boolean;
         submitted: boolean;
         curse: Curse | null;
         curse_notice: string | null;
@@ -172,6 +182,7 @@ export interface RoomState {
         cultists_by_player_count: Record<number, number>;
         small_gathering_max_players: number;
         town_roles_min_players?: Record<string, number>;
+        cult_roles_min_players?: Record<string, number>;
     };
 }
 
@@ -247,5 +258,26 @@ export const roles: Record<
         description:
             'Watch another living player tonight. At dawn, privately learn whether anyone else targeted them. Your own watch does not count. You learn no visitor names, roles, or abilities; even a blocked curse counts as a visit.',
         symbol: '☼',
+    },
+    medium: {
+        name: 'The Medium',
+        subtitle: 'Town · listener beyond the veil',
+        description:
+            'Once per match, contact a banished player at night to privately learn their true alignment at dawn. Veils cannot change this result. You may keep watch instead and save your ability. A disrupted attempt still spends it.',
+        symbol: '☽',
+    },
+    dreamweaver: {
+        name: 'The Dreamweaver',
+        subtitle: 'Cult · trespasser in dreams',
+        description:
+            'Chant without a target, or once per match give up chanting to disrupt another living player’s night action. Disruptions resolve first: the target’s other ability or chant fails, and they privately learn their submitted action was disrupted. Warden protection does not stop it. Choosing disruption also breaks a mission that requires every cultist to chant.',
+        symbol: '≋',
+    },
+    bellkeeper: {
+        name: 'The Bellkeeper',
+        subtitle: 'Town · the last warning',
+        description:
+            'Once per match, ring the bell at night to prevent one ritual step earned that night. It never removes existing progress. Ringing when no steps are earned still spends your ability, as does a disrupted attempt. Keep watch to save it for later.',
+        symbol: '♧',
     },
 };

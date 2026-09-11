@@ -42,7 +42,10 @@ const nextAction = computed(() => {
         </section>
         <RoleGuide
             compact
-            :minimum-players="state.rules.town_roles_min_players"
+            :minimum-players="{
+                ...state.rules.town_roles_min_players,
+                ...state.rules.cult_roles_min_players,
+            }"
         />
         <section class="help-answer">
             <h3>How do we win?</h3>
@@ -70,7 +73,8 @@ const nextAction = computed(() => {
             <p>
                 Reveal your secrets to use a private night ability. A submitted
                 choice is final. Puzzle and mist curses must be solved before
-                you can return to the room.
+                you can return to the room. The Medium instead targets a
+                banished player when using their ability at night.
             </p>
             <p>
                 Selecting a player never submits automatically. Use the
@@ -99,8 +103,11 @@ const nextAction = computed(() => {
                     <strong>Night.</strong> Everyone confirms one private
                     action. Cultists chant, the Oracle investigates, and the
                     Warden protects against new curses, the Lamplighter watches
-                    for other visitors, and townspeople keep watch. Missing the
-                    deadline forfeits the action.
+                    for other visitors, and townspeople keep watch. The Medium,
+                    Dreamweaver, and Bellkeeper can use their once-per-match
+                    ability or save it. Disruptions resolve first. A committed
+                    ability is spent even if disrupted. Missing the deadline
+                    forfeits the action without spending a saved ability.
                 </li>
                 <li>
                     <strong>Discussion.</strong> Read public events and any

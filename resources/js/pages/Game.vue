@@ -51,7 +51,11 @@ import {
     type Character,
     defaultCharacters,
 } from '@/lib/chanting';
-import { eligibleTargets } from '@/lib/roleActions';
+import {
+    eligibleTargets,
+    hasLimitedAbility,
+    nightActionLabel,
+} from '@/lib/roleActions';
 import '../../css/chanting.css';
 
 const props = withDefaults(
@@ -77,6 +81,13 @@ const pending = ref(false);
 const disconnected = ref(false);
 const live = ref(false);
 const target = ref<string | null>(null);
+const useAbility = ref(false);
+const limitedAbility = computed(() =>
+    hasLimitedAbility(state.value?.me.role ?? null),
+);
+watch(useAbility, () => {
+    target.value = null;
+});
 const actionSerial = ref(0);
 const revealed = ref(false);
 const message = ref('');
@@ -286,12 +297,18 @@ const lobbyRoster = computed(() => {
         cultists,
         townspeople: count - cultists - 1 - townRoles.length,
         townRoles,
+        cultRoles: Object.entries(
+            state.value.rules.cult_roles_min_players ?? {},
+        )
+            .filter(([, minimum]) => count >= minimum)
+            .slice(0, Math.max(0, cultists - 1))
+            .map(([role]) => role),
         steps: goal.steps,
         small: count <= state.value.rules.small_gathering_max_players,
     };
 });
 const targets = computed(() =>
-    state.value ? eligibleTargets(state.value) : [],
+    state.value ? eligibleTargets(state.value, useAbility.value) : [],
 );
 const canChat = computed(
     () =>
@@ -319,7 +336,9 @@ const timeLabel = computed(() =>
 const requiresTarget = computed(
     () =>
         state.value?.phase === 'night' &&
-        ['oracle', 'lamplighter'].includes(state.value.me.role ?? ''),
+        (['oracle', 'lamplighter'].includes(state.value.me.role ?? '') ||
+            (useAbility.value &&
+                ['medium', 'dreamweaver'].includes(state.value.me.role ?? ''))),
 );
 const canChooseNightTarget = computed(
     () =>
@@ -327,7 +346,10 @@ const canChooseNightTarget = computed(
         state.value?.me.role === 'warden' ||
         state.value?.me.role === 'lamplighter' ||
         state.value?.me.role === 'veilweaver' ||
-        state.value?.me.role === 'acolyte',
+        state.value?.me.role === 'acolyte' ||
+        (useAbility.value &&
+            !state.value?.me.ability_used &&
+            ['medium', 'dreamweaver'].includes(state.value?.me.role ?? '')),
 );
 const puzzleCursed = computed(
     () =>
@@ -357,17 +379,9 @@ function selectSeat(id: string) {
         target.value = id;
 }
 const nightLabel = computed(() =>
-    state.value?.me.role === 'oracle'
-        ? 'Confirm investigation'
-        : state.value?.me.role === 'warden'
-          ? target.value
-              ? 'Confirm protection'
-              : 'Confirm skipped protection'
-          : state.value?.me.role === 'lamplighter'
-            ? 'Confirm observation'
-            : state.value?.me.alignment === 'cult'
-              ? 'Chant for the ritual'
-              : 'Keep watch tonight',
+    state.value
+        ? nightActionLabel(state.value, useAbility.value, target.value)
+        : '',
 );
 
 function accept(next: RoomState) {
@@ -537,6 +551,7 @@ watch(
     () => state.value?.phase_id,
     () => {
         target.value = null;
+        useAbility.value = false;
         if (state.value?.phase === 'lobby' || state.value?.phase === 'reveal') {
             revealed.value = false;
             roleRead.value = false;
@@ -923,6 +938,21 @@ onBeforeUnmount(() => {
                                     The lone cultist adds one step each night
                                     they chant, even if investigated.
                                 </p>
+                                <p v-if="lobbyRoster.cultRoles.length">
+                                    The cult includes one Veilweaver and
+                                    <span
+                                        v-for="role in lobbyRoster.cultRoles"
+                                        :key="role"
+                                        >one
+                                        {{
+                                            roles[role]?.name.replace(
+                                                /^The /,
+                                                '',
+                                            ) ?? role
+                                        }}.
+                                    </span>
+                                    Remaining cultists are Acolytes.
+                                </p>
                                 <p>
                                     With just one cultist and one town player
                                     left, the cult wins immediately.
@@ -1094,8 +1124,11 @@ onBeforeUnmount(() => {
                                         state.me.role === 'oracle'
                                             ? 'Choose a living player to investigate. Your private reading arrives at dawn.'
                                             : state.me.role === 'warden' ||
-                                                state.me.role === 'lamplighter'
-                                              ? roles[state.me.role].description
+                                                state.me.role ===
+                                                    'lamplighter' ||
+                                                limitedAbility
+                                              ? roles[state.me.role ?? '']
+                                                    ?.description
                                               : state.me.role === 'veilweaver'
                                                 ? 'Choose someone to veil and curse, or chant without a target. Their alignment appears reversed tonight; a random curse takes hold at dawn.'
                                                 : state.me.role === 'acolyte'
@@ -1129,8 +1162,63 @@ onBeforeUnmount(() => {
                                     <Check :size="17" />Your action is sealed.
                                     Wait for dawn.
                                 </div>
-                                <template v-else
-                                    ><div
+                                <template v-else>
+                                    <div
+                                        v-if="limitedAbility"
+                                        class="small-help"
+                                    >
+                                        <p v-if="state.me.ability_used">
+                                            Your once-per-match ability is
+                                            spent. You can still
+                                            {{
+                                                state.me.alignment === 'cult'
+                                                    ? 'chant'
+                                                    : 'keep watch'
+                                            }}.
+                                        </p>
+                                        <template v-else>
+                                            <label class="quiet-link">
+                                                <input
+                                                    type="checkbox"
+                                                    v-model="useAbility"
+                                                    :disabled="
+                                                        pending ||
+                                                        disconnected ||
+                                                        puzzleCursed ||
+                                                        mistCursed ||
+                                                        (state.me.role ===
+                                                            'medium' &&
+                                                            !state.players.some(
+                                                                (player) =>
+                                                                    !player.alive,
+                                                            ))
+                                                    "
+                                                />
+                                                Use my once-per-match ability
+                                                tonight
+                                            </label>
+                                            <p
+                                                v-if="
+                                                    state.me.role ===
+                                                        'medium' &&
+                                                    !state.players.some(
+                                                        (player) =>
+                                                            !player.alive,
+                                                    )
+                                                "
+                                            >
+                                                Nobody has been banished yet.
+                                                Keep watch to save your ability.
+                                            </p>
+                                            <p v-else>
+                                                Leave this unchecked to save it.
+                                                Confirming its use spends it
+                                                even if your action is
+                                                disrupted.
+                                            </p>
+                                        </template>
+                                    </div>
+                                    <div
                                         v-if="canChooseNightTarget"
                                         class="target-list"
                                         role="group"
@@ -1193,7 +1281,12 @@ onBeforeUnmount(() => {
                                                 ? 'night-curse-help'
                                                 : undefined
                                         "
-                                        @click="act('night', { target })"
+                                        @click="
+                                            act('night', {
+                                                target,
+                                                use_ability: useAbility,
+                                            })
+                                        "
                                     >
                                         {{ nightLabel }}<Check :size="16" />
                                     </button>

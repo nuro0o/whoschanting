@@ -87,8 +87,9 @@ function restoreFocus(event: Event) {
         </header>
         <p class="curse-effect">
             Your next chosen night or vote target will turn toward another legal
-            living player instead. It happens once. Abstaining does not trigger
-            it; there is no puzzle to break this curse.
+            player instead. The Medium can only be redirected to another
+            banished player. It happens once. Abstaining does not trigger it;
+            there is no puzzle to break this curse.
         </p>
         <p class="curse-expiry">
             Took hold at dawn {{ curse.day }} · Fades at the next dawn.

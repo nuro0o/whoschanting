@@ -1,6 +1,22 @@
 <script setup lang="ts">
 const terms = [
     [
+        'Medium',
+        'A town role. Once per match, contacts a banished player at night and privately learns their true alignment at dawn. Veils cannot change it. Keeping watch saves the ability; a disrupted attempt spends it.',
+    ],
+    [
+        'Dreamweaver',
+        'A cult role. Chants without a target, or once per match replaces chanting with a disruption of another living player. Disruptions resolve before other night actions and bypass Warden protection. The target privately learns a submitted action failed. A disruption also breaks a mission requiring every cultist to chant.',
+    ],
+    [
+        'Bellkeeper',
+        'A town role. Once per match, prevents one ritual step earned that night. Existing progress stays unchanged. Ringing on a quiet night or being disrupted spends the ability. Keeping watch saves it.',
+    ],
+    [
+        'Disrupted',
+        'Your submitted night action had no effect. Any committed once-per-match ability is still spent. The Lamplighter can still detect your attempted visit. Simultaneous Dreamweaver disruptions resolve together before all other actions.',
+    ],
+    [
         'Role',
         'Your secret job and abilities for this match, shown on your private role card. It is assigned separately from your cosmetic character.',
     ],
@@ -62,7 +78,7 @@ const terms = [
     ],
     [
         'Misdirection',
-        'Only appears at ritual level 3, from two-thirds progress. Your next chosen night or vote target changes once to another legal living player. Abstaining does not trigger it. It fades at the following dawn.',
+        'Only appears at ritual level 3, from two-thirds progress. Your next chosen night or vote target changes once to another legal player. The Medium can only be redirected to another banished player. Abstaining does not trigger it. It fades at the following dawn.',
     ],
     [
         'Chant',

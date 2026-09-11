@@ -16,13 +16,20 @@ const allegiances = [
         id: 'town',
         name: 'Town',
         purpose: 'Uncover the cult.',
-        roles: ['townsperson', 'oracle', 'warden', 'lamplighter'],
+        roles: [
+            'townsperson',
+            'oracle',
+            'warden',
+            'lamplighter',
+            'medium',
+            'bellkeeper',
+        ],
     },
     {
         id: 'cult',
         name: 'Cult',
         purpose: 'Keep the ritual alive.',
-        roles: ['veilweaver', 'acolyte'],
+        roles: ['veilweaver', 'acolyte', 'dreamweaver'],
     },
 ];
 </script>

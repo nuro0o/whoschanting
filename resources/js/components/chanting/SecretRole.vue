@@ -2,7 +2,7 @@
 import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { Eye, EyeOff, LockKeyhole } from '@lucide/vue';
 import { roles, type RoomState } from '@/lib/chanting';
-import { privateResultText } from '@/lib/roleActions';
+import { privateResultText, hasLimitedAbility } from '@/lib/roleActions';
 import {
     prefersReducedMotion,
     usePanelMotion,
@@ -180,6 +180,17 @@ onBeforeUnmount(() => {
             <div class="role-details">
                 <p class="eyebrow">TONIGHT’S ABILITY</p>
                 <p>{{ roles[state.me.role ?? '']?.description }}</p>
+                <p
+                    v-if="hasLimitedAbility(state.me.role)"
+                    class="private-separator"
+                >
+                    <strong>{{
+                        state.me.ability_used
+                            ? 'Once-per-match ability spent.'
+                            : 'Once-per-match ability available.'
+                    }}</strong>
+                    Choose whether to use it in your night action in Play.
+                </p>
                 <div v-if="state.me.mission" class="private-separator">
                     <p class="eyebrow">YOUR MISSION</p>
                     <strong>{{ state.me.mission.name }}</strong>

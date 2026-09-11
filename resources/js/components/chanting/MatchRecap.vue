@@ -29,6 +29,18 @@ function redirection(action: {
 }
 function actionDescription(action: RecapNightAction) {
     if (!action.submitted) return 'Missed the night deadline. No action taken.';
+    if (action.disrupted)
+        return `Night action disrupted. No ability or chant took effect.${action.used_ability ? ' The once-per-match ability was spent.' : ''}`;
+    if (action.role === 'medium')
+        return action.used_ability
+            ? `Contacted ${name(action.target_id)}. True alignment: ${action.true_alignment}.`
+            : 'Kept watch and saved any remaining ability.';
+    if (action.role === 'bellkeeper')
+        return action.used_ability
+            ? `Rang the bell. Prevented ${action.prevented_steps ?? 0} ritual ${action.prevented_steps === 1 ? 'step' : 'steps'}. The ability was spent.`
+            : 'Kept watch and saved any remaining ability.';
+    if (action.role === 'dreamweaver' && action.used_ability)
+        return `Sent a disruption to ${name(action.target_id)} instead of chanting. The ability was spent.`;
     if (action.role === 'oracle') {
         return `Investigated ${name(action.target_id)}. Read as ${action.apparent_alignment === 'cult' ? 'cult' : 'town'}.`;
     }
@@ -39,10 +51,12 @@ function actionDescription(action: RecapNightAction) {
     if (action.role === 'lamplighter') {
         return `Watched ${name(action.target_id)}. ${action.visited ? 'At least one other player targeted them.' : 'No other player targeted them.'}`;
     }
-    if (action.role === 'veilweaver' || action.role === 'acolyte') {
+    if (['veilweaver', 'acolyte', 'dreamweaver'].includes(action.role)) {
         const chant = action.contributed
             ? 'Chanted. Added 1 ritual step.'
-            : 'Chanted, but the mission condition was not met. No ritual step.';
+            : action.ritual_blocked
+              ? 'Chanted, but the Bellkeeper prevented this ritual step.'
+              : 'Chanted, but the mission condition was not met. No ritual step.';
         const veil =
             action.role === 'veilweaver'
                 ? action.target_id
