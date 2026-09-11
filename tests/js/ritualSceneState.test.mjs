@@ -18,7 +18,7 @@ await test('new gatherings clear the previous summoning, including stale winner 
 });
 
 await test('summoning strength scales with the public ritual ratio across room sizes', () => {
-    for (const threshold of [3, 4, 6, 8, 9, 10, 11, 12]) {
+    for (const threshold of [2, 3, 4, 6, 8, 9, 10, 11, 12]) {
         const midpoint = scene('night', threshold / 2, threshold);
         const reference = scene('night', 5, 10);
         for (const key of ['progress', 'cracks', 'mist', 'emergence']) {
@@ -29,9 +29,11 @@ await test('summoning strength scales with the public ritual ratio across room s
             );
         }
         let previous = scene('night', 0, threshold);
+        assert.equal(previous.runeCount, threshold);
         assert.equal(previous.emergence, 0);
         for (let tokens = 1; tokens <= threshold; tokens++) {
             const next = scene('night', tokens, threshold);
+            assert.equal(next.litRunes, tokens);
             for (const key of [
                 'progress',
                 'cracks',

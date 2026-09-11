@@ -16,7 +16,7 @@ export function ritualSceneState(input: RitualSceneInput) {
     const calmed = input.phase === 'finished' && input.winner === 'town';
     const summoned = input.phase === 'finished' && input.winner === 'cult';
     const runeCount = valid
-        ? Math.max(3, Math.min(24, Math.ceil(input.threshold)))
+        ? Math.max(2, Math.min(24, Math.ceil(input.threshold)))
         : 6;
     return {
         progress,

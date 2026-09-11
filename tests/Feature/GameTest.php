@@ -186,7 +186,7 @@ class GameTest extends TestCase
         $this->expire($room);
         $this->expire($room);
         $recap = $this->engine->access($room->code, 'secret-0')['recap'];
-        $this->assertSame('paranoia-v1', $recap['rules_version']);
+        $this->assertSame('small-gathering-v2', $recap['rules_version']);
         $actions = array_column($recap['rounds'][0]['night']['actions'], null, 'player_id');
         $this->assertTrue($actions[$r['warden']]['prevented_curse']);
         $this->assertTrue($actions[$r['lamplighter']]['visited']);
@@ -655,11 +655,13 @@ class GameTest extends TestCase
     {
         [$room, $identities] = $this->match(mission: null, playerCount: $playerCount);
         $cultist = $this->roles($room)['veilweaver'];
+        $goal = $playerCount === 3 ? 2 : 3;
+        $this->assertSame($goal, $room->state['threshold']);
         $this->expire($room);
-        for ($night = 1; $night <= $playerCount; $night++) {
+        for ($night = 1; $night <= $goal; $night++) {
             $this->act($room, $identities[$cultist], 'night');
             $this->expire($room);
-            if ($night < $playerCount) {
+            if ($night < $goal) {
                 $this->expire($room);
                 $this->expire($room);
             }
@@ -672,10 +674,11 @@ class GameTest extends TestCase
         $this->expire($room);
         $this->assertSame('cult', $room->state['winner']);
         $this->assertSame('finished', $room->state['phase']);
-        $this->assertSame($playerCount, $room->state['tokens']);
+        $this->assertSame($goal, $room->state['tokens']);
+        $this->assertCount($playerCount, array_filter($room->state['players'], fn (array $player): bool => $player['alive']));
         $view = $this->engine->access($room->code, 'secret-0');
-        $this->assertCount($playerCount, $view['recap']['rounds']);
-        $this->assertArrayHasKey('vote', $view['recap']['rounds'][$playerCount - 1]);
+        $this->assertCount($goal, $view['recap']['rounds']);
+        $this->assertArrayHasKey('vote', $view['recap']['rounds'][$goal - 1]);
         $this->assertFalse($view['ritual']['final_vote']);
     }
 
@@ -986,7 +989,7 @@ class GameTest extends TestCase
     /** @return iterable<string, array{string, int, string}> */
     public static function finalRitualVotes(): iterable
     {
-        yield 'last cultist banished at 3 of 3' => ['last_cultist', 3, 'town'];
+        yield 'last cultist banished at 2 of 2' => ['last_cultist', 3, 'town'];
         yield 'town player banished' => ['wrong_player', 3, 'cult'];
         yield 'everyone abstains' => ['abstain', 3, 'cult'];
         yield 'vote is tied' => ['tie', 3, 'cult'];
@@ -1014,7 +1017,7 @@ class GameTest extends TestCase
         }
         $view = $this->engine->access($room->code, 'secret-0');
         $this->assertSame('discussion', $view['phase']);
-        $this->assertSame($playerCount === 3 ? 3 : 7, $view['ritual']['tokens']);
+        $this->assertSame($playerCount === 3 ? 2 : 7, $view['ritual']['tokens']);
         $this->assertTrue($view['ritual']['final_vote']);
         $this->assertNull($view['winner']);
         $this->assertNull($view['recap']);
@@ -1238,7 +1241,7 @@ class GameTest extends TestCase
         $this->act($room, 'secret-0', 'discussion_ready');
         $this->expire($room);
         $this->assertSame('voting', $room->state['phase']);
-        $this->assertSame([3, 4, 6, 8, 9, 10, 11, 12], array_column($this->engine->rules()['ritual_goals'], 'steps'));
+        $this->assertSame([2, 3, 6, 8, 9, 10, 11, 12], array_column($this->engine->rules()['ritual_goals'], 'steps'));
     }
 
     #[DataProvider('rosterSizes')]
@@ -1246,7 +1249,7 @@ class GameTest extends TestCase
     {
         [$room, $identities] = $this->match(mission: null, playerCount: $playerCount);
         $s = $room->fresh()->state;
-        $this->assertSame([3 => 3, 4 => 4, 5 => 6, 6 => 8, 7 => 9, 8 => 10, 9 => 11, 10 => 12][$playerCount], $s['threshold']);
+        $this->assertSame([3 => 2, 4 => 3, 5 => 6, 6 => 8, 7 => 9, 8 => 10, 9 => 11, 10 => 12][$playerCount], $s['threshold']);
         if ($cultistCount === 1) {
             $this->assertSame('solitary', $s['mission']['id']);
             $this->expire($room);
@@ -1364,7 +1367,7 @@ class GameTest extends TestCase
         [$room] = $this->match(mission: null, playerCount: 3);
         config(['game.ritual_goals_by_player_count.3' => 9, 'game.seconds.night' => 300]);
         $this->expire($room);
-        $this->assertSame(3, $room->state['threshold']);
+        $this->assertSame(2, $room->state['threshold']);
         $this->assertSame('solitary', $room->state['mission']['id']);
         $this->assertSame(45, (int) now()->diffInSeconds($room->deadline));
         $this->assertSame(45, $this->engine->access($room->code, 'secret-0')['rules']['seconds']['night']);
