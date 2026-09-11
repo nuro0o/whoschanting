@@ -1,57 +1,20 @@
 <script setup lang="ts">
-import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import { Eye, EyeOff, LockKeyhole } from '@lucide/vue';
+import { nextTick, ref, watch } from 'vue';
+import { BookOpen, Eye, EyeOff, LockKeyhole } from '@lucide/vue';
 import { roles, type RoomState } from '@/lib/chanting';
-import { privateResultText, hasLimitedAbility } from '@/lib/roleActions';
-import {
-    prefersReducedMotion,
-    usePanelMotion,
-} from '@/composables/usePanelMotion';
+import { hasLimitedAbility } from '@/lib/roleActions';
+import { usePanelMotion } from '@/composables/usePanelMotion';
 const panel = usePanelMotion();
-const props = defineProps<{
+defineProps<{
     state: RoomState;
-    active: boolean;
     newResults: number;
 }>();
-const emit = defineEmits<{ hide: []; 'results-read': [] }>();
+const emit = defineEmits<{ hide: []; journal: [] }>();
 const revealed = defineModel<boolean>({ default: false });
-const resultsOpen = ref(false);
-const resultsElement = ref<HTMLElement>();
-const resultsVisible = ref(false);
 const revealButton = ref<HTMLButtonElement>();
-let resultsObserver: IntersectionObserver | undefined;
-watch(resultsElement, (element) => {
-    resultsObserver?.disconnect();
-    resultsVisible.value = false;
-    if (!element) return;
-    resultsObserver = new IntersectionObserver(
-        ([entry]) => {
-            resultsVisible.value = entry.isIntersecting;
-        },
-        { threshold: 0.25 },
-    );
-    resultsObserver.observe(element);
-});
-watch(
-    [resultsVisible, () => props.active, () => props.state.me.results.length],
-    () => {
-        acknowledgeResults();
-    },
-    { flush: 'post' },
-);
-function acknowledgeResults() {
-    if (
-        resultsVisible.value &&
-        props.active &&
-        revealed.value &&
-        document.visibilityState === 'visible'
-    )
-        emit('results-read');
-}
 const justRevealed = ref(false);
 watch(revealed, (visible) => {
     justRevealed.value = visible;
-    if (!visible) resultsOpen.value = false;
 });
 function revealRole() {
     justRevealed.value = true;
@@ -63,23 +26,6 @@ async function hideRole() {
     await nextTick();
     revealButton.value?.focus({ preventScroll: true });
 }
-async function showResults() {
-    resultsOpen.value = true;
-    await nextTick();
-    resultsElement.value?.focus({ preventScroll: true });
-    resultsElement.value?.scrollIntoView({
-        behavior: prefersReducedMotion() ? 'instant' : 'smooth',
-        block: 'nearest',
-    });
-}
-defineExpose({ showResults });
-onMounted(() =>
-    document.addEventListener('visibilitychange', acknowledgeResults),
-);
-onBeforeUnmount(() => {
-    resultsObserver?.disconnect();
-    document.removeEventListener('visibilitychange', acknowledgeResults);
-});
 </script>
 <template>
     <section
@@ -133,50 +79,14 @@ onBeforeUnmount(() => {
                 </p>
             </div>
             <button
-                v-if="state.me.results.length"
                 class="button investigation-toggle"
-                :aria-expanded="resultsOpen"
-                aria-controls="role-investigations"
-                @click="resultsOpen = !resultsOpen"
+                @click="emit('journal')"
             >
-                {{ resultsOpen ? 'Hide night results' : 'Read night results' }}
+                <BookOpen :size="16" /> Open table journal
                 <span v-if="newResults" class="room-badge"
-                    >{{ newResults }} new result{{
-                        newResults === 1 ? '' : 's'
-                    }}</span
+                    >{{ newResults }} new</span
                 >
             </button>
-            <div
-                v-if="resultsOpen && state.me.results.length"
-                id="role-investigations"
-                ref="resultsElement"
-                class="private-separator role-results"
-                tabindex="-1"
-            >
-                <strong>Your night results · private</strong>
-                <ul class="investigation-list">
-                    <li
-                        v-for="(result, index) in [
-                            ...state.me.results,
-                        ].reverse()"
-                        :key="index"
-                    >
-                        Night {{ result.day }} · {{ privateResultText(result) }}
-                    </li>
-                </ul>
-                <p v-if="state.me.role === 'oracle'">
-                    Readings can be veiled. Your own role and mission always
-                    tell the truth.
-                </p>
-                <p v-else-if="state.me.role === 'lamplighter'">
-                    Visits can be friendly or hostile. Veils do not change these
-                    observations, and your own watch is excluded.
-                </p>
-                <p v-else-if="state.me.role === 'warden'">
-                    This records whom you protected, not whether a curse was
-                    attempted. Veils still affect Oracle readings.
-                </p>
-            </div>
             <div class="role-details">
                 <p class="eyebrow">YOUR ABILITY</p>
                 <p>{{ roles[state.me.role ?? '']?.description }}</p>

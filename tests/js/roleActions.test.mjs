@@ -18,6 +18,50 @@ const state = {
     ],
 };
 
+await test('only curse-capable cultists can select themselves at night, with an explicit confirmation label', () => {
+    for (const role of ['veilweaver', 'acolyte']) {
+        const cult = { ...state, me: { ...state.me, role, alignment: 'cult' } };
+        assert.deepEqual(
+            eligibleTargets(cult).map((p) => p.id),
+            ['me', 'previous', 'neighbor'],
+        );
+        assert.equal(
+            nightActionLabel(cult, false, 'me'),
+            'Chant and curse yourself',
+        );
+        assert.ok(
+            !eligibleTargets({ ...cult, phase: 'voting' }).some(
+                (p) => p.id === 'me',
+            ),
+        );
+        assert.ok(
+            !eligibleTargets({
+                ...cult,
+                players: state.players.map((p) => ({
+                    ...p,
+                    alive: p.id !== 'me' && p.alive,
+                })),
+            }).some((p) => p.id === 'me'),
+        );
+    }
+    for (const role of [
+        'oracle',
+        'warden',
+        'lamplighter',
+        'tracker',
+        'dreamweaver',
+        'counterfeiter',
+        'phantasm',
+    ]) {
+        assert.ok(
+            !eligibleTargets(
+                { ...state, me: { ...state.me, role } },
+                true,
+            ).some((p) => p.id === 'me'),
+        );
+    }
+});
+
 await test('Paranoia oaths are available with secrets hidden and alongside an Exorcist ability', () => {
     const discussion = {
         ...state,

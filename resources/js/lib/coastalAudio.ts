@@ -301,21 +301,20 @@ export class CoastalAudio {
     private makeNoise(context: AudioContext): AudioBuffer {
         const buffer = context.createBuffer(
             1,
-            context.sampleRate * 4,
+            context.sampleRate * 16,
             context.sampleRate,
         );
         const samples = buffer.getChannelData(0);
         let brown = 0;
         for (let i = 0; i < samples.length; i++) {
-            brown = (brown + Math.random() * 0.04 - 0.02) / 1.02;
-            samples[i] = brown * 3.5;
+            samples[i] = Math.random() * 0.04 - 0.02;
+            brown = (brown + samples[i]) / 1.02;
         }
-        // Smooth both loop boundaries to zero to avoid a click every four seconds.
-        const edge = Math.floor(context.sampleRate * 0.025);
-        for (let i = 0; i < edge; i++) {
-            const taper = (1 - Math.cos((Math.PI * i) / edge)) / 2;
-            samples[i] *= taper;
-            samples[samples.length - 1 - i] *= taper;
+        // Warm the filter through a full cycle, then start from its final state.
+        // The seam behaves like an ordinary sample step, with no fade-to-silence dip.
+        for (let i = 0; i < samples.length; i++) {
+            brown = (brown + samples[i]) / 1.02;
+            samples[i] = brown * 3.5;
         }
         return buffer;
     }
@@ -373,8 +372,8 @@ export class CoastalAudio {
         gain.gain.linearRampToValueAtTime(0.34, context.currentTime + 2);
         const tide = context.createOscillator();
         const depth = context.createGain();
-        tide.frequency.value = 0.085;
-        depth.gain.value = 0.12;
+        tide.frequency.value = 0.031;
+        depth.gain.value = 0.035;
         tide.connect(depth);
         depth.connect(gain.gain);
         this.track(sea, [filter, gain], true);

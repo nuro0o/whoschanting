@@ -1,0 +1,20 @@
+.chanting .tutorial-invitation {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0 8px;
+    margin-top: 18px;
+    color: var(--muted);
+    font-size: 13px;
+}
+
+.tutorial-invitation .quiet-link {
+    min-height: 44px;
+    color: var(--green);
+    text-decoration: underline;
+    text-underline-offset: 4px;
+}
+
+.tutorial-invitation > span {
+    flex-basis: 100%;
+}

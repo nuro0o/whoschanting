@@ -14,6 +14,7 @@ import RoomEntry from '@/components/chanting/RoomEntry.vue';
 import ProgressionSummary from '@/components/chanting/ProgressionSummary.vue';
 import { type Character } from '@/lib/chanting';
 import type { ProgressionData } from '@/lib/progression';
+import '../../css/tutorial-invitation.css';
 
 defineProps<{
     progression: ProgressionData;
@@ -97,6 +98,13 @@ const membershipDate = computed(() => {
                         :initial-name="user.name"
                         compact-characters
                     />
+                    <p class="tutorial-invitation">
+                        Learn before you gather.
+                        <Link href="/tutorial" class="quiet-link"
+                            >Practice solo →</Link
+                        >
+                        <span>A guided round with scripted villagers.</span>
+                    </p>
                 </div>
             </section>
             <aside class="ledger-record" aria-label="Your account at a glance">

@@ -321,8 +321,9 @@ class MatchEngine
         $this->ensure($forgedAlignment === null || ($type === 'night' && $p['role'] === 'counterfeiter' && $useAbility), 'Only a Counterfeiter using their ability can forge a reading.');
         $this->ensure(! ($p['role'] === 'counterfeiter' && $useAbility) || in_array($forgedAlignment, ['town', 'cult'], true), 'Choose the forged alignment.');
         $deadTarget = $type === 'night' && $p['role'] === 'medium' && $useAbility;
+        $canCurseSelf = $type === 'night' && in_array($p['role'], ['veilweaver', 'acolyte'], true);
         if ($target !== null) {
-            $this->ensure(isset($s['players'][$target]) && $s['players'][$target]['alive'] !== $deadTarget && $target !== $id, $deadTarget ? 'Choose a banished player.' : 'Choose another living player.');
+            $this->ensure(isset($s['players'][$target]) && $s['players'][$target]['alive'] !== $deadTarget && ($target !== $id || $canCurseSelf), $deadTarget ? 'Choose a banished player.' : ($canCurseSelf ? 'Choose a living player, including yourself.' : 'Choose another living player.'));
         }
         if ($type === 'discussion_ready') {
             $this->ensure($s['phase'] === 'discussion', 'You can be ready for voting only during discussion.');
@@ -345,7 +346,7 @@ class MatchEngine
             $curseType = $p['curse']['type'] ?? null;
             if ($curseType === 'misdirection') {
                 $excludedProtection = $type === 'night' ? $this->previousProtection($p, $s['day']) : null;
-                $alternatives = array_keys(array_filter($s['players'], fn (array $player): bool => $player['alive'] !== $deadTarget && $player['id'] !== $id && $player['id'] !== $target && $player['id'] !== $excludedProtection));
+                $alternatives = array_keys(array_filter($s['players'], fn (array $player): bool => $player['alive'] !== $deadTarget && ($player['id'] !== $id || $canCurseSelf) && $player['id'] !== $target && $player['id'] !== $excludedProtection));
                 if ($alternatives !== []) {
                     $target = $alternatives[random_int(0, count($alternatives) - 1)];
                     $s['players'][$id]['curse'] = null;
@@ -768,7 +769,8 @@ class MatchEngine
         }
 
         return [
-            'id' => $room->id, 'code' => $room->code, 'phase' => $s['phase'], 'phase_id' => $s['phase_id'],
+            'id' => $room->id, 'code' => $room->code, 'match_id' => $s['match_id'] ?? null,
+            'phase' => $s['phase'], 'phase_id' => $s['phase_id'],
             'revision' => $s['revision'], 'day' => $s['day'], 'deadline' => $room->deadline?->toISOString(),
             'roster' => $s['roster'] ?? 'classic',
             'mode_setup' => $setup, 'mode_preview' => $preview, 'chaos_event' => $s['chaos_event'] ?? null,

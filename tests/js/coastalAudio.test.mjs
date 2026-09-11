@@ -107,9 +107,6 @@ await test('engine creates nothing until enabled, stops scheduled sources on pau
         assert.equal(contexts.length, 0);
         assert.equal(await engine.enable(), true);
         const context = contexts[0];
-        const noise = context.buffers[0];
-        assert.equal(Math.abs(noise[0]), 0);
-        assert.equal(Math.abs(noise.at(-1)), 0);
         engine.play(['seal', 'town']);
         assert.ok(context.nodes.some((node) => node.started > 0));
         engine.pause();
@@ -137,6 +134,48 @@ await test('engine creates nothing until enabled, stops scheduled sources on pau
     } finally {
         engine.close();
         globalThis.AudioContext = original;
+    }
+});
+
+await test('wind keeps energy across its loop seam without a reset click or periodic silence', async () => {
+    const originalContext = globalThis.AudioContext;
+    const originalRandom = Math.random;
+    const { contexts, Context } = audioMock();
+    globalThis.AudioContext = Context;
+    let seed = 12345;
+    Math.random = () => {
+        seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+        return seed / 4294967296;
+    };
+    const engine = new CoastalAudio(() => {});
+    try {
+        await engine.enable();
+        const context = contexts[0];
+        const noise = context.buffers[0];
+        assert.ok(noise.length / context.sampleRate >= 16);
+        // The wrapped filter input is bounded just like every other sample.
+        assert.ok(
+            Math.abs(noise[0] - noise.at(-1) / 1.02) <= 0.07 / 1.02 + 0.000001,
+        );
+        const energy = (values) =>
+            values.reduce((sum, value) => sum + value * value, 0) /
+            values.length;
+        const edge = Math.floor(context.sampleRate * 0.005);
+        const seam = [...noise.slice(-edge), ...noise.slice(0, edge)];
+        assert.ok(
+            energy(seam) > energy(noise) * 0.25,
+            'the seam must not fade to silence',
+        );
+        engine.update(defaultSoundPreferences, 'discussion');
+        assert.equal(
+            context.buffers.length,
+            1,
+            'phase changes reuse the running loop',
+        );
+    } finally {
+        engine.close();
+        globalThis.AudioContext = originalContext;
+        Math.random = originalRandom;
     }
 });
 

@@ -78,7 +78,7 @@ const terms = [
     ],
     [
         'Veilweaver',
-        'A cult role. Can chant while veiling and cursing one other living player. The veil reverses their apparent alignment for the Oracle tonight; their chosen curse takes hold at dawn.',
+        'A cult role. Can chant while veiling and cursing any living player, including themselves. The veil reverses their apparent alignment for the Oracle tonight; their chosen curse takes hold at dawn. Self-curses have the same effects as other curses.',
     ],
     [
         'Warden',
@@ -90,7 +90,7 @@ const terms = [
     ],
     [
         'Acolyte',
-        'A cult role. Chants to advance the ritual when the shared mission condition is met, and can optionally curse one other living player. Their chosen curse takes hold at dawn.',
+        'A cult role. Chants to advance the ritual when the shared mission condition is met, and can optionally curse any living player, including themselves. Their chosen curse takes hold at dawn. Self-curses have the same effects as other curses.',
     ],
     [
         'Veiled',

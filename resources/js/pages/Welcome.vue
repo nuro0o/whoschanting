@@ -8,6 +8,7 @@ import GameGlossary from '@/components/chanting/GameGlossary.vue';
 import CharacterPortrait from '@/components/chanting/CharacterPortrait.vue';
 import { defaultCharacters, type Character } from '@/lib/chanting';
 import '../../css/chanting.css';
+import '../../css/tutorial-invitation.css';
 withDefaults(
     defineProps<{
         characters?: Character[];
@@ -40,6 +41,7 @@ withDefaults(
             >
             <nav aria-label="Main navigation">
                 <a href="#roles" class="quiet-link">Roles</a>
+                <a href="/tutorial" class="quiet-link">Practice solo</a>
                 <a href="#how-to-play" class="quiet-link"
                     >How to play <ArrowDown :size="14"
                 /></a>
@@ -96,6 +98,13 @@ withDefaults(
                         :characters="characters"
                         :preferred-character="preferredCharacter"
                     />
+                    <p class="tutorial-invitation">
+                        First time here?
+                        <a href="/tutorial" class="quiet-link"
+                            >Try a guided round →</a
+                        >
+                        <span>Solo · No account needed · No timer</span>
+                    </p>
                 </div>
                 <span class="hero-side-note" aria-hidden="true"
                     >WELCOME TO THE END OF THE WORLD. MAYBE.</span

@@ -3493,11 +3493,13 @@
     max-width: 850px;
     margin-inline: auto;
 }
+.room-workspace[data-view='journal'] .room-chat,
 .room-workspace[data-view='role'] .room-chat,
 .room-workspace[data-view='help'] .room-chat {
     display: none;
 }
 .room-role-view,
+.room-journal-view,
 .room-help-view {
     grid-column: 1 / -1;
     width: 100%;
@@ -3766,7 +3768,7 @@
         inset: auto 0 0;
         z-index: 40;
         display: grid;
-        grid-template-columns: repeat(4, minmax(0, 1fr));
+        grid-template-columns: repeat(5, minmax(0, 1fr));
         gap: 0;
         margin: 0;
         padding: 5px 8px calc(5px + env(safe-area-inset-bottom));

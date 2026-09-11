@@ -73,6 +73,19 @@ const nextAction = computed(() => {
             }"
         />
         <section class="help-answer">
+            <h3>Where are my ability results?</h3>
+            <p>
+                Open Journal beside the table or in the room navigation. Results
+                collects your private ability outcomes by round, newest first.
+                My notes gives you a place to record claims and suspicions.
+            </p>
+            <p>
+                Notes save only on this browser for this match and are never
+                sent to chat. A new match starts with fresh notes. Hide secrets
+                covers both your results and notes, along with your role.
+            </p>
+        </section>
+        <section class="help-answer">
             <h3>Did anyone else see that?</h3>
             <p>
                 Shadows, strange words and brief chat distortions become more
@@ -103,8 +116,10 @@ const nextAction = computed(() => {
             <h3>Why can’t I select someone?</h3>
             <p>
                 Targets are available during voting and for night abilities that
-                use a target. You must be alive, and you cannot select yourself
-                or a banished player.
+                use a target. You must be alive. Veilweavers and Acolytes can
+                target themselves with a night curse; other actions cannot
+                target yourself. Living targets are required except for the
+                Medium.
             </p>
             <p>
                 Reveal your secrets to use a private night ability. A submitted

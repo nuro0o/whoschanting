@@ -171,6 +171,7 @@ export interface Curse {
     challenge: CurseChallenge | null;
 }
 export interface RoomState {
+    match_id: string | null;
     mode_setup?: ModeSetup;
     mode_preview?: {
         possible_roles?: Record<string, string[]>;
@@ -313,14 +314,14 @@ export const roles: Record<
         name: 'The Veilweaver',
         subtitle: 'Cult · master of misdirection',
         description:
-            'Chant for the ritual. You may veil another living player: their alignment appears reversed to the Oracle tonight, and your chosen curse takes hold at dawn. Soul Bind traps them behind rings and towers; Mind Mist clouds their thoughts with lost lanterns. At ritual level 3, Misdirection can redirect their next target unless they untangle its rings first.',
+            'Chant for the ritual. You may veil any living player, including yourself: their alignment appears reversed to the Oracle tonight, and your chosen curse takes hold at dawn. Cursing yourself has the same effects and must be dealt with normally. Soul Bind traps the victim behind rings and towers; Mind Mist clouds their thoughts with lost lanterns. At ritual level 3, Misdirection can redirect their next target unless they untangle its rings first.',
         symbol: '◈',
     },
     acolyte: {
         name: 'The Acolyte',
         subtitle: 'Cult · keeper of the ritual',
         description:
-            'Chant each night to complete your shared mission. You may curse another living player at dawn with Soul Bind or Mind Mist. Their seals grow harder as the ritual strengthens. At ritual level 3, Misdirection can redirect their next target unless they untangle its rings first.',
+            'Chant each night to complete your shared mission. You may curse any living player, including yourself, at dawn with Soul Bind or Mind Mist. Cursing yourself has the same effects and must be dealt with normally. Their seals grow harder as the ritual strengthens. At ritual level 3, Misdirection can redirect their next target unless they untangle its rings first.',
         symbol: '✧',
     },
     oracle: {

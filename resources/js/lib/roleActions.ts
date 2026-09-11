@@ -78,10 +78,12 @@ export function eligibleTargets(
     )
         return [];
     const deadTarget = night && state.me.role === 'medium' && useAbility;
+    const canCurseSelf =
+        night && ['veilweaver', 'acolyte'].includes(state.me.role ?? '');
     return state.players.filter(
         (player) =>
             player.alive !== deadTarget &&
-            player.id !== state.me.id &&
+            (player.id !== state.me.id || canCurseSelf) &&
             !(
                 state.phase === 'night' &&
                 state.me.role === 'warden' &&
@@ -95,6 +97,11 @@ export function nightActionLabel(
     useAbility: boolean,
     target: string | null,
 ): string {
+    if (
+        target === state.me.id &&
+        ['veilweaver', 'acolyte'].includes(state.me.role ?? '')
+    )
+        return 'Chant and curse yourself';
     if (useAbility && state.me.role === 'oracle')
         return 'Confirm investigation';
     if (useAbility && state.me.role === 'herbalist')

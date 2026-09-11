@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Head, usePage } from '@inertiajs/vue3';
 import {
+    BookOpen,
     Check,
     ChevronDown,
     Circle,
@@ -41,6 +42,7 @@ import {
     type ModeSetup,
 } from '@/lib/gameModes';
 import SecretRole from '@/components/chanting/SecretRole.vue';
+import PersonalJournal from '@/components/chanting/PersonalJournal.vue';
 import RoomBriefing from '@/components/chanting/RoomBriefing.vue';
 import RitualWarning from '@/components/chanting/RitualWarning.vue';
 import RoomEvents from '@/components/chanting/RoomEvents.vue';
@@ -182,7 +184,7 @@ const actionSerial = ref(0);
 const revealed = ref(false);
 const message = ref('');
 const copied = ref(false);
-type RoomView = 'play' | 'role' | 'chat' | 'help';
+type RoomView = 'play' | 'role' | 'journal' | 'chat' | 'help';
 const activeView = ref<RoomView>('play');
 const hasRoom = computed(() => !!state.value);
 const fullscreen = ref(false);
@@ -207,7 +209,7 @@ const roleRead = ref(false);
 const hintDismissed = ref(false);
 const readMessageIds = ref<Set<string>>(new Set());
 const readResultCount = ref(0);
-const secretRole = ref<InstanceType<typeof SecretRole>>();
+const personalJournal = ref<InstanceType<typeof PersonalJournal>>();
 const chatVisible = ref(false);
 let chatObserver: IntersectionObserver | undefined;
 const unreadChat = computed(
@@ -255,8 +257,8 @@ function readResults() {
     readResultCount.value = state.value?.me.results.length ?? 0;
 }
 async function openResults() {
-    await navigate('role');
-    await secretRole.value?.showResults();
+    await personalJournal.value?.showResults();
+    await navigate('journal');
 }
 function markChatRead() {
     if (
@@ -739,6 +741,19 @@ watch(
     },
 );
 watch(
+    () =>
+        JSON.stringify([
+            state.value?.id,
+            state.value?.me.id,
+            state.value?.match_id,
+        ]),
+    () => {
+        readResultCount.value = 0;
+        revealed.value = false;
+        roleRead.value = false;
+    },
+);
+watch(
     () => state.value?.phase_id,
     () => {
         target.value = null;
@@ -1134,7 +1149,11 @@ onBeforeUnmount(() => {
                     </template>
                     <template #actions>
                         <div
-                            v-if="showPrivateTools || actionDetailsAvailable"
+                            v-if="
+                                showPrivateTools ||
+                                actionDetailsAvailable ||
+                                state.match_id
+                            "
                             class="table-action-dock"
                         >
                             <div class="table-tools-row">
@@ -1168,16 +1187,19 @@ onBeforeUnmount(() => {
                                                 : 'Reveal my role'
                                         }}
                                     </button>
-                                    <button
-                                        v-if="newResults"
-                                        class="button new-result"
-                                        @click="openResults"
-                                    >
-                                        {{ newResults }} new result{{
-                                            newResults === 1 ? '' : 's'
-                                        }}
-                                    </button>
                                 </div>
+                                <button
+                                    v-if="state.match_id"
+                                    class="button table-journal-shortcut"
+                                    :class="{ 'new-result': newResults }"
+                                    aria-controls="room-journal"
+                                    @click="openResults"
+                                >
+                                    <BookOpen :size="15" /> Journal
+                                    <span v-if="newResults" class="room-badge"
+                                        >{{ newResults }} new</span
+                                    >
+                                </button>
                                 <button
                                     v-if="actionDetailsAvailable"
                                     id="action-details-toggle"
@@ -1265,10 +1287,10 @@ onBeforeUnmount(() => {
                                                         ?.description
                                                   : state.me.role ===
                                                       'veilweaver'
-                                                    ? 'Choose someone to veil and curse, or chant without a target. Their alignment appears reversed tonight; your chosen curse takes hold at dawn. You chant either way.'
+                                                    ? 'Choose someone, including yourself, to veil and curse, or chant without a target. Their alignment appears reversed tonight; your chosen curse takes hold at dawn. You chant either way.'
                                                     : state.me.role ===
                                                         'acolyte'
-                                                      ? 'Choose someone and a curse, or chant without a target. Your chosen curse takes hold at dawn. Either way, your chant advances the ritual if your shared mission’s condition is met.'
+                                                      ? 'Choose someone, including yourself, and a curse, or chant without a target. Your chosen curse takes hold at dawn. Either way, your chant advances the ritual if your shared mission’s condition is met.'
                                                       : 'Stay alert. You have no secret ability, but your voice and your vote matter in the morning.'
                                         }}
                                     </p>
@@ -1708,9 +1730,23 @@ onBeforeUnmount(() => {
                     aria-controls="room-role"
                     @click="navigate('role')"
                 >
-                    <LockKeyhole :size="18" /><span>My role</span
-                    ><span v-if="newResults" class="room-badge"
-                        >{{ newResults }} new</span
+                    <LockKeyhole :size="18" /><span>My role</span>
+                </button>
+                <button
+                    id="nav-journal"
+                    :class="{ active: activeView === 'journal' }"
+                    :aria-current="
+                        activeView === 'journal' ? 'page' : undefined
+                    "
+                    aria-controls="room-journal"
+                    @click="navigate('journal')"
+                >
+                    <BookOpen :size="18" /><span>Journal</span>
+                    <span
+                        v-if="newResults"
+                        class="room-badge"
+                        :aria-label="`${newResults} new results`"
+                        >{{ newResults }}</span
                     >
                 </button>
                 <button
@@ -2373,16 +2409,10 @@ onBeforeUnmount(() => {
                             !['lobby', 'finished'].includes(state.phase)
                         "
                         id="private-role"
-                        ref="secretRole"
                         v-model="revealed"
                         :state="state"
-                        :active="
-                            activeView === 'role' &&
-                            !puzzleCursed &&
-                            !mistCursed
-                        "
                         :new-results="newResults"
-                        @results-read="readResults"
+                        @journal="openResults"
                     />
                     <div v-else class="game-panel room-empty">
                         <h2>
@@ -2409,6 +2439,30 @@ onBeforeUnmount(() => {
                                 ? 'Back to Play to get ready'
                                 : 'Back to Play'
                         }}<Play :size="16" />
+                    </button>
+                </section>
+                <section
+                    id="room-journal"
+                    class="room-journal-view"
+                    v-show="activeView === 'journal'"
+                    tabindex="-1"
+                    aria-label="Table journal"
+                >
+                    <PersonalJournal
+                        ref="personalJournal"
+                        v-model="revealed"
+                        :state="state"
+                        :active="activeView === 'journal'"
+                        :blocked="puzzleCursed || mistCursed"
+                        :new-results="newResults"
+                        @results-read="readResults"
+                        @play="navigate('play')"
+                    />
+                    <button
+                        class="button return-to-play"
+                        @click="navigate('play')"
+                    >
+                        <Play :size="16" /> Back to Play
                     </button>
                 </section>
                 <section
@@ -2526,6 +2580,16 @@ onBeforeUnmount(() => {
 }
 .table-action-dock .quiet-link {
     min-height: 44px;
+}
+.table-action-dock .table-journal-shortcut {
+    min-height: 46px;
+    padding: 10px 14px;
+    border-color: #a48f6d;
+    color: #f0dbb8;
+    background: #29332c;
+}
+.table-action-dock .table-journal-shortcut:hover {
+    background: #364236;
 }
 .action-details-toggle {
     display: flex;
@@ -2850,11 +2914,16 @@ onBeforeUnmount(() => {
         height: calc(100% - 12px);
         scroll-padding-top: calc(clamp(270px, 44dvh, 460px) + 16px);
     }
+    .is-immersive .room-workspace[data-view='journal'] {
+        scroll-padding-top: 0;
+    }
     .is-immersive .room-workspace > * {
         flex-shrink: 0;
         margin-bottom: 0;
     }
-    .is-immersive .room-workspace[data-view] .room-chat {
+    .is-immersive
+        .room-workspace[data-view]:not([data-view='journal'])
+        .room-chat {
         display: block;
         order: -1;
         position: sticky;

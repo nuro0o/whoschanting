@@ -121,10 +121,9 @@ function seatStyle(index: number) {
 function selectable(player: Player) {
     return (
         props.canSelect &&
-        player.id !== props.meId &&
         (props.eligibleTargetIds
             ? props.eligibleTargetIds.includes(player.id)
-            : player.alive)
+            : player.alive && player.id !== props.meId)
     );
 }
 function seatLabel(player: Player) {
