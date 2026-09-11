@@ -11,9 +11,12 @@ import {
 } from '@lucide/vue';
 import { computed } from 'vue';
 import RoomEntry from '@/components/chanting/RoomEntry.vue';
+import ProgressionSummary from '@/components/chanting/ProgressionSummary.vue';
 import { type Character } from '@/lib/chanting';
+import type { ProgressionData } from '@/lib/progression';
 
 defineProps<{
+    progression: ProgressionData;
     characters: Character[];
     preferredCharacter: string | null;
     rules: { min_players: number; max_players: number };
@@ -73,6 +76,7 @@ const membershipDate = computed(() => {
                 >A SAFE CROSSING. PROBABLY.</span
             >
         </section>
+        <ProgressionSummary :progression="progression" />
         <div class="ledger-columns">
             <section class="ledger-play" aria-labelledby="gather-title">
                 <header class="ledger-section-heading">

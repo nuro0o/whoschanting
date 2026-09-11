@@ -11,9 +11,10 @@ defineProps<{ breadcrumbs?: BreadcrumbItem[] }>();
 const page = usePage();
 const navigation = [
     { number: '01', label: 'Ledger', href: '/dashboard' },
-    { number: '02', label: 'Profile', href: '/settings/profile' },
-    { number: '03', label: 'Security', href: '/settings/security' },
-    { number: '04', label: 'Appearance', href: '/settings/appearance' },
+    { number: '02', label: 'Progression', href: '/progression' },
+    { number: '03', label: 'Profile', href: '/settings/profile' },
+    { number: '04', label: 'Security', href: '/settings/security' },
+    { number: '05', label: 'Appearance', href: '/settings/appearance' },
 ];
 const isCurrent = (href: string) => page.url.split('?')[0] === href;
 onMounted(() => document.body.classList.add('account-theme'));

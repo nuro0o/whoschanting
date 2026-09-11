@@ -5,6 +5,7 @@ namespace App\Game;
 use App\Events\RoomUpdated;
 use App\Models\GameMatch;
 use App\Models\GameRoom;
+use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -12,7 +13,7 @@ use Illuminate\Validation\ValidationException;
 
 class MatchEngine
 {
-    public function __construct(private CurseEngine $curses, private GameModes $modes = new GameModes) {}
+    public function __construct(private CurseEngine $curses, private GameModes $modes = new GameModes, private AccountProgression $progression = new AccountProgression) {}
 
     /** @return array<string, mixed> */
     public function rules(): array
@@ -32,11 +33,11 @@ class MatchEngine
     }
 
     /** @param array<string, mixed> $setup */
-    public function create(string $identity, string $name, ?string $character = null, array $setup = []): GameRoom
+    public function create(string $identity, string $name, ?string $character = null, array $setup = [], ?int $accountId = null): GameRoom
     {
         $setup = $this->modes->normalize($setup);
 
-        return DB::transaction(function () use ($identity, $name, $character, $setup): GameRoom {
+        return DB::transaction(function () use ($identity, $name, $character, $setup, $accountId): GameRoom {
             $id = (string) Str::uuid();
             do {
                 $code = strtoupper(Str::random(6));
@@ -45,7 +46,7 @@ class MatchEngine
             return GameRoom::create(['code' => $code, 'state' => [
                 'phase' => 'lobby', 'phase_id' => 1, 'revision' => 1, 'day' => 0,
                 'mode_setup' => $setup, 'roster' => $setup['classic_variant'],
-                'host_id' => $id, 'players' => [$id => $this->seat($id, $identity, $name, $character)],
+                'host_id' => $id, 'players' => [$id => $this->seat($id, $identity, $name, $character, $accountId)],
                 'tokens' => 0, 'threshold' => 0, 'mission' => null, 'winner' => null,
                 'win_reason' => null, 'actions' => [], 'awards' => [], 'messages' => [],
                 'log' => ['A new gathering takes shape.'], 'cult_banished' => false,
@@ -54,22 +55,36 @@ class MatchEngine
     }
 
     /** @return array<string, mixed> */
-    private function seat(string $id, string $identity, string $name, ?string $character = null): array
+    private function seat(string $id, string $identity, string $name, ?string $character = null, ?int $accountId = null): array
     {
         $characters = array_column(config('game.characters'), 'id');
         $this->ensure($character === null || in_array($character, $characters, true), 'Choose a character from the village.');
+        $this->ensure($accountId === null || User::whereKey($accountId)->whereNotNull('email_verified_at')->exists(), 'Verify your account before joining.');
 
         return ['id' => $id, 'identity' => hash('sha256', $identity), 'name' => $name,
+            'user_id' => $accountId, 'customization' => $accountId === null ? null : $this->progression->appearance($accountId),
             'alive' => true, 'ready' => false, 'role' => null, 'alignment' => null, 'results' => [],
             'character' => $character ?? $characters[random_int(0, count($characters) - 1)]];
     }
 
-    public function join(string $code, string $identity, string $name, ?string $character = null): GameRoom
+    public function join(string $code, string $identity, string $name, ?string $character = null, ?int $accountId = null): GameRoom
     {
-        return DB::transaction(function () use ($code, $identity, $name, $character): GameRoom {
+        return DB::transaction(function () use ($code, $identity, $name, $character, $accountId): GameRoom {
             $room = GameRoom::where('code', $code)->lockForUpdate()->firstOrFail();
             $s = $room->state;
-            if ($this->playerId($s, $identity) !== null) {
+            $existing = $this->playerId($s, $identity, $accountId);
+            if ($existing !== null) {
+                if ($accountId !== null && $s['phase'] === 'lobby') {
+                    $this->ensure(User::whereKey($accountId)->whereNotNull('email_verified_at')->exists(), 'Verify your account before joining.');
+                    $this->ensure($character === null || in_array($character, array_column(config('game.characters'), 'id'), true), 'Choose a character from the village.');
+                    $s['players'][$existing]['user_id'] = $accountId;
+                    $s['players'][$existing]['customization'] = $this->progression->appearance($accountId);
+                    if ($character !== null) {
+                        $s['players'][$existing]['character'] = $character;
+                    }
+                    $this->save($room, $s);
+                }
+
                 return $room;
             }
             $this->ensure($s['phase'] === 'lobby', 'This match has already begun.');
@@ -80,7 +95,7 @@ class MatchEngine
                 $this->ensure(mb_strtolower($player['name']) !== mb_strtolower($name), 'That name is already at the table.');
             }
             $id = (string) Str::uuid();
-            $s['players'][$id] = $this->seat($id, $identity, $name, $character);
+            $s['players'][$id] = $this->seat($id, $identity, $name, $character, $accountId);
             $this->save($room, $s);
 
             return $room;
@@ -88,11 +103,18 @@ class MatchEngine
     }
 
     /** @param array<string, mixed> $s */
-    public function playerId(array $s, string $identity): ?string
+    public function playerId(array $s, string $identity, ?int $accountId = null): ?string
     {
+        if ($accountId !== null) {
+            foreach ($s['players'] as $id => $player) {
+                if (($player['user_id'] ?? null) === $accountId) {
+                    return $id;
+                }
+            }
+        }
         foreach ($s['players'] as $id => $player) {
             if (hash_equals($player['identity'], hash('sha256', $identity))) {
-                return $id;
+                return isset($player['user_id']) && $player['user_id'] !== $accountId ? null : $id;
             }
         }
 
@@ -103,12 +125,12 @@ class MatchEngine
     /** @param array<string, mixed>|null $action
      * @return array<string, mixed>
      */
-    public function access(string $code, string $identity, ?array $action = null): array
+    public function access(string $code, string $identity, ?array $action = null, ?int $accountId = null): array
     {
-        $result = DB::transaction(function () use ($code, $identity, $action): array {
+        $result = DB::transaction(function () use ($code, $identity, $action, $accountId): array {
             $room = GameRoom::where('code', $code)->lockForUpdate()->firstOrFail();
             $s = $room->state;
-            $id = $this->playerId($s, $identity);
+            $id = $this->playerId($s, $identity, $accountId);
             abort_if($id === null, 403, 'Join this room to take a seat.');
             if ($room->deadline?->isPast()) {
                 $this->advance($room, $s);
@@ -205,7 +227,7 @@ class MatchEngine
             unset($player);
             $s = array_replace($s, ['day' => 0, 'tokens' => 0, 'threshold' => 0, 'winner' => null, 'win_reason' => null,
                 'mission' => null, 'awards' => [], 'messages' => [], 'log' => ['The village gathers again.'], 'cult_banished' => false]);
-            unset($s['match_id'], $s['match_rules'], $s['started_at'], $s['finished_at'], $s['rounds'], $s['missed_actions'], $s['chaos_event']);
+            unset($s['match_id'], $s['match_rules'], $s['started_at'], $s['finished_at'], $s['rounds'], $s['missed_actions'], $s['chaos_event'], $s['match_rewards']);
             $this->phase($room, $s, 'lobby');
 
             return;
@@ -220,6 +242,9 @@ class MatchEngine
             $setup = $this->modes->setup($s);
             $roster = $this->modes->roster($setup, $count);
             foreach ($ids as $index => $pid) {
+                if (isset($s['players'][$pid]['user_id'])) {
+                    $s['players'][$pid]['customization'] = $this->progression->appearance($s['players'][$pid]['user_id']);
+                }
                 $s['players'][$pid]['role'] = $roster[$index];
                 $s['players'][$pid]['alignment'] = config('game.role_alignments')[$roster[$index]];
             }
@@ -707,6 +732,9 @@ class MatchEngine
         foreach ($s['players'] as $pid => $p) {
             $public = array_intersect_key($p, array_flip(['id', 'name', 'alive', 'ready']));
             $public['character'] = $this->character($p);
+            if (isset($p['customization'])) {
+                $public['customization'] = $p['customization'];
+            }
             $public['oath'] = ($p['oath']['day'] ?? null) === $s['day'] ? $p['oath'] : null;
             $public['discussion_ready'] = $s['phase'] === 'discussion' && isset($s['actions'][$pid]) && $s['actions'][$pid]['type'] === 'discussion_ready';
             if ($s['phase'] === 'finished') {
@@ -730,6 +758,9 @@ class MatchEngine
             'winner' => $s['winner'], 'win_reason' => $s['win_reason'], 'players' => $players,
             'me' => array_replace(array_intersect_key($me, array_flip(['id', 'name', 'alive', 'role', 'alignment', 'results'])), [
                 'character' => $this->character($me),
+                'customization' => $me['customization'] ?? null,
+                'account_progression' => isset($me['user_id']),
+                'match_reward' => $s['phase'] === 'finished' ? ($s['match_rewards'][$id] ?? null) : null,
                 'curse' => $this->curses->view($me['curse'] ?? null),
                 'curse_notice' => $me['curse_notice'] ?? null,
                 'previous_protection_target' => $this->previousProtection($me, $s['day']),
@@ -771,10 +802,10 @@ class MatchEngine
     /** Archive in the same locked transaction as victory, before rematch can clear secrets.
      * @param  array<string, mixed>  $s
      */
-    private function archive(GameRoom $room, array $s): void
+    private function archive(GameRoom $room, array &$s): void
     {
         $recap = $this->recap($s);
-        GameMatch::firstOrCreate(['id' => $s['match_id'] ?? (string) Str::uuid()], [
+        $match = GameMatch::firstOrCreate(['id' => $s['match_id'] ?? (string) Str::uuid()], [
             'game_room_id' => $room->id, 'rules_version' => $recap['rules_version'],
             'player_count' => $recap['player_count'], 'mission' => $s['mission']['id'],
             'winner' => $s['winner'], 'win_reason' => $s['win_reason'], 'nights' => $s['day'],
@@ -784,6 +815,7 @@ class MatchEngine
             'recap' => ['players' => array_values(array_map(fn (array $p): array => array_intersect_key($p, array_flip(['id', 'name', 'role', 'alignment', 'character'])), $s['players'])), ...$recap],
             'started_at' => $s['started_at'] ?? null, 'finished_at' => $s['finished_at'],
         ]);
+        $s['match_rewards'] = $this->progression->award($match, $s);
     }
 
     /** Older rooms receive a stable cosmetic portrait without altering their roles.

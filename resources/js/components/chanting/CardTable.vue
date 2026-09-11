@@ -244,7 +244,12 @@ onBeforeUnmount(() => {
                 @click="selectable(player) && emit('select', player.id)"
             >
                 <span class="seat-card" aria-hidden="true"></span>
-                <CharacterPortrait :character="player.character" decorative />
+                <CharacterPortrait
+                    :character="player.character"
+                    :frame="player.customization?.frame"
+                    :accent="player.customization?.accent"
+                    decorative
+                />
                 <span
                     v-if="player.id === hauntedSeatId"
                     class="phantom-face"

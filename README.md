@@ -1,6 +1,6 @@
 # Who’s Chanting?
 
-A private-room social deduction game built with Laravel 13, Vue 3, TypeScript, Reverb + Echo, MySQL, and a responsive village card table. No account is required: an encrypted Laravel session owns your seat.
+A private-room social deduction game built with Laravel 13, Vue 3, TypeScript, Reverb + Echo, MySQL, and a responsive village card table. No account is required: guests use an encrypted browser session, while verified accounts can keep their seat and progression across devices.
 
 ## Run locally
 
@@ -20,9 +20,21 @@ php artisan queue:work --sleep=1 --tries=3
 php artisan schedule:work
 ```
 
-Open <http://127.0.0.1:8000>. Create a room, send its code or invite link to friends, and have everyone mark themselves ready. Use separate browsers/profiles to test multiple seats; tabs in one browser deliberately share a seat. Reopening the room in the same browser recovers it. Clearing cookies, session expiry, or changing browsers does not recover a seat. The template keeps active sessions for seven days.
+Open <http://127.0.0.1:8000>. Create a room, send its code or invite link to friends, and have everyone mark themselves ready. Use separate browsers/profiles to test multiple seats; tabs in one browser deliberately share a seat. Reopening the room in the same browser recovers it. Guest seats require the original session; clearing cookies, session expiry, or changing browsers loses access. Verified account seats can be recovered by signing in again. The template keeps active sessions for seven days.
 
 For phones on a local network, serve on `0.0.0.0`, set `APP_URL` and the Reverb/Vite host to the machine’s LAN address, add that hostname to `REVERB_ALLOWED_ORIGINS`, and rebuild. Friends must reach both HTTP and WebSocket ports. Do not expose development servers to the internet.
+
+## Account progression
+
+Verified accounts have a **Progression** page at `/progression`, linked from the dashboard and account navigation. It includes lifetime XP and levels, quarterly seasons, eight permanent achievements, recent match rewards, and a wardrobe for titles, portrait frames, accent colors and character preferences. Cosmetics never change roles or abilities. Levels and equipped cosmetics appear in rooms; wardrobe changes apply when joining a lobby or starting a match.
+
+Rewards are granted by the server when a complete match is archived. A player must have submitted at least one night action and one vote (explicit abstention counts). Eligible players earn 80 XP, plus 40 for winning and 20 for submitting every night action and vote available while alive. Eliminated players can still qualify. Guests, unverified accounts, incomplete archives and inactive seats earn no XP. Each account earns once per match, including across reconnects or retries. Matches completed before this feature do not receive retroactive rewards.
+
+Lifetime level thresholds are 0, 250, 750, 1,500 and 2,500 XP for levels 1 through 5, with increasing requirements thereafter. Seasons follow UTC calendar quarters and use the match completion time. A new quarter starts a fresh season record automatically; lifetime XP, achievements, historical season records and earned cosmetics remain. Season tiers begin at 0, 250, 750, 1,500 and 3,000 XP. Rewards and unlock requirements can be adjusted in `config/progression.php`.
+
+Creating or joining a lobby while verified links the seat to the account. The same account recovers that seat across browsers and cannot occupy a second seat in the same room. Existing guest seats can be linked by explicitly rejoining the lobby after signing in; a match already underway cannot be claimed. Account character preferences persist across sessions and devices. Guest seat recovery still depends on the original encrypted browser session.
+
+Run `php artisan migrate` on existing installations to add the profile, season and match reward tables, then rebuild the frontend. No extra scheduled job is needed for season rollover. Account deletion also deletes that account's progression and reward records.
 
 ## Characters and presentation
 
@@ -30,7 +42,7 @@ Accounts must verify their email before entering the game or choosing a characte
 
 Run `php artisan migrate` on existing installations to add welcome-email delivery tracking, and keep `php artisan queue:work --tries=3` running. Configure `MAIL_MAILER=smtp`, `MAIL_HOST`, `MAIL_PORT`, `MAIL_SCHEME`, `MAIL_USERNAME`, `MAIL_PASSWORD`, and a provider-approved `MAIL_FROM_ADDRESS` for inbox delivery. Set `APP_URL` to the public HTTPS site so signed links point to the correct host. The default `MAIL_MAILER=log` is for local previews and does **not** deliver email. After deployment, refresh cached configuration and restart queue workers. The welcome job retries failures and skips accounts that already received their welcome.
 
-Illustrated villagers are available as cosmetic portraits. Guests receive a random character; signed-in players can select any character when creating or joining a room, and change it in the lobby. Account choices are remembered within the browser session. Portraits stay with the seat through reconnects and rematches and never indicate a role or team. Older rooms receive a stable fallback portrait.
+Illustrated villagers are available as cosmetic portraits. Guests receive a random character; signed-in players can select any character when creating or joining a room, and change it in the lobby. Account choices are saved across browser sessions and devices. Portraits stay with the seat through reconnects and rematches and never indicate a role or team. Older rooms receive a stable fallback portrait.
 
 The room has persistent **Play / My role / Chat / Help** navigation, with a compact bottom bar on phones and chat beside play on desktop. **Your turn** keeps each phase's instructions, controls, and submitted status together. Select an eligible seat to choose a target, then confirm using the action controls; seat selection never submits an action. A dismissible selection hint can be reopened in Help. Chat has unread indicators; private investigation indicators appear only when secrets are revealed and clear when viewed. The role view shows the objective, ability, shared mission, and teammates explicitly. Help provides current-phase guidance, rules, and a separate glossary without leaving the room. The table retains public ritual progress, phase lighting, candles, and sealed cards. Roles turn face-up only after victory. Reduced-motion preferences suppress decorative motion.
 

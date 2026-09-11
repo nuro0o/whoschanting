@@ -45,6 +45,7 @@ import RoomEvents from '@/components/chanting/RoomEvents.vue';
 import RoomHelp from '@/components/chanting/RoomHelp.vue';
 import CharacterPicker from '@/components/chanting/CharacterPicker.vue';
 import CharacterPortrait from '@/components/chanting/CharacterPortrait.vue';
+import MatchRewards from '@/components/chanting/MatchRewards.vue';
 import CursePanel from '@/components/chanting/CursePanel.vue';
 import MatchRecap from '@/components/chanting/MatchRecap.vue';
 import CardTable from '@/components/chanting/CardTable.vue';
@@ -1932,6 +1933,11 @@ onBeforeUnmount(() => {
                         </p>
                     </section>
                     <RoomEvents :log="state.log" />
+                    <MatchRewards
+                        v-if="state.phase === 'finished'"
+                        :linked="!!state.me.account_progression"
+                        :reward="state.me.match_reward"
+                    />
                     <MatchRecap
                         v-if="state.phase === 'finished' && state.recap"
                         :recap="state.recap"
@@ -1959,6 +1965,8 @@ onBeforeUnmount(() => {
                                 >
                                     <CharacterPortrait
                                         :character="player.character"
+                                        :frame="player.customization?.frame"
+                                        :accent="player.customization?.accent"
                                         decorative
                                     /><span class="player-name"
                                         >{{ player.name
@@ -1985,6 +1993,12 @@ onBeforeUnmount(() => {
                                                     player.role
                                                 }}</template
                                             ></small
+                                        ><small v-if="player.customization"
+                                            >Level
+                                            {{ player.customization.level }} ·
+                                            {{
+                                                player.customization.title_name
+                                            }}</small
                                         ></span
                                     ><span
                                         v-if="state.phase === 'lobby'"

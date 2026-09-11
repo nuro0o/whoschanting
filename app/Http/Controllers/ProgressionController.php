@@ -1,0 +1,27 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Game\AccountProgression;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Inertia\Inertia;
+use Inertia\Response;
+
+class ProgressionController extends Controller
+{
+    public function show(Request $request, AccountProgression $progression): Response
+    {
+        return Inertia::render('Progression', ['progression' => $progression->view($request->user()->id), 'characters' => config('game.characters')]);
+    }
+
+    public function customize(Request $request, AccountProgression $progression): JsonResponse
+    {
+        $input = $request->validate(['title' => ['required', 'string', 'max:40'], 'frame' => ['required', 'string', 'max:40'],
+            'accent' => ['required', 'string', 'max:40'], 'character' => ['nullable', 'string', 'max:40']]);
+        $result = $progression->customize($request->user()->id, $input);
+        $request->session()->forget('chanting.characters.'.$request->user()->id);
+
+        return response()->json(['progression' => $result]);
+    }
+}

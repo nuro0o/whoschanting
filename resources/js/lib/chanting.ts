@@ -1,4 +1,5 @@
 import type { ChaosEvent, ModeSetup } from './gameModes';
+import type { MatchReward, PublicCustomization } from './progression';
 
 export class RoomError extends Error {
     constructor(
@@ -58,6 +59,7 @@ export async function roomRequest<T>(url: string, body?: object): Promise<T> {
 }
 
 export interface Player {
+    customization?: PublicCustomization | null;
     oath?: { day: number; target_id: string } | null;
     id: string;
     name: string;
@@ -187,6 +189,9 @@ export interface RoomState {
     recap: MatchRecapData | null;
     players: Player[];
     me: {
+        customization?: PublicCustomization | null;
+        account_progression?: boolean;
+        match_reward?: MatchReward | null;
         id: string;
         name: string;
         alive: boolean;

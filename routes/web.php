@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\GameController;
+use App\Http\Controllers\ProgressionController;
 use App\Http\Middleware\EnsureVerifiedAccount;
 use App\Http\Middleware\PrivateGameResponse;
 use Illuminate\Support\Facades\Route;
@@ -18,6 +19,8 @@ Route::middleware([PrivateGameResponse::class, EnsureVerifiedAccount::class])->g
 
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('dashboard', [GameController::class, 'dashboard'])->middleware(PrivateGameResponse::class)->name('dashboard');
+    Route::get('progression', [ProgressionController::class, 'show'])->middleware(PrivateGameResponse::class)->name('progression');
+    Route::post('account/customization', [ProgressionController::class, 'customize'])->middleware([PrivateGameResponse::class, 'throttle:30,1'])->block()->name('account.customization');
 });
 
 require __DIR__.'/settings.php';

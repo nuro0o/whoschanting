@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Game\AccountProgression;
 use App\Game\MatchEngine;
 use App\Game\MusicLibrary;
 use App\Models\GameRoom;
@@ -16,7 +17,7 @@ use Laravel\Fortify\Features;
 
 class GameController extends Controller
 {
-    public function __construct(private MatchEngine $engine) {}
+    public function __construct(private MatchEngine $engine, private AccountProgression $progression) {}
 
     public function home(Request $request): Response
     {
@@ -27,6 +28,7 @@ class GameController extends Controller
     {
         return Inertia::render('Dashboard', [
             'rules' => $this->engine->rules(),
+            'progression' => $this->progression->view($request->user()->id),
             ...$this->characterProps($request),
             'twoFactorEnabled' => $request->user()->hasEnabledTwoFactorAuthentication(),
             'passkeyCount' => Features::canManagePasskeys() ? $request->user()->passkeys()->count() : 0,
@@ -49,7 +51,7 @@ class GameController extends Controller
     public function create(Request $request): JsonResponse
     {
         $data = $request->validate(['name' => ['required', 'string', 'min:2', 'max:24'], 'character' => $this->characterRules($request), ...$this->modeRules()]);
-        $room = $this->engine->create($this->identity($request), $data['name'], $this->selectedCharacter($request, $data), $data['setup'] ?? []);
+        $room = $this->engine->create($this->identity($request), $data['name'], $this->selectedCharacter($request, $data), $data['setup'] ?? [], $request->user()?->id);
         $this->rememberCharacter($request, $data);
 
         return response()->json(['code' => $room->code], 201);
@@ -58,7 +60,7 @@ class GameController extends Controller
     public function join(Request $request): JsonResponse
     {
         $data = $request->validate(['code' => ['required', 'string', 'size:6', 'alpha_num:ascii'], 'name' => ['required', 'string', 'min:2', 'max:24'], 'character' => $this->characterRules($request)]);
-        $room = $this->engine->join(strtoupper($data['code']), $this->identity($request), $data['name'], $this->selectedCharacter($request, $data));
+        $room = $this->engine->join(strtoupper($data['code']), $this->identity($request), $data['name'], $this->selectedCharacter($request, $data), $request->user()?->id);
         $this->rememberCharacter($request, $data);
 
         return response()->json(['code' => $room->code]);
@@ -66,7 +68,7 @@ class GameController extends Controller
 
     public function state(Request $request, string $code): JsonResponse
     {
-        return response()->json($this->engine->access(strtoupper($code), $this->identity($request)));
+        return response()->json($this->engine->access(strtoupper($code), $this->identity($request), accountId: $request->user()?->id));
     }
 
     public function action(Request $request, string $code): JsonResponse
@@ -90,7 +92,7 @@ class GameController extends Controller
         if ($data['type'] === 'character') {
             abort_unless($request->user() !== null, 403, 'Sign in to choose your character.');
         }
-        $state = $this->engine->access(strtoupper($code), $this->identity($request), $data);
+        $state = $this->engine->access(strtoupper($code), $this->identity($request), $data, $request->user()?->id);
         if ($data['type'] === 'character') {
             $this->rememberCharacter($request, $data);
         }
@@ -130,13 +132,15 @@ class GameController extends Controller
             return null;
         }
 
-        return $data['character'] ?? $request->session()->get('chanting.characters.'.$request->user()->getAuthIdentifier());
+        return $data['character'] ?? $this->progression->preferredCharacter($request->user()->id)
+            ?? $request->session()->get('chanting.characters.'.$request->user()->getAuthIdentifier());
     }
 
     /** @param array<string, mixed> $data */
     private function rememberCharacter(Request $request, array $data): void
     {
         if ($request->user() !== null && isset($data['character'])) {
+            $this->progression->rememberCharacter($request->user()->id, $data['character']);
             $request->session()->put('chanting.characters.'.$request->user()->getAuthIdentifier(), $data['character']);
         }
     }
@@ -146,7 +150,7 @@ class GameController extends Controller
     {
         $data = $request->validate(['socket_id' => ['required', 'regex:/\A[0-9]+\.[0-9]+\z/'], 'channel_name' => ['required', 'string']]);
         $room = GameRoom::where('code', strtoupper($code))->firstOrFail();
-        abort_unless($this->engine->playerId($room->state, $this->identity($request)) !== null, 403);
+        abort_unless($this->engine->playerId($room->state, $this->identity($request), $request->user()?->id) !== null, 403);
         abort_unless($data['channel_name'] === 'private-room.'.$room->id, 403);
 
         return response()->json(Broadcast::connection('reverb')->validAuthenticationResponse($request, true));
