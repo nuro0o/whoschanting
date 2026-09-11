@@ -48,8 +48,8 @@ class GameController extends Controller
 
     public function create(Request $request): JsonResponse
     {
-        $data = $request->validate(['name' => ['required', 'string', 'min:2', 'max:24'], 'character' => $this->characterRules($request)]);
-        $room = $this->engine->create($this->identity($request), $data['name'], $this->selectedCharacter($request, $data));
+        $data = $request->validate(['name' => ['required', 'string', 'min:2', 'max:24'], 'character' => $this->characterRules($request), ...$this->modeRules()]);
+        $room = $this->engine->create($this->identity($request), $data['name'], $this->selectedCharacter($request, $data), $data['setup'] ?? []);
         $this->rememberCharacter($request, $data);
 
         return response()->json(['code' => $room->code], 201);
@@ -72,15 +72,19 @@ class GameController extends Controller
     public function action(Request $request, string $code): JsonResponse
     {
         $data = $request->validate([
-            'type' => ['required', 'string', 'in:ready,start,night,vote,chat,rematch,character,discussion_ready,solve_curse'],
+            'type' => ['required', 'string', 'in:ready,start,night,vote,chat,rematch,character,discussion_ready,solve_curse,roster,exorcise,oath,configure_mode'],
             'phase_id' => ['required', 'integer', 'min:1'],
             'target' => ['nullable', 'string', 'uuid'],
             'use_ability' => ['sometimes', 'boolean'],
+            'roster' => ['sometimes', 'string', 'in:classic,illusions'],
+            'forged_alignment' => ['sometimes', 'string', 'in:town,cult'],
+            'curse_type' => ['nullable', 'string', 'in:puzzle,mist,misdirection'],
             'body' => ['nullable', 'string', 'max:280'],
             'curse_id' => ['required_if:type,solve_curse', 'uuid'],
             'answer' => ['required_if:type,solve_curse', 'array', 'list', 'max:12'],
             'answer.*' => ['required', 'string', 'uuid'],
             'character' => $this->characterRules($request),
+            ...$this->modeRules(),
         ]);
 
         if ($data['type'] === 'character') {
@@ -92,6 +96,19 @@ class GameController extends Controller
         }
 
         return response()->json($state);
+    }
+
+    /** @return array<string, mixed> */
+    private function modeRules(): array
+    {
+        return [
+            'setup' => ['sometimes', 'array:mode,classic_variant,chaos_variant,roles'],
+            'setup.mode' => ['sometimes', 'string', 'in:classic,hard,chaos,custom'],
+            'setup.classic_variant' => ['sometimes', 'string', 'in:classic,illusions'],
+            'setup.chaos_variant' => ['sometimes', 'string', 'in:wildcards,maelstrom'],
+            'setup.roles' => ['sometimes', 'array', 'max:'.count(config('game.role_alignments'))],
+            'setup.roles.*' => ['integer', 'min:0', 'max:'.config('game.max_players')],
+        ];
     }
 
     /** @return array<string, mixed> */

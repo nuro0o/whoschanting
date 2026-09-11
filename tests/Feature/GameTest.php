@@ -186,7 +186,7 @@ class GameTest extends TestCase
         $this->expire($room);
         $this->expire($room);
         $recap = $this->engine->access($room->code, 'secret-0')['recap'];
-        $this->assertSame('midnight-abilities-v1', $recap['rules_version']);
+        $this->assertSame('modes-v1', $recap['rules_version']);
         $actions = array_column($recap['rounds'][0]['night']['actions'], null, 'player_id');
         $this->assertTrue($actions[$r['warden']]['prevented_curse']);
         $this->assertTrue($actions[$r['lamplighter']]['visited']);
@@ -699,7 +699,7 @@ class GameTest extends TestCase
             $p = $room->fresh()->state['players'][$id];
             $this->assertSame($p['role'], $view['me']['role']);
             foreach ($view['players'] as $public) {
-                $this->assertSame(['id', 'name', 'alive', 'ready', 'character', 'discussion_ready'], array_keys($public));
+                $this->assertSame(['id', 'name', 'alive', 'ready', 'character', 'oath', 'discussion_ready'], array_keys($public));
             }
             $this->assertStringNotContainsString('identity', json_encode($view));
             $this->assertArrayNotHasKey('actions', $view);
@@ -1335,17 +1335,80 @@ class GameTest extends TestCase
         $this->assertDatabaseHas('game_matches', ['rules_version' => 'legacy', 'recap_complete' => false]);
     }
 
+    /** @return iterable<string, array{string, string}> */
+    public static function chosenCurses(): iterable
+    {
+        foreach (['veilweaver', 'acolyte'] as $role) {
+            foreach (['puzzle', 'mist', 'misdirection'] as $type) {
+                yield $role.'-'.$type => [$role, $type];
+            }
+        }
+    }
+
+    #[DataProvider('chosenCurses')]
+    public function test_cultists_choose_a_curse_and_still_chant(string $role, string $type): void
+    {
+        [$room, $identities] = $this->match();
+        $roles = $this->roles($room);
+        $this->expire($room);
+        $s = $room->fresh()->state;
+        $s['tokens'] = $type === 'misdirection' ? 4 : 0;
+        $room->update(['state' => $s]);
+        $this->withSession(['chanting.identity' => $identities[$roles[$role]]]);
+        $this->postJson('/rooms/'.$room->code.'/actions', [
+            'type' => 'night', 'phase_id' => $s['phase_id'],
+            'target' => $roles['townsperson'], 'curse_type' => $type,
+        ])->assertOk();
+        $this->assertSame($type, $room->fresh()->state['actions'][$roles[$role]]['curse_type']);
+        $this->assertTrue($this->engine->access($room->code, $identities[$roles[$role]])['me']['submitted']);
+        $otherRole = $role === 'veilweaver' ? 'acolyte' : 'veilweaver';
+        $this->act($room, $identities[$roles[$otherRole]], 'night');
+        $this->expire($room);
+        $this->assertSame($s['tokens'] + 2, $room->state['tokens']);
+        $curse = $this->engine->access($room->code, $identities[$roles['townsperson']])['me']['curse'];
+        $this->assertSame($type, $curse['type']);
+        $this->assertArrayNotHasKey('solution', $curse);
+        $actions = array_column($room->state['rounds'][1]['night']['actions'], null, 'player_id');
+        $this->assertSame($type, $actions[$roles[$role]]['curse_type']);
+        $this->assertTrue($actions[$roles[$role]]['contributed']);
+    }
+
+    public function test_curse_selection_rejects_locked_invalid_and_ineligible_choices_without_sealing_an_action(): void
+    {
+        [$room, $identities] = $this->match(playerCount: 7);
+        $roles = $this->roles($room);
+        $this->expire($room);
+        $s = $room->fresh()->state;
+        // Tonight's chants could unlock level 3, but it is not available when choosing.
+        $s['tokens'] = (int) ceil($s['threshold'] * 2 / 3) - 1;
+        $room->update(['state' => $s]);
+        foreach ([
+            ['veilweaver', 'misdirection', $roles['townsperson']],
+            ['acolyte', 'unknown', $roles['townsperson']],
+            ['oracle', 'puzzle', $roles['townsperson']],
+            ['dreamweaver', 'mist', $roles['townsperson']],
+            ['veilweaver', 'mist', null],
+        ] as [$role, $type, $target]) {
+            $this->withSession(['chanting.identity' => $identities[$roles[$role]]]);
+            $this->postJson('/rooms/'.$room->code.'/actions', [
+                'type' => 'night', 'phase_id' => $s['phase_id'],
+                'target' => $target, 'curse_type' => $type,
+            ])->assertUnprocessable();
+            $this->assertSame($s, $room->fresh()->state);
+        }
+    }
+
     public function test_veiling_and_acolyte_cursing_apply_one_private_affliction_at_dawn(): void
     {
         [$room, $identities] = $this->match();
         $roles = $this->roles($room);
         $curses = \Mockery::mock(CurseEngine::class)->makePartial();
-        $curses->shouldReceive('create')->once()->with(2, 6, 1)->andReturn((new CurseEngine)->create(2, 6, 1));
+        $curses->shouldReceive('create')->once()->with(2, 6, 1, 'puzzle')->andReturn((new CurseEngine)->create(2, 6, 1));
         $this->engine = new MatchEngine($curses);
         $this->app->instance(MatchEngine::class, $this->engine);
         $this->expire($room);
         $this->act($room, $identities[$roles['veilweaver']], 'night', ['target' => $roles['townsperson']]);
-        $this->act($room, $identities[$roles['acolyte']], 'night', ['target' => $roles['townsperson']]);
+        $this->act($room, $identities[$roles['acolyte']], 'night', ['target' => $roles['townsperson'], 'curse_type' => 'mist']);
         $this->assertNull($this->engine->access($room->code, $identities[$roles['townsperson']])['me']['curse']);
         $this->expire($room);
         $view = $this->engine->access($room->code, $identities[$roles['townsperson']]);

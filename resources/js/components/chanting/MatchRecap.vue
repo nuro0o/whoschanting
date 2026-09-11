@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ChevronDown, Eye, Moon, Vote } from '@lucide/vue';
 import { computed } from 'vue';
+import { chaosEvents, modeName } from '@/lib/gameModes';
 import {
     roles,
     type MatchRecapData,
@@ -31,6 +32,16 @@ function actionDescription(action: RecapNightAction) {
     if (!action.submitted) return 'Missed the night deadline. No action taken.';
     if (action.disrupted)
         return `Night action disrupted. No ability or chant took effect.${action.used_ability ? ' The once-per-match ability was spent.' : ''}`;
+    if (action.role === 'tracker')
+        return `Tracked ${name(action.target_id)}. ${action.tracked_target_id ? `Seen targeting ${name(action.tracked_target_id)}.` : 'No outgoing visit was visible.'}`;
+    if (action.role === 'herbalist')
+        return action.used_ability
+            ? 'Protected the village from all new curses. The ability was spent.'
+            : 'Kept watch and saved any remaining ability.';
+    if (action.role === 'phantasm' && action.used_ability)
+        return `Haunted ${name(action.target_id)} and concealed their outgoing visits instead of chanting.`;
+    if (action.role === 'counterfeiter' && action.used_ability)
+        return `Forged ${name(action.target_id)} as ${action.forged_alignment} to the Oracle instead of chanting.`;
     if (action.role === 'medium')
         return action.used_ability
             ? `Contacted ${name(action.target_id)}. True alignment: ${action.true_alignment}.`
@@ -49,9 +60,17 @@ function actionDescription(action: RecapNightAction) {
         return `Protected ${name(action.target_id)} from new curses. ${action.prevented_curse ? 'Blocked a curse attempt.' : 'No curse was attempted on that player.'}`;
     }
     if (action.role === 'lamplighter') {
-        return `Watched ${name(action.target_id)}. ${action.visited ? 'At least one other player targeted them.' : 'No other player targeted them.'}`;
+        return `Watched ${name(action.target_id)}. ${action.visited ? 'At least one other player was seen targeting them.' : 'No other player was seen targeting them.'}`;
     }
-    if (['veilweaver', 'acolyte', 'dreamweaver'].includes(action.role)) {
+    if (
+        [
+            'veilweaver',
+            'acolyte',
+            'dreamweaver',
+            'phantasm',
+            'counterfeiter',
+        ].includes(action.role)
+    ) {
         const chant = action.contributed
             ? 'Chanted. Added 1 ritual step.'
             : action.ritual_blocked
@@ -67,7 +86,7 @@ function actionDescription(action: RecapNightAction) {
             action.curse_type && action.target_id
                 ? `Cursed ${name(action.target_id)} with ${{ puzzle: 'a puzzle curse', mist: 'mind mist', misdirection: 'misdirection' }[action.curse_type]}.`
                 : action.curse_blocked
-                  ? `Tried to curse ${name(action.target_id)}, but the Warden protected them.`
+                  ? `Tried to curse ${name(action.target_id)}, but protection blocked it.`
                   : '';
         return [chant, veil, curse].filter(Boolean).join(' ');
     }
@@ -97,6 +116,7 @@ function actionDescription(action: RecapNightAction) {
                 </div>
             </dl>
             <p class="recap-mission">
+                Mode: {{ modeName(recap.mode_setup, recap.roster) }}.
                 <strong>The cult’s mission: {{ recap.mission.name }}</strong
                 >{{ recap.mission.description }}
             </p>
@@ -149,6 +169,10 @@ function actionDescription(action: RecapNightAction) {
                             {{ recap.ritual_goal }} steps</span
                         >
                     </h3>
+                    <p v-if="round.night.chaos_event" class="recap-veil">
+                        {{ chaosEvents[round.night.chaos_event].name }}:
+                        {{ chaosEvents[round.night.chaos_event].description }}
+                    </p>
                     <ul class="recap-actions">
                         <li
                             v-for="action in round.night.actions"
@@ -168,15 +192,36 @@ function actionDescription(action: RecapNightAction) {
                                 v-if="
                                     action.role === 'oracle' &&
                                     action.submitted &&
-                                    action.veiled
+                                    action.veiled &&
+                                    !action.forged
                                 "
                                 class="recap-veil"
                             >
                                 <Eye :size="14" aria-hidden="true" />The veil
                                 reversed this reading.
                             </p>
+                            <p v-if="action.forged" class="recap-veil">
+                                The Counterfeiter planted this reading,
+                                overriding any veil.
+                            </p>
+                            <p v-if="action.visits_hidden" class="recap-veil">
+                                The Phantasm hid this player’s outgoing visits
+                                from observers.
+                            </p>
                         </li>
                     </ul>
+                </section>
+                <section v-if="round.discussion?.length">
+                    <h3>Discussion abilities</h3>
+                    <p v-for="(action, index) in round.discussion" :key="index">
+                        {{ name(action.player_id) }}
+                        {{
+                            action.type === 'exorcise'
+                                ? 'cleansed'
+                                : 'publicly promised to vote for'
+                        }}
+                        {{ name(action.target_id) }}.
+                    </p>
                 </section>
                 <section
                     v-if="round.vote"
@@ -201,6 +246,13 @@ function actionDescription(action: RecapNightAction) {
                                           : 'Chose to abstain'
                                 }}<template v-if="redirection(ballot)"
                                     >. {{ redirection(ballot) }}</template
+                                ><template v-if="ballot.oath_kept != null"
+                                    >.
+                                    {{
+                                        ballot.oath_kept
+                                            ? 'Oath kept; protection earned for the next night.'
+                                            : 'Oath broken; no protection earned.'
+                                    }}</template
                                 ></span
                             >
                         </li>

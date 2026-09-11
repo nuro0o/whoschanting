@@ -4,6 +4,7 @@ import { HelpCircle } from '@lucide/vue';
 import GameGlossary from '@/components/chanting/GameGlossary.vue';
 import RoleGuide from '@/components/chanting/RoleGuide.vue';
 import type { RoomState } from '@/lib/chanting';
+import { modeName } from '@/lib/gameModes';
 
 const props = defineProps<{ state: RoomState }>();
 defineEmits<{ play: []; 'reopen-hint': [] }>();
@@ -39,6 +40,22 @@ const nextAction = computed(() => {
             <h3>What do I do now?</h3>
             <p>{{ nextAction }}</p>
             <button class="button" @click="$emit('play')">Go to Play</button>
+        </section>
+        <section class="help-answer">
+            <h3>
+                This room’s mode: {{ modeName(state.mode_setup, state.roster) }}
+            </h3>
+            <p>
+                The host can open Modes in the lobby and apply settings before
+                everyone readies up. Classic keeps the familiar rules; Hard adds
+                Tracker and Herbalist. Chaos can repeat roles, and Maelstrom
+                announces a different rule each night.
+            </p>
+            <p>
+                Custom uses the exact enabled role counts, with at least one
+                Town and one Cult player. Everyone can join before the match
+                starts; the number of players must then match the chosen cast.
+            </p>
         </section>
         <RoleGuide
             compact
@@ -103,16 +120,20 @@ const nextAction = computed(() => {
                     <strong>Night.</strong> Everyone confirms one private
                     action. Cultists chant, the Oracle investigates, and the
                     Warden protects against new curses, the Lamplighter watches
-                    for other visitors, and townspeople keep watch. The Medium,
-                    Dreamweaver, and Bellkeeper can use their once-per-match
-                    ability or save it. Disruptions resolve first. A committed
-                    ability is spent even if disrupted. Missing the deadline
-                    forfeits the action without spending a saved ability.
+                    for other visitors, the Tracker follows outgoing targets,
+                    and townspeople keep watch. The Medium, Dreamweaver,
+                    Bellkeeper, Herbalist, Phantasm and Counterfeiter can use
+                    their once-per-match ability or save it. Disruptions resolve
+                    first. A committed ability is spent even if disrupted.
+                    Missing the deadline forfeits the action without spending a
+                    saved ability.
                 </li>
                 <li>
                     <strong>Discussion.</strong> Read public events and any
                     private investigation, then compare stories in Chat. Voting
                     starts when all living players are ready or the timer ends.
+                    The Exorcist can cleanse another player once per match; the
+                    Oathkeeper can make one public voting promise each day.
                 </li>
                 <li>
                     <strong>Voting.</strong> Choose a player to banish or

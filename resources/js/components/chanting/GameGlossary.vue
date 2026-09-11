@@ -1,6 +1,38 @@
 <script setup lang="ts">
 const terms = [
     [
+        'Modes',
+        'Classic preserves the original roles, with an optional Illusions variant. Hard adds a wider cast from 5 players. Chaos draws random roles with possible repeats. Custom uses exactly the role counts chosen by the host; the total must match the players at the start.',
+    ],
+    [
+        'Maelstrom',
+        'A Chaos variant with one public rule each night: Mirrors reverses base Oracle readings before veils and forgeries; Sanctuary stops all new curses; Eclipse hides visits from Lamplighters and Trackers. The rule is announced to everyone.',
+    ],
+    [
+        'Tracker',
+        'A town role. Follows another living player each night and privately learns whom they targeted, or that no outgoing visit was visible. Disrupted attempts count; Phantasm concealment and Eclipse hide tracks. No role or ability is revealed.',
+    ],
+    [
+        'Herbalist',
+        'A town role. Once per match at night, protects all living players from new curses without selecting a target. It does not remove existing curses or stop haunting, forgery or disruption. A quiet night or disrupted attempt still spends the ability.',
+    ],
+    [
+        'Phantasm',
+        'A cult role. Once, gives up chanting to haunt another player through discussion and hide their outgoing visits from the Lamplighter that night. False faces and sounds reveal no allegiance; names and controls stay truthful.',
+    ],
+    [
+        'Counterfeiter',
+        'A cult role. Once, gives up chanting to choose how another player appears to the Oracle tonight. The forgery overrides a veil, but never changes true roles or Medium results.',
+    ],
+    [
+        'Exorcist',
+        'A town role. Once during discussion, clears another living player’s active curse and haunting. It is spent even if the player was unaffected and gives no future protection.',
+    ],
+    [
+        'Oathkeeper',
+        'A town role. Once each discussion, publicly promises a vote. Keeping that promise with the actual ballot protects against new curses next night. Abstaining, missing the vote or voting elsewhere earns no protection.',
+    ],
+    [
         'Medium',
         'A town role. Once per match, contacts a banished player at night and privately learns their true alignment at dawn. Veils cannot change it. Keeping watch saves the ability; a disrupted attempt spends it.',
     ],
@@ -46,7 +78,7 @@ const terms = [
     ],
     [
         'Veilweaver',
-        'A cult role. Can chant while veiling and cursing one other living player. The veil reverses their apparent alignment for the Oracle tonight; a random curse takes hold at dawn.',
+        'A cult role. Can chant while veiling and cursing one other living player. The veil reverses their apparent alignment for the Oracle tonight; their chosen curse takes hold at dawn.',
     ],
     [
         'Warden',
@@ -58,7 +90,7 @@ const terms = [
     ],
     [
         'Acolyte',
-        'A cult role. Chants to advance the ritual when the shared mission condition is met, and can optionally curse one other living player. A random curse takes hold at dawn.',
+        'A cult role. Chants to advance the ritual when the shared mission condition is met, and can optionally curse one other living player. Their chosen curse takes hold at dawn.',
     ],
     [
         'Veiled',
@@ -66,7 +98,7 @@ const terms = [
     ],
     [
         'Eldritch curse',
-        'A private affliction placed by a cultist. It takes hold at dawn and expires at the following dawn. The type is random; challenge difficulty grows with the ritual level. Being cursed does not reveal your alignment.',
+        'A private affliction placed by a cultist. It takes hold at dawn and expires at the following dawn. The caster chooses a random puzzle, mind mist, or misdirection (unlocked at ritual level 3 when choosing). Challenge difficulty grows with the ritual level. Being cursed does not reveal your alignment.',
     ],
     [
         'Puzzle curse',
@@ -90,7 +122,7 @@ const terms = [
     ],
     [
         'Small gathering',
-        'A match with 3 or 4 players: one cultist, one Oracle, and the remaining players are townspeople. The ritual takes 3 steps with 3 players, or 4 steps with 4. A submitted chant adds one step even when the Oracle investigates the cultist.',
+        'In Classic, a match with 3 or 4 players has one cultist, one Oracle, and the remaining players are townspeople. Chaos and Custom can use other roles. The ritual takes 3 steps with 3 players, or 4 steps with 4. A submitted chant adds one step even when the Oracle investigates the cultist.',
     ],
     [
         'Ritual progress',

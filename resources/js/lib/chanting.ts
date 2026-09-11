@@ -1,3 +1,5 @@
+import type { ChaosEvent, ModeSetup } from './gameModes';
+
 export class RoomError extends Error {
     constructor(
         message: string,
@@ -56,6 +58,7 @@ export async function roomRequest<T>(url: string, body?: object): Promise<T> {
 }
 
 export interface Player {
+    oath?: { day: number; target_id: string } | null;
     id: string;
     name: string;
     alive: boolean;
@@ -66,6 +69,10 @@ export interface Player {
     alignment?: string;
 }
 export interface RecapNightAction {
+    tracked_target_id?: string | null;
+    forged_alignment?: string | null;
+    forged?: boolean;
+    visits_hidden?: boolean;
     player_id: string;
     role: string;
     target_id: string | null;
@@ -87,14 +94,22 @@ export interface RecapNightAction {
 export type PrivateNightResult = { day: number; target: string } & (
     | { kind?: 'alignment'; alignment: string }
     | { kind: 'visits'; visited: boolean }
+    | { kind: 'tracking'; visited_target: string | null }
+    | { kind: 'herbs' }
     | { kind: 'protection' }
     | { kind: 'spirit'; alignment: string }
     | { kind: 'bell'; prevented: number }
     | { kind: 'disruption' }
     | { kind: 'disrupted' }
+    | { kind: 'haunting' }
+    | { kind: 'forgery'; alignment: string }
+    | { kind: 'exorcism' }
+    | { kind: 'oath'; kept: boolean }
 );
 
 export interface MatchRecapData {
+    mode_setup?: ModeSetup;
+    roster?: 'classic' | 'illusions';
     rules_version: string;
     player_count: number;
     mission: { id: string; name: string; description: string };
@@ -105,7 +120,13 @@ export interface MatchRecapData {
     missed_actions: { night: number; vote: number };
     rounds: {
         day: number;
+        discussion?: {
+            type: 'exorcise' | 'oath';
+            player_id: string;
+            target_id: string;
+        }[];
         night?: {
+            chaos_event?: ChaosEvent | null;
             actions: RecapNightAction[];
             gained: number;
             tokens: number;
@@ -116,6 +137,7 @@ export interface MatchRecapData {
                 target_id: string | null;
                 chosen_target_id?: string | null;
                 submitted: boolean;
+                oath_kept?: boolean | null;
             }[];
             banished_id: string | null;
         };
@@ -137,6 +159,14 @@ export interface Curse {
     challenge: CurseChallenge | null;
 }
 export interface RoomState {
+    mode_setup?: ModeSetup;
+    mode_preview?: {
+        roles: Record<string, number> | null;
+        required_players: number | null;
+        error: string | null;
+    };
+    chaos_event?: ChaosEvent | null;
+    roster?: 'classic' | 'illusions';
     id: number;
     code: string;
     phase: 'lobby' | 'reveal' | 'night' | 'discussion' | 'voting' | 'finished';
@@ -168,6 +198,8 @@ export interface RoomState {
         results: PrivateNightResult[];
         previous_protection_target?: string | null;
         ability_used?: boolean;
+        haunting?: { day: number; seat_id: string } | null;
+        oath_protected?: boolean;
         submitted: boolean;
         curse: Curse | null;
         curse_notice: string | null;
@@ -217,25 +249,67 @@ export const roles: Record<
     string,
     { name: string; subtitle: string; description: string; symbol: string }
 > = {
+    tracker: {
+        name: 'The Tracker',
+        subtitle: 'Town · follower of midnight footsteps',
+        symbol: '⌭',
+        description:
+            'Each night, follow another living player. At dawn, privately learn the name of the player they targeted, or that no visit was visible. Submitted attempts count even if disrupted. Phantasm concealment and the Eclipse hide tracks. You learn no role or ability.',
+    },
+    herbalist: {
+        name: 'The Herbalist',
+        subtitle: 'Town · keeper of protective remedies',
+        symbol: '⌭',
+        description:
+            'Once per match at night, protect every living player against all new curses. No target is needed. This does not remove existing curses or stop haunting, forgery or disruption. The ability is spent even on a quiet night or if disrupted. Keep watch to save it.',
+    },
+    phantasm: {
+        name: 'The Phantasm',
+        subtitle: 'Cult · architect of false visions',
+        symbol: '◌',
+        description:
+            'Once per match, haunt another living player instead of chanting. Their outgoing visits are hidden from the Lamplighter and Tracker tonight, and false faces, shadows and distant chanting follow them through discussion. These visions reveal no allegiance. Names, actions and your own role stay truthful. The haunting fades before voting; disruption stops it. Otherwise, chant without a target.',
+    },
+    counterfeiter: {
+        name: 'The Counterfeiter',
+        subtitle: 'Cult · author of false evidence',
+        symbol: '✎',
+        description:
+            'Once per match, forgo chanting to choose another living player and how they appear to the Oracle tonight: town or cult. This overrides a veil, but cannot alter the Medium or anyone’s true role. It is spent even if nobody investigates the target or you are disrupted. Otherwise, chant without a target.',
+    },
+    exorcist: {
+        name: 'The Exorcist',
+        subtitle: 'Town · clearer of troubled minds',
+        symbol: '✣',
+        description:
+            'Once per match during discussion, cleanse another living player of their active curse and Phantasm haunting. The ability is spent even if they had neither. It does not rewrite earlier Oracle readings or protect against future afflictions. Break your own blocking curse before acting. Keep watch at night.',
+    },
+    oathkeeper: {
+        name: 'The Oathkeeper',
+        subtitle: 'Town · bound by a public promise',
+        symbol: '⚖',
+        description:
+            'Each discussion, publicly promise to vote for another living player. The oath cannot be changed. If your actual ballot matches, you gain protection against all new curses next night. Abstaining, missing the vote or a redirected ballot breaks it. Protection does not stop haunting, forgery or disruption. Keep watch at night.',
+    },
     veilweaver: {
         name: 'The Veilweaver',
         subtitle: 'Cult · master of misdirection',
         description:
-            'Chant for the ritual. You may veil another living player: their alignment appears reversed to the Oracle tonight, and a random eldritch curse takes hold at dawn. Curses grow stronger with the ritual.',
+            'Chant for the ritual. You may veil another living player: their alignment appears reversed to the Oracle tonight, and your chosen curse takes hold at dawn. Choose a random puzzle or mind mist; misdirection unlocks at ritual level 3.',
         symbol: '◈',
     },
     acolyte: {
         name: 'The Acolyte',
         subtitle: 'Cult · keeper of the ritual',
         description:
-            'Chant each night to complete your shared mission. You may also curse another living player: a random eldritch curse takes hold at dawn and grows stronger with the ritual. Keep your intentions hidden.',
+            'Chant each night to complete your shared mission. You may also curse another living player: your chosen curse takes hold at dawn and grows stronger with the ritual. Choose a random puzzle or mind mist; misdirection unlocks at ritual level 3.',
         symbol: '✧',
     },
     oracle: {
         name: 'The Oracle',
         subtitle: 'Town · seeker of secrets',
         description:
-            'Each night, investigate another living player’s alignment. Beware: the Veilweaver can reverse one reading for a night.',
+            'Each night, investigate another living player’s alignment. Beware: the Veilweaver can reverse a reading, and the Counterfeiter can forge one when that role is in play.',
         symbol: '☾',
     },
     townsperson: {
@@ -256,7 +330,7 @@ export const roles: Record<
         name: 'The Lamplighter',
         subtitle: 'Town · watcher of midnight visitors',
         description:
-            'Watch another living player tonight. At dawn, privately learn whether anyone else targeted them. Your own watch does not count. You learn no visitor names, roles, or abilities; even a blocked curse counts as a visit.',
+            'Watch another living player tonight. At dawn, privately learn whether anyone else was seen targeting them. Your own watch does not count. You learn no visitor names, roles, or abilities; even a blocked curse counts as a visit. The Phantasm can conceal a visitor when that role is in play.',
         symbol: '☼',
     },
     medium: {

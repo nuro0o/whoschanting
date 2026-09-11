@@ -1,12 +1,20 @@
 <?php
 
 return [
-    'rules_version' => 'midnight-abilities-v1',
+    'rules_version' => 'modes-v1',
     'min_players' => (int) env('GAME_MIN_PLAYERS', 3),
     'max_players' => (int) env('GAME_MAX_PLAYERS', 10),
     'cultists_by_player_count' => [3 => 1, 4 => 1, 5 => 2, 6 => 2, 7 => 3, 8 => 3, 9 => 4, 10 => 4],
     'town_roles_min_players' => ['warden' => 5, 'lamplighter' => 7, 'medium' => 8, 'bellkeeper' => 10],
     'cult_roles_min_players' => ['dreamweaver' => 7],
+    'illusion_town_roles_min_players' => ['exorcist' => 5, 'lamplighter' => 7, 'oathkeeper' => 8, 'bellkeeper' => 10],
+    'illusion_cult_roles_min_players' => ['counterfeiter' => 5, 'dreamweaver' => 7],
+    'hard_town_roles_min_players' => ['tracker' => 5, 'exorcist' => 7, 'herbalist' => 8, 'oathkeeper' => 10],
+    'hard_cult_roles_min_players' => ['counterfeiter' => 5, 'phantasm' => 7, 'dreamweaver' => 9],
+    'role_alignments' => [
+        'oracle' => 'town', 'townsperson' => 'town', 'warden' => 'town', 'lamplighter' => 'town', 'medium' => 'town', 'bellkeeper' => 'town', 'exorcist' => 'town', 'oathkeeper' => 'town', 'tracker' => 'town', 'herbalist' => 'town',
+        'veilweaver' => 'cult', 'acolyte' => 'cult', 'dreamweaver' => 'cult', 'phantasm' => 'cult', 'counterfeiter' => 'cult',
+    ],
     'tokens_per_player' => 1.2,
     'ritual_goals_by_player_count' => [3 => 3, 4 => 4],
     'small_gathering_max_players' => 4,

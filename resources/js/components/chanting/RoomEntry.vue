@@ -16,6 +16,13 @@ import {
 } from '@/lib/chanting';
 import CharacterPicker from './CharacterPicker.vue';
 import CharacterPortrait from './CharacterPortrait.vue';
+import ModeSelector from './ModeSelector.vue';
+import {
+    customModeError,
+    defaultModeSetup,
+    modeName,
+    modeSubmission,
+} from '@/lib/gameModes';
 
 const props = withDefaults(
     defineProps<{
@@ -33,6 +40,22 @@ const character = ref(
     props.preferredCharacter || props.characters[0]?.id || 'mariner',
 );
 const mode = ref(props.initialCode ? 'join' : 'create');
+const createTab = ref<'details' | 'modes'>('details');
+const setup = ref(defaultModeSetup());
+const setupError = computed(() => customModeError(setup.value));
+function switchCreateTab(event: KeyboardEvent) {
+    if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+    event.preventDefault();
+    createTab.value =
+        event.key === 'Home'
+            ? 'details'
+            : event.key === 'End'
+              ? 'modes'
+              : createTab.value === 'details'
+                ? 'modes'
+                : 'details';
+    document.getElementById(`create-tab-${createTab.value}`)?.focus();
+}
 const name = ref((props.initialName ?? '').slice(0, 24));
 const selectedCharacter = computed(() =>
     props.characters.find((item) => item.id === character.value),
@@ -41,6 +64,11 @@ const code = ref(props.initialCode ?? '');
 const pending = ref(false);
 const error = ref('');
 async function enter() {
+    if (mode.value === 'create' && setupError.value) {
+        error.value = setupError.value;
+        createTab.value = 'modes';
+        return;
+    }
     pending.value = true;
     error.value = '';
     try {
@@ -51,7 +79,7 @@ async function enter() {
                 ...(signedIn.value ? { character: character.value } : {}),
                 ...(mode.value === 'join'
                     ? { code: code.value.trim().toUpperCase() }
-                    : {}),
+                    : { setup: modeSubmission(setup.value) }),
             },
         );
         window.location.assign(`/rooms/${encodeURIComponent(data.code)}`);
@@ -128,43 +156,112 @@ async function enter() {
                     :disabled="pending || !!initialCode"
                 />
             </template>
-            <details
-                v-if="signedIn && compactCharacters"
-                class="entry-character-disclosure"
+            <div
+                v-if="mode === 'create'"
+                class="entry-tabs create-tabs"
+                role="tablist"
+                aria-label="Create room settings"
+                @keydown="switchCreateTab"
             >
-                <summary>
-                    <CharacterPortrait :character="character" decorative /><span
-                        ><small>Your character</small
-                        ><strong>{{
-                            selectedCharacter?.name ?? 'Choose a villager'
-                        }}</strong></span
-                    ><span class="entry-character-change"
-                        >Change <ChevronDown :size="14"
-                    /></span>
-                </summary>
+                <button
+                    id="create-tab-details"
+                    type="button"
+                    role="tab"
+                    aria-controls="create-panel-details"
+                    :aria-selected="createTab === 'details'"
+                    :tabindex="createTab === 'details' ? 0 : -1"
+                    :class="{ selected: createTab === 'details' }"
+                    :disabled="pending"
+                    @click="createTab = 'details'"
+                >
+                    Room details
+                </button>
+                <button
+                    id="create-tab-modes"
+                    type="button"
+                    role="tab"
+                    aria-controls="create-panel-modes"
+                    :aria-selected="createTab === 'modes'"
+                    :tabindex="createTab === 'modes' ? 0 : -1"
+                    :class="{ selected: createTab === 'modes' }"
+                    :disabled="pending"
+                    @click="createTab = 'modes'"
+                >
+                    Modes
+                </button>
+            </div>
+            <div
+                v-if="mode === 'create'"
+                v-show="createTab === 'modes'"
+                id="create-panel-modes"
+                role="tabpanel"
+                aria-labelledby="create-tab-modes"
+            >
+                <ModeSelector v-model="setup" :disabled="pending" />
+            </div>
+            <div
+                v-show="mode === 'join' || createTab === 'details'"
+                id="create-panel-details"
+                :role="mode === 'create' ? 'tabpanel' : undefined"
+                :aria-labelledby="
+                    mode === 'create' ? 'create-tab-details' : undefined
+                "
+            >
+                <details
+                    v-if="signedIn && compactCharacters"
+                    class="entry-character-disclosure"
+                >
+                    <summary>
+                        <CharacterPortrait
+                            :character="character"
+                            decorative
+                        /><span
+                            ><small>Your character</small
+                            ><strong>{{
+                                selectedCharacter?.name ?? 'Choose a villager'
+                            }}</strong></span
+                        ><span class="entry-character-change"
+                            >Change <ChevronDown :size="14"
+                        /></span>
+                    </summary>
+                    <CharacterPicker
+                        v-model="character"
+                        :characters="characters"
+                        :disabled="pending"
+                    />
+                </details>
                 <CharacterPicker
+                    v-else-if="signedIn"
                     v-model="character"
                     :characters="characters"
                     :disabled="pending"
                 />
-            </details>
-            <CharacterPicker
-                v-else-if="signedIn"
-                v-model="character"
-                :characters="characters"
-                :disabled="pending"
-            />
-            <p v-else class="guest-character-note">
-                The village will choose a random character for you.
-                <a href="/login">Sign in</a> or
-                <a href="/register">create an account</a> to pick your own.
-                Looks never reveal your role.
-            </p>
+                <p v-else class="guest-character-note">
+                    The village will choose a random character for you.
+                    <a href="/login">Sign in</a> or
+                    <a href="/register">create an account</a> to pick your own.
+                    Looks never reveal your role.
+                </p>
+                <p v-if="mode === 'create'" class="entry-mode-summary">
+                    Mode: <strong>{{ modeName(setup) }}</strong
+                    ><button
+                        type="button"
+                        class="quiet-link"
+                        :disabled="pending"
+                        @click="createTab = 'modes'"
+                    >
+                        Change mode
+                    </button>
+                </p>
+            </div>
             <p v-if="error" class="form-error" role="alert">{{ error }}</p>
             <button
                 class="button primary entry-submit"
                 :disabled="
-                    pending || !name.trim() || (mode === 'join' && !code.trim())
+                    pending ||
+                    !name.trim() ||
+                    (mode === 'join' && !code.trim()) ||
+                    (mode === 'create' && !!setupError)
                 "
             >
                 <template v-if="pending"
@@ -188,3 +285,24 @@ async function enter() {
         </form>
     </section>
 </template>
+
+<style scoped>
+.create-tabs {
+    margin-top: 4px;
+}
+.entry-mode-summary {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    padding-top: 16px;
+    color: var(--muted);
+    font-size: 12px;
+}
+.entry-mode-summary strong {
+    color: var(--cream);
+}
+.entry-mode-summary button {
+    margin-left: auto;
+}
+</style>

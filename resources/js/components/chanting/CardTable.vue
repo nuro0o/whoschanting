@@ -19,6 +19,7 @@ const props = defineProps<{
     selectedTarget: string | null;
     canSelect: boolean;
     eligibleTargetIds?: string[];
+    hauntedSeatId?: string | null;
 }>();
 const emit = defineEmits<{ select: [id: string] }>();
 const phaseChanging = ref(false);
@@ -170,12 +171,18 @@ onBeforeUnmount(() => {
                 'is-night': phase === 'night',
                 'is-small': players.length <= 4,
                 'is-crowded': crowded,
+                'is-haunted': !!hauntedSeatId,
             }"
         >
             <div class="table-surface" aria-hidden="true">
                 <div class="table-inlay"></div>
             </div>
             <div class="table-atmosphere" aria-hidden="true"></div>
+            <div
+                v-if="hauntedSeatId"
+                class="phantom-shadow"
+                aria-hidden="true"
+            ></div>
             <div
                 class="table-ritual"
                 :class="{ 'ritual-awakening': newlyLit.length > 0 }"
@@ -223,6 +230,7 @@ onBeforeUnmount(() => {
                     'is-selected': selectedTarget === player.id && canSelect,
                     'is-extinguishing': extinguished.includes(player.id),
                     'is-face-up': phase === 'finished',
+                    'phantom-seat': player.id === hauntedSeatId,
                 }"
                 :style="seatStyle(index)"
                 :type="selectable(player) ? 'button' : undefined"
@@ -237,6 +245,12 @@ onBeforeUnmount(() => {
             >
                 <span class="seat-card" aria-hidden="true"></span>
                 <CharacterPortrait :character="player.character" decorative />
+                <span
+                    v-if="player.id === hauntedSeatId"
+                    class="phantom-face"
+                    aria-hidden="true"
+                    ><i></i><i></i
+                ></span>
                 <span class="seat-candle" aria-hidden="true"><i></i></span>
                 <span
                     v-if="
@@ -282,3 +296,82 @@ onBeforeUnmount(() => {
         <p class="table-caption">{{ caption }}</p>
     </section>
 </template>
+
+<style scoped>
+.phantom-face {
+    --phantom-size: 57px;
+    pointer-events: none;
+    position: absolute;
+    top: 2px;
+    left: 50%;
+    width: var(--phantom-size);
+    height: var(--phantom-size);
+    transform: translateX(-50%);
+    border-radius: 48% 48% 20% 20%;
+    background: radial-gradient(
+        ellipse at 50% 40%,
+        #080b10 27%,
+        #343245 30%,
+        #10151f 65%
+    );
+    box-shadow: 0 0 16px #9180bb50;
+    display: flex;
+    justify-content: center;
+    gap: 9px;
+    padding-top: calc(var(--phantom-size) * 0.43);
+    opacity: 0.75;
+    animation: false-face 9s ease-in-out infinite;
+}
+.phantom-face i {
+    width: 4px;
+    height: 2px;
+    background: #d2abc9;
+    box-shadow: 0 0 5px #d2abc9;
+}
+.phantom-shadow {
+    pointer-events: none;
+    position: absolute;
+    top: 27%;
+    left: 35%;
+    width: 42px;
+    height: 110px;
+    background: linear-gradient(#55516b60, #080b1030);
+    border-radius: 50% 50% 20% 20%;
+    filter: blur(5px);
+    opacity: 0.35;
+    animation: wandering-shadow 15s ease-in-out infinite alternate;
+}
+@keyframes false-face {
+    0%,
+    100% {
+        opacity: 0.1;
+    }
+    45%,
+    70% {
+        opacity: 0.9;
+    }
+}
+@keyframes wandering-shadow {
+    to {
+        transform: translate(95px, -15px) skew(-10deg);
+        opacity: 0.1;
+    }
+}
+@media (prefers-reduced-motion: reduce) {
+    .phantom-face,
+    .phantom-shadow {
+        animation: none;
+    }
+}
+.is-crowded .phantom-face {
+    --phantom-size: 48px;
+}
+@media (max-width: 760px) {
+    .phantom-face {
+        --phantom-size: 45px;
+    }
+    .is-crowded .phantom-face {
+        --phantom-size: 35px;
+    }
+}
+</style>

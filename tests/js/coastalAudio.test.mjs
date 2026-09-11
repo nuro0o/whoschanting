@@ -59,6 +59,9 @@ function audioMock() {
         createGain() {
             return Object.assign(this.node(), { gain: this.param() });
         }
+        createStereoPanner() {
+            return Object.assign(this.node(), { pan: this.param() });
+        }
         createBiquadFilter() {
             return Object.assign(this.node(), {
                 frequency: this.param(),
@@ -231,6 +234,53 @@ await test('unmount while browser resume is pending cannot activate sound later'
         assert.equal(engine.active, false);
         assert.equal(contexts[0].state, 'closed');
         assert.ok(contexts[0].nodes.every((node) => node.disconnected));
+    } finally {
+        engine.close();
+        globalThis.AudioContext = original;
+    }
+});
+
+await test('haunting respects activation, effects mute, cleansing, phase changes and background suspension', async () => {
+    const original = globalThis.AudioContext;
+    const { contexts, Context } = audioMock();
+    globalThis.AudioContext = Context;
+    const engine = new CoastalAudio(() => {});
+    const prefs = { ...defaultSoundPreferences, ambience: 0, effects: 30 };
+    try {
+        engine.update(prefs, 'discussion');
+        engine.setHaunting(-0.65);
+        assert.equal(contexts.length, 0);
+        await engine.enable();
+        const context = contexts[0];
+        const liveSources = () =>
+            context.nodes.filter((n) => n.start && !n.disconnected);
+        assert.equal(liveSources().length, 4);
+        assert.equal(context.nodes.find((n) => n.pan).pan.value, -0.65);
+        const nodeCount = context.nodes.length;
+        engine.setHaunting(-0.65);
+        engine.update(prefs, 'discussion');
+        assert.equal(
+            context.nodes.length,
+            nodeCount,
+            'polls do not layer voices',
+        );
+        engine.update({ ...prefs, effects: 0 }, 'discussion');
+        assert.equal(liveSources().length, 0);
+        engine.update(prefs, 'discussion');
+        assert.equal(liveSources().length, 4);
+        engine.setHaunting(null);
+        assert.equal(liveSources().length, 0, 'exorcism stops the illusion');
+        engine.setHaunting(0.65);
+        engine.pause();
+        assert.equal(liveSources().length, 0);
+        engine.setHaunting(0.65);
+        assert.equal(liveSources().length, 0);
+        await engine.enable();
+        assert.equal(liveSources().length, 4);
+        engine.update(prefs, 'voting');
+        assert.equal(liveSources().length, 0);
+        engine.close();
+        assert.ok(context.nodes.every((n) => n.disconnected));
     } finally {
         engine.close();
         globalThis.AudioContext = original;

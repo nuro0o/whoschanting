@@ -11,7 +11,9 @@ import {
     type SoundSnapshot,
 } from '@/lib/coastalAudio';
 
-const props = defineProps<SoundSnapshot & { music: MusicLibrary }>();
+const props = defineProps<
+    SoundSnapshot & { music: MusicLibrary; hauntPan?: number | null }
+>();
 const preferences = ref({ ...defaultSoundPreferences });
 const active = ref(false);
 const busy = ref(false);
@@ -43,6 +45,7 @@ function save() {
     }
 }
 function sync() {
+    engine?.setHaunting(props.hauntPan ?? null);
     const cues = tracker.update({ ...props }, active.value && !document.hidden);
     engine?.update(preferences.value, props.phase);
     engine?.play(cues);
@@ -60,6 +63,7 @@ async function enable() {
     busy.value = true;
     issue.value = '';
     tracker.update({ ...props }, false);
+    engine.setHaunting(props.hauntPan ?? null);
     engine.update(preferences.value, props.phase);
     // Start media within the user's gesture, before awaiting AudioContext.resume().
     syncMusic(true);

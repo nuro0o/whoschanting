@@ -119,14 +119,100 @@ await test('legacy Oracle results and new observations have distinct explanation
     );
     assert.equal(
         privateResultText({ ...result, kind: 'visits', visited: true }),
-        'Mara was targeted by at least one other player.',
+        'At least one other player was seen targeting Mara.',
     );
     assert.equal(
         privateResultText({ ...result, kind: 'visits', visited: false }),
-        'Mara was not targeted by any other player.',
+        'No other player was seen targeting Mara.',
     );
     assert.equal(
         privateResultText({ ...result, kind: 'protection' }),
         'You protected Mara from new curses.',
+    );
+});
+
+await test('illusion abilities require opting in and retain living targets; day roles keep watch', () => {
+    for (const role of ['phantasm', 'counterfeiter']) {
+        const current = {
+            ...state,
+            me: { id: 'me', role, alignment: 'cult', ability_used: false },
+        };
+        assert.deepEqual(eligibleTargets(current), []);
+        assert.deepEqual(
+            eligibleTargets(current, true).map((p) => p.id),
+            ['previous', 'neighbor'],
+        );
+        assert.match(
+            nightActionLabel(current, true, 'neighbor'),
+            /instead of chanting/,
+        );
+        current.me.ability_used = true;
+        assert.deepEqual(eligibleTargets(current, true), []);
+    }
+    assert.equal(
+        nightActionLabel(
+            { ...state, me: { role: 'exorcist', alignment: 'town' } },
+            false,
+            null,
+        ),
+        'Keep watch tonight',
+    );
+    assert.match(
+        privateResultText({
+            day: 1,
+            kind: 'forgery',
+            target: 'Neighbor',
+            alignment: 'cult',
+        }),
+        /appear cult/,
+    );
+    assert.match(
+        privateResultText({
+            day: 1,
+            kind: 'oath',
+            target: 'Neighbor',
+            kept: false,
+        }),
+        /No protection/,
+    );
+});
+
+await test('Tracker and Herbalist controls choose only their legal action targets', () => {
+    const tracker = { ...state, me: { id: 'me', role: 'tracker' } };
+    assert.deepEqual(
+        eligibleTargets(tracker).map((p) => p.id),
+        ['previous', 'neighbor'],
+    );
+    assert.equal(
+        nightActionLabel(tracker, false, 'neighbor'),
+        'Confirm tracking',
+    );
+    const herbalist = { ...state, me: { id: 'me', role: 'herbalist' } };
+    assert.deepEqual(eligibleTargets(herbalist, true), []);
+    assert.equal(
+        nightActionLabel(herbalist, true, null),
+        'Protect the village',
+    );
+    assert.match(
+        privateResultText({
+            kind: 'tracking',
+            day: 1,
+            target: 'Mara',
+            visited_target: 'Jane',
+        }),
+        /Mara was seen targeting Jane/,
+    );
+    assert.match(
+        privateResultText({
+            kind: 'tracking',
+            day: 1,
+            target: 'Mara',
+            visited_target: null,
+        }),
+        /No outgoing visit was visible/,
+    );
+    assert.match(
+        privateResultText({ kind: 'herbs', day: 1, target: 'The village' }),
+        /all new curses/,
     );
 });

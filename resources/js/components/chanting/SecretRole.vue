@@ -178,7 +178,7 @@ onBeforeUnmount(() => {
                 </p>
             </div>
             <div class="role-details">
-                <p class="eyebrow">TONIGHT’S ABILITY</p>
+                <p class="eyebrow">YOUR ABILITY</p>
                 <p>{{ roles[state.me.role ?? '']?.description }}</p>
                 <p
                     v-if="hasLimitedAbility(state.me.role)"
@@ -189,7 +189,11 @@ onBeforeUnmount(() => {
                             ? 'Once-per-match ability spent.'
                             : 'Once-per-match ability available.'
                     }}</strong>
-                    Choose whether to use it in your night action in Play.
+                    {{
+                        state.me.role === 'exorcist'
+                            ? 'Use it during discussion in Play.'
+                            : 'Choose whether to use it in your night action in Play.'
+                    }}
                 </p>
                 <div v-if="state.me.mission" class="private-separator">
                     <p class="eyebrow">YOUR MISSION</p>

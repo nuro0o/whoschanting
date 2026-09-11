@@ -28,6 +28,16 @@ import {
     watch,
 } from 'vue';
 import RoomEntry from '@/components/chanting/RoomEntry.vue';
+import ModeSelector from '@/components/chanting/ModeSelector.vue';
+import {
+    chaosEvents,
+    copyModeSetup,
+    customModeError,
+    defaultModeSetup,
+    modeName,
+    modeSubmission,
+    type ModeSetup,
+} from '@/lib/gameModes';
 import SecretRole from '@/components/chanting/SecretRole.vue';
 import RoomBriefing from '@/components/chanting/RoomBriefing.vue';
 import RitualWarning from '@/components/chanting/RitualWarning.vue';
@@ -38,6 +48,7 @@ import CharacterPortrait from '@/components/chanting/CharacterPortrait.vue';
 import CursePanel from '@/components/chanting/CursePanel.vue';
 import MatchRecap from '@/components/chanting/MatchRecap.vue';
 import CardTable from '@/components/chanting/CardTable.vue';
+import DiscussionAbility from '@/components/chanting/DiscussionAbility.vue';
 import GameAtmosphere from '@/components/chanting/GameAtmosphere.vue';
 import SoundControl from '@/components/chanting/SoundControl.vue';
 import type { MusicLibrary } from '@/lib/phaseMusic';
@@ -49,6 +60,7 @@ import {
     roles,
     type RoomState,
     type Character,
+    type Curse,
     defaultCharacters,
 } from '@/lib/chanting';
 import {
@@ -74,6 +86,43 @@ const page = usePage();
 const signedIn = computed(() => !!page.props.auth.user);
 const state = ref<RoomState>();
 const loading = ref(true);
+const modeDraft = ref<ModeSetup>(defaultModeSetup());
+const modeEditorOpen = ref(false);
+const modeDirty = computed(
+    () =>
+        JSON.stringify(modeSubmission(modeDraft.value)) !==
+        JSON.stringify(
+            modeSubmission(
+                copyModeSetup(state.value?.mode_setup, state.value?.roster),
+            ),
+        ),
+);
+const modeDraftError = computed(() =>
+    customModeError(
+        modeDraft.value,
+        state.value?.rules.min_players,
+        state.value?.rules.max_players,
+    ),
+);
+watch(
+    () => JSON.stringify([state.value?.mode_setup, state.value?.roster]),
+    () => {
+        const next = copyModeSetup(
+            state.value?.mode_setup,
+            state.value?.roster,
+        );
+        if (next.mode !== 'custom') next.roles = { ...modeDraft.value.roles };
+        modeDraft.value = next;
+    },
+);
+async function applyMode() {
+    if (modeDraftError.value) return;
+    if (await act('configure_mode', { setup: modeSubmission(modeDraft.value) }))
+        modeEditorOpen.value = false;
+}
+const currentChaosEvent = computed(() =>
+    state.value?.chaos_event ? chaosEvents[state.value.chaos_event] : null,
+);
 const outsider = ref(false);
 const error = ref('');
 const curseError = ref('');
@@ -82,8 +131,37 @@ const disconnected = ref(false);
 const live = ref(false);
 const target = ref<string | null>(null);
 const useAbility = ref(false);
-const limitedAbility = computed(() =>
-    hasLimitedAbility(state.value?.me.role ?? null),
+const forgedAlignment = ref<'town' | 'cult'>('cult');
+const selectedCurse = ref<Curse['type']>('puzzle');
+const canCurse = computed(() =>
+    ['veilweaver', 'acolyte'].includes(state.value?.me.role ?? ''),
+);
+const curseChoices: {
+    type: Curse['type'];
+    label: string;
+    description: string;
+}[] = [
+    {
+        type: 'puzzle',
+        label: 'Random puzzle',
+        description: 'A fresh puzzle to solve before returning to the village.',
+    },
+    {
+        type: 'mist',
+        label: 'Mind mist',
+        description:
+            'Obscure the village and chat until a focus challenge is solved.',
+    },
+    {
+        type: 'misdirection',
+        label: 'Misdirection',
+        description: 'Redirect their next targeted vote or night action.',
+    },
+];
+const limitedAbility = computed(
+    () =>
+        state.value?.me.role !== 'exorcist' &&
+        hasLimitedAbility(state.value?.me.role ?? null),
 );
 watch(useAbility, () => {
     target.value = null;
@@ -272,11 +350,19 @@ const canStart = computed(
     () =>
         !!state.value &&
         state.value.players.length >= state.value.rules.min_players &&
-        readyCount.value === state.value.players.length,
+        readyCount.value === state.value.players.length &&
+        !state.value.mode_preview?.error &&
+        !(modeEditorOpen.value && modeDirty.value),
+);
+const lobbyPlayerCount = computed(() =>
+    state.value?.phase === 'lobby' && state.value.mode_setup?.mode === 'custom'
+        ? (state.value.mode_preview?.required_players ??
+          state.value.players.length)
+        : (state.value?.players.length ?? 0),
 );
 const lobbyRoster = computed(() => {
     if (!state.value) return null;
-    const count = state.value.players.length;
+    const count = lobbyPlayerCount.value;
     const cultists = state.value.rules.cultists_by_player_count[count];
     const goal = state.value.rules.ritual_goals.find(
         (entry) => entry.players === count,
@@ -336,20 +422,27 @@ const timeLabel = computed(() =>
 const requiresTarget = computed(
     () =>
         state.value?.phase === 'night' &&
-        (['oracle', 'lamplighter'].includes(state.value.me.role ?? '') ||
+        (['oracle', 'lamplighter', 'tracker'].includes(
+            state.value.me.role ?? '',
+        ) ||
             (useAbility.value &&
-                ['medium', 'dreamweaver'].includes(state.value.me.role ?? ''))),
+                ['medium', 'dreamweaver', 'phantasm', 'counterfeiter'].includes(
+                    state.value.me.role ?? '',
+                ))),
 );
 const canChooseNightTarget = computed(
     () =>
         state.value?.me.role === 'oracle' ||
         state.value?.me.role === 'warden' ||
         state.value?.me.role === 'lamplighter' ||
+        state.value?.me.role === 'tracker' ||
         state.value?.me.role === 'veilweaver' ||
         state.value?.me.role === 'acolyte' ||
         (useAbility.value &&
             !state.value?.me.ability_used &&
-            ['medium', 'dreamweaver'].includes(state.value?.me.role ?? '')),
+            ['medium', 'dreamweaver', 'phantasm', 'counterfeiter'].includes(
+                state.value?.me.role ?? '',
+            )),
 );
 const puzzleCursed = computed(
     () =>
@@ -552,6 +645,7 @@ watch(
     () => {
         target.value = null;
         useAbility.value = false;
+        selectedCurse.value = 'puzzle';
         if (state.value?.phase === 'lobby' || state.value?.phase === 'reveal') {
             revealed.value = false;
             roleRead.value = false;
@@ -713,6 +807,16 @@ onBeforeUnmount(() => {
             </p>
             <div class="game-tools">
                 <SoundControl
+                    :haunt-pan="
+                        state.me.haunting
+                            ? state.players.findIndex(
+                                  (p) => p.id === state?.me.haunting?.seat_id,
+                              ) <
+                              state.players.length / 2
+                                ? -0.65
+                                : 0.65
+                            : null
+                    "
                     :music="music"
                     :phase="state.phase"
                     :phase-id="state.phase_id"
@@ -829,6 +933,20 @@ onBeforeUnmount(() => {
                     aria-label="Play"
                     v-show="activeView === 'play'"
                 >
+                    <aside
+                        v-if="
+                            currentChaosEvent &&
+                            ['night', 'discussion', 'voting'].includes(
+                                state.phase,
+                            )
+                        "
+                        class="chaos-event-banner"
+                        aria-label="Active Maelstrom rule"
+                    >
+                        <p class="eyebrow">MAELSTROM · NIGHT {{ state.day }}</p>
+                        <h2>{{ currentChaosEvent.name }}</h2>
+                        <p>{{ currentChaosEvent.description }}</p>
+                    </aside>
                     <div
                         v-if="
                             state.me.role &&
@@ -895,7 +1013,48 @@ onBeforeUnmount(() => {
                                 Send your friends an invite. Once everyone is
                                 ready, the host can let the secrets begin.
                             </p>
-                            <div v-if="lobbyRoster" class="lobby-rules">
+                            <div v-if="state.mode_preview" class="lobby-rules">
+                                <p class="eyebrow">
+                                    {{
+                                        modeName(state.mode_setup, state.roster)
+                                    }}
+                                    · {{ state.players.length }} PLAYERS
+                                </p>
+                                <p v-if="state.mode_preview.roles">
+                                    <strong
+                                        ><template
+                                            v-for="(count, role, index) in state
+                                                .mode_preview.roles"
+                                            :key="role"
+                                            >{{ index ? ', ' : '' }}{{ count }}
+                                            {{
+                                                roles[role]?.name.replace(
+                                                    /^The /,
+                                                    '',
+                                                ) ?? role
+                                            }}</template
+                                        >.</strong
+                                    >
+                                </p>
+                                <p v-else>
+                                    The cast is drawn at the start. Roles can
+                                    repeat; the Town/Cult split follows your
+                                    village size.
+                                </p>
+                                <p v-if="state.mode_preview.required_players">
+                                    This exact cast needs
+                                    {{ state.mode_preview.required_players }}
+                                    players. {{ state.players.length }} have
+                                    arrived.
+                                </p>
+                                <p v-if="lobbyRoster">
+                                    The ritual takes
+                                    {{ lobbyRoster.steps }} steps. A final pair
+                                    of one cultist and one town player ends in a
+                                    cult victory.
+                                </p>
+                            </div>
+                            <div v-else-if="lobbyRoster" class="lobby-rules">
                                 <p class="eyebrow">
                                     {{
                                         lobbyRoster.small
@@ -939,7 +1098,13 @@ onBeforeUnmount(() => {
                                     they chant, even if investigated.
                                 </p>
                                 <p v-if="lobbyRoster.cultRoles.length">
-                                    The cult includes one Veilweaver and
+                                    The cult includes one
+                                    {{
+                                        state.roster === 'illusions'
+                                            ? 'Phantasm'
+                                            : 'Veilweaver'
+                                    }}
+                                    and
                                     <span
                                         v-for="role in lobbyRoster.cultRoles"
                                         :key="role"
@@ -988,6 +1153,85 @@ onBeforeUnmount(() => {
                                 Your character was chosen at random. Every look
                                 can have any secret role.
                             </p>
+                            <div v-if="host" class="lobby-mode-settings">
+                                <button
+                                    class="button"
+                                    :aria-expanded="modeEditorOpen"
+                                    aria-controls="lobby-mode-editor"
+                                    :disabled="pending"
+                                    @click="modeEditorOpen = !modeEditorOpen"
+                                >
+                                    Modes ·
+                                    {{
+                                        modeName(state.mode_setup, state.roster)
+                                    }}
+                                </button>
+                                <div
+                                    v-if="modeEditorOpen"
+                                    id="lobby-mode-editor"
+                                    class="lobby-mode-editor"
+                                >
+                                    <ModeSelector
+                                        v-model="modeDraft"
+                                        :disabled="pending || disconnected"
+                                        :min-players="state.rules.min_players"
+                                        :max-players="state.rules.max_players"
+                                    />
+                                    <p class="small-help">
+                                        Applying settings clears everyone’s
+                                        ready status. These settings also carry
+                                        over when you play again.
+                                    </p>
+                                    <button
+                                        class="button primary"
+                                        :disabled="
+                                            pending ||
+                                            disconnected ||
+                                            !modeDirty ||
+                                            !!modeDraftError
+                                        "
+                                        @click="applyMode"
+                                    >
+                                        {{
+                                            pending
+                                                ? 'Applying…'
+                                                : 'Apply mode settings'
+                                        }}
+                                    </button>
+                                    <button
+                                        class="button"
+                                        :disabled="pending"
+                                        @click="
+                                            modeDraft = copyModeSetup(
+                                                state.mode_setup,
+                                                state.roster,
+                                            );
+                                            modeEditorOpen = false;
+                                        "
+                                    >
+                                        Cancel
+                                    </button>
+                                </div>
+                            </div>
+                            <p v-else class="small-help">
+                                Mode:
+                                {{ modeName(state.mode_setup, state.roster) }}.
+                                The host can change it before the match starts.
+                            </p>
+                            <p
+                                v-if="state.mode_preview?.error"
+                                class="form-error"
+                                role="status"
+                            >
+                                {{ state.mode_preview.error }}
+                            </p>
+                            <p
+                                v-if="host && modeEditorOpen && modeDirty"
+                                class="small-help"
+                            >
+                                Apply or cancel your mode changes before
+                                starting.
+                            </p>
                             <p class="lobby-readiness" role="status">
                                 <strong
                                     >{{ readyCount }} of
@@ -1014,7 +1258,13 @@ onBeforeUnmount(() => {
                             ><button
                                 v-if="host"
                                 class="button primary"
-                                :disabled="pending || !canStart"
+                                :disabled="
+                                    pending ||
+                                    !canStart ||
+                                    (!state.mode_preview &&
+                                        state.roster === 'illusions' &&
+                                        state.players.length < 5)
+                                "
                                 @click="act('start')"
                             >
                                 Start game <Moon :size="16" />
@@ -1126,13 +1376,18 @@ onBeforeUnmount(() => {
                                             : state.me.role === 'warden' ||
                                                 state.me.role ===
                                                     'lamplighter' ||
-                                                limitedAbility
+                                                state.me.role === 'tracker' ||
+                                                limitedAbility ||
+                                                [
+                                                    'exorcist',
+                                                    'oathkeeper',
+                                                ].includes(state.me.role ?? '')
                                               ? roles[state.me.role ?? '']
                                                     ?.description
                                               : state.me.role === 'veilweaver'
-                                                ? 'Choose someone to veil and curse, or chant without a target. Their alignment appears reversed tonight; a random curse takes hold at dawn.'
+                                                ? 'Choose someone to veil and curse, or chant without a target. Their alignment appears reversed tonight; your chosen curse takes hold at dawn. You chant either way.'
                                                 : state.me.role === 'acolyte'
-                                                  ? 'Choose someone to curse, or chant without a target. A random curse takes hold at dawn. Your chant advances the ritual if your shared mission’s condition is met.'
+                                                  ? 'Choose someone and a curse, or chant without a target. Your chosen curse takes hold at dawn. Either way, your chant advances the ritual if your shared mission’s condition is met.'
                                                   : 'Stay alert. You have no secret ability, but your voice and your vote matter in the morning.'
                                     }}
                                 </p>
@@ -1218,6 +1473,31 @@ onBeforeUnmount(() => {
                                             </p>
                                         </template>
                                     </div>
+                                    <label
+                                        v-if="
+                                            useAbility &&
+                                            state.me.role === 'counterfeiter'
+                                        "
+                                        class="small-help"
+                                    >
+                                        Forged Oracle reading
+                                        <select
+                                            v-model="forgedAlignment"
+                                            :disabled="
+                                                pending ||
+                                                disconnected ||
+                                                puzzleCursed ||
+                                                mistCursed
+                                            "
+                                        >
+                                            <option value="cult">
+                                                Make the target appear cult
+                                            </option>
+                                            <option value="town">
+                                                Make the target appear town
+                                            </option>
+                                        </select>
+                                    </label>
                                     <div
                                         v-if="canChooseNightTarget"
                                         class="target-list"
@@ -1266,6 +1546,57 @@ onBeforeUnmount(() => {
                                             }}</span>
                                         </button>
                                     </div>
+                                    <fieldset
+                                        v-if="canCurse && target"
+                                        class="curse-picker"
+                                        :disabled="
+                                            pending ||
+                                            disconnected ||
+                                            puzzleCursed ||
+                                            mistCursed
+                                        "
+                                    >
+                                        <legend>Choose a curse</legend>
+                                        <div class="target-list">
+                                            <label
+                                                v-for="choice in curseChoices"
+                                                :key="choice.type"
+                                                class="target-button"
+                                                :class="{
+                                                    selected:
+                                                        selectedCurse ===
+                                                        choice.type,
+                                                }"
+                                            >
+                                                <input
+                                                    v-model="selectedCurse"
+                                                    type="radio"
+                                                    name="curse-type"
+                                                    :value="choice.type"
+                                                    :disabled="
+                                                        choice.type ===
+                                                            'misdirection' &&
+                                                        state.ritual.level < 3
+                                                    "
+                                                />
+                                                <span
+                                                    >{{ choice.label
+                                                    }}<small>{{
+                                                        choice.type ===
+                                                            'misdirection' &&
+                                                        state.ritual.level < 3
+                                                            ? 'Unlocks at ritual level 3'
+                                                            : choice.description
+                                                    }}</small></span
+                                                >
+                                            </label>
+                                        </div>
+                                        <p class="small-help">
+                                            You chant and curse in the same
+                                            action. The curse takes hold at
+                                            dawn.
+                                        </p>
+                                    </fieldset>
                                     <button
                                         class="button primary"
                                         :disabled="
@@ -1285,6 +1616,18 @@ onBeforeUnmount(() => {
                                             act('night', {
                                                 target,
                                                 use_ability: useAbility,
+                                                ...(useAbility &&
+                                                state.me.role ===
+                                                    'counterfeiter'
+                                                    ? {
+                                                          forged_alignment:
+                                                              forgedAlignment,
+                                                      }
+                                                    : {}),
+                                                curse_type:
+                                                    canCurse && target
+                                                        ? selectedCurse
+                                                        : null,
                                             })
                                         "
                                     >
@@ -1313,6 +1656,19 @@ onBeforeUnmount(() => {
                             tabindex="-1"
                         >
                             <p class="eyebrow">THE MORNING AFTER</p>
+                            <DiscussionAbility
+                                :key="state.day"
+                                :state="state"
+                                :revealed="revealed"
+                                :disabled="
+                                    pending ||
+                                    disconnected ||
+                                    puzzleCursed ||
+                                    mistCursed
+                                "
+                                @reveal="revealed = true"
+                                @act="act"
+                            />
 
                             <p>
                                 Compare stories in the village chat or talk with
@@ -1510,6 +1866,7 @@ onBeforeUnmount(() => {
                         </section>
                     </RoomBriefing>
                     <CardTable
+                        :haunted-seat-id="state.me.haunting?.seat_id ?? null"
                         :class="{ 'is-mist-cursed': mistCursed }"
                         :players="state.players"
                         :phase="state.phase"
@@ -1534,6 +1891,46 @@ onBeforeUnmount(() => {
                         @select="selectSeat"
                     />
 
+                    <p
+                        v-if="state.me.haunting"
+                        class="small-help"
+                        role="status"
+                    >
+                        A haunting clouds your senses. Faces, shadows and
+                        distant chanting may be illusions; they reveal no
+                        allegiance. Your role, names and choices remain
+                        reliable. This fades before voting or can be cleansed by
+                        an Exorcist.
+                    </p>
+                    <p
+                        v-if="state.me.oath_protected && revealed"
+                        class="small-help"
+                        role="status"
+                    >
+                        Your kept oath protects you from new curses tonight.
+                    </p>
+                    <section
+                        v-if="
+                            ['discussion', 'voting'].includes(state.phase) &&
+                            state.players.some((p) => p.oath)
+                        "
+                        class="game-panel"
+                    >
+                        <h3>Public oaths</h3>
+                        <p
+                            v-for="player in state.players.filter(
+                                (p) => p.oath,
+                            )"
+                            :key="player.id"
+                        >
+                            {{ player.name }} promised to vote for
+                            {{
+                                state.players.find(
+                                    (p) => p.id === player.oath?.target_id,
+                                )?.name
+                            }}.
+                        </p>
+                    </section>
                     <RoomEvents :log="state.log" />
                     <MatchRecap
                         v-if="state.phase === 'finished' && state.recap"
@@ -1643,7 +2040,7 @@ onBeforeUnmount(() => {
                             >
                                 {{
                                     lobbyRoster
-                                        ? `${lobbyRoster.steps} steps with ${state.players.length} players.`
+                                        ? `${lobbyRoster.steps} steps with ${lobbyPlayerCount} players.`
                                         : `Gather at least ${state.rules.min_players} players to see the ritual goal.`
                                 }}
                             </p>
@@ -1858,3 +2255,36 @@ onBeforeUnmount(() => {
         </main>
     </div>
 </template>
+
+<style scoped>
+.lobby-mode-settings {
+    margin-block: 20px;
+}
+.lobby-mode-editor {
+    margin-top: 16px;
+    padding-top: 18px;
+    border-top: 1px solid var(--line);
+}
+.lobby-mode-editor > .button {
+    margin-top: 12px;
+    margin-right: 8px;
+}
+.chaos-event-banner {
+    margin-bottom: 18px;
+    padding: 18px 22px;
+    border: 1px solid var(--line);
+    border-left: 3px solid var(--coral);
+    background: rgb(183 98 74 / 9%);
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.7;
+}
+.chaos-event-banner .eyebrow {
+    color: var(--coral);
+}
+.chaos-event-banner h2 {
+    margin: 6px 0;
+    color: var(--cream);
+    font-size: 24px;
+}
+</style>

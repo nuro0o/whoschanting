@@ -13,13 +13,27 @@ class CurseEngineTest extends TestCase
         $engine = new CurseEngine;
         foreach ([[0, 6, 1], [1, 6, 1], [2, 6, 2], [3, 6, 2], [4, 6, 3], [6, 6, 3], [0, 0, 1]] as [$tokens, $goal, $tier]) {
             $this->assertSame($tier, $engine->level($tokens, $goal));
-            for ($i = 0; $i < 20; $i++) {
-                $curse = $engine->create($tokens, $goal, 1);
+            $types = $tier === 3 ? ['puzzle', 'mist', 'misdirection'] : ['puzzle', 'mist'];
+            $this->assertSame($types, $engine->availableTypes($tokens, $goal));
+            $this->assertSame('puzzle', $engine->create($tokens, $goal, 1)['type']);
+            foreach ($types as $type) {
+                $curse = $engine->create($tokens, $goal, 1, $type);
                 $this->assertSame($tier, $curse['level']);
-                $this->assertContains($curse['type'], $tier === 3 ? ['puzzle', 'mist', 'misdirection'] : ['puzzle', 'mist']);
+                $this->assertSame($type, $curse['type']);
                 $this->assertArrayNotHasKey('solution', $engine->view($curse));
+                if ($type === 'misdirection') {
+                    $this->assertNull($curse['challenge']);
+                } else {
+                    $this->assertContains($curse['challenge']['kind'], $type === 'mist' ? ['focus'] : ['cipher', 'order', 'missing', 'arithmetic', 'odd', 'reverse']);
+                }
             }
         }
+    }
+
+    public function test_misdirection_cannot_be_created_before_it_unlocks(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        (new CurseEngine)->create(3, 6, 1, 'misdirection');
     }
 
     /** @return iterable<string, array{string, int}> */

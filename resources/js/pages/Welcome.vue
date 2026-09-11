@@ -265,16 +265,21 @@ withDefaults(
                             <strong
                                 >First-edition rules, ready to evolve.</strong
                             >
-                            {{ rules.min_players }}–{{ rules.max_players }}
+                            Classic has {{ rules.min_players }}–{{
+                                rules.max_players
+                            }}
                             players and one Oracle. There is 1 cultist with 3–4
-                            players, 2 with 5–6, 3 with 7–8, and 4 with 9–10.
-                            One cultist is the Veilweaver. Larger gatherings
-                            replace an Acolyte with a Dreamweaver and
+                            players, 2 with 5–6, 3 with 7–8, and 4 with 9–10. In
+                            Classic, one cultist is the Veilweaver. Larger
+                            gatherings replace an Acolyte with a Dreamweaver and
                             Townsperson seats with special Town roles; see the
-                            role guide for their player thresholds. Default
-                            phases last 25 seconds for the reveal, 45 for night,
-                            90 for discussion and 45 for voting. These balance
-                            settings are provisional and configurable.
+                            role guide for their player thresholds. Hosts can
+                            choose the Illusions roster with 5+ players for
+                            Phantasm, Counterfeiter and Exorcist, plus
+                            Oathkeeper at 8+. Default phases last 25 seconds for
+                            the reveal, 45 for night, 90 for discussion and 45
+                            for voting. These balance settings are provisional
+                            and configurable.
                         </p>
                     </div>
                 </details>

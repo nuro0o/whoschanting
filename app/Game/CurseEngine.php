@@ -11,12 +11,19 @@ class CurseEngine
         return min(3, 1 + intdiv(max(0, $tokens) * 3, max(1, $threshold)));
     }
 
+    /** @return list<string> */
+    public function availableTypes(int $tokens, int $threshold): array
+    {
+        return $this->level($tokens, $threshold) === 3 ? ['puzzle', 'mist', 'misdirection'] : ['puzzle', 'mist'];
+    }
+
     /** @return array<string, mixed> */
-    public function create(int $tokens, int $threshold, int $day): array
+    public function create(int $tokens, int $threshold, int $day, string $type = 'puzzle'): array
     {
         $level = $this->level($tokens, $threshold);
-        $types = $level === 3 ? ['puzzle', 'mist', 'misdirection'] : ['puzzle', 'mist'];
-        $type = $types[random_int(0, count($types) - 1)];
+        if (! in_array($type, $this->availableTypes($tokens, $threshold), true)) {
+            throw new \InvalidArgumentException('Choose an unlocked curse type.');
+        }
         $puzzles = ['cipher', 'order', 'missing', 'arithmetic', 'odd', 'reverse'];
 
         return ['id' => (string) Str::uuid(), 'type' => $type, 'level' => $level, 'day' => $day,

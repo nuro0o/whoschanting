@@ -136,6 +136,8 @@ export class CoastalAudio {
     private creakTimer: ReturnType<typeof setTimeout> | null = null;
     private generation = 0;
     private playbackAllowed = false;
+    private hauntPan: number | null = null;
+    private hauntingSources: (() => void)[] = [];
     private phase: SoundSnapshot['phase'] = 'lobby';
     private preferences = { ...defaultSoundPreferences };
     private onState: (active: boolean) => void;
@@ -200,6 +202,53 @@ export class CoastalAudio {
         if (preferences.ambience === 0 || phase === 'finished')
             this.stopAmbience();
         else if (!this.ambientSources.size) this.startAmbience();
+        this.setHaunting(this.hauntPan);
+    }
+
+    /** A quiet private illusion, routed through the existing effects volume. */
+    setHaunting(pan: number | null): void {
+        if (pan !== this.hauntPan) this.stopHaunting();
+        this.hauntPan = pan;
+        if (
+            pan === null ||
+            !this.active ||
+            !this.context ||
+            this.preferences.effects === 0 ||
+            this.phase !== 'discussion'
+        ) {
+            this.stopHaunting();
+            return;
+        }
+        if (this.hauntingSources.length) return;
+        const context = this.context;
+        const stereo = context.createStereoPanner();
+        stereo.pan.value = pan;
+        const voice = context.createGain();
+        voice.gain.setValueAtTime(0, context.currentTime);
+        voice.gain.linearRampToValueAtTime(0.012, context.currentTime + 3);
+        voice.connect(stereo);
+        stereo.connect(this.effects!);
+        const pulse = context.createOscillator();
+        const depth = context.createGain();
+        pulse.frequency.value = 0.65;
+        depth.gain.value = 0.008;
+        pulse.connect(depth);
+        depth.connect(voice.gain);
+        this.hauntingSources.push(this.track(pulse, [depth, voice, stereo]));
+        pulse.start();
+        for (const frequency of [85, 127, 170]) {
+            const tone = context.createOscillator();
+            tone.type = 'sine';
+            tone.frequency.value = frequency;
+            tone.connect(voice);
+            this.hauntingSources.push(this.track(tone, []));
+            tone.start();
+        }
+    }
+
+    private stopHaunting(): void {
+        this.hauntingSources.forEach((clean) => clean());
+        this.hauntingSources = [];
     }
 
     play(cues: SoundCue[]): void {
@@ -263,7 +312,7 @@ export class CoastalAudio {
         source: AudioScheduledSourceNode,
         nodes: AudioNode[],
         ambient = false,
-    ): void {
+    ): () => void {
         const clean = () => {
             source.onended = null;
             try {
@@ -279,6 +328,7 @@ export class CoastalAudio {
         this.sources.add(clean);
         if (ambient) this.ambientSources.add(clean);
         source.onended = clean;
+        return clean;
     }
 
     private stopAmbience(): void {
@@ -289,6 +339,7 @@ export class CoastalAudio {
     }
 
     private stopSources(): void {
+        this.stopHaunting();
         this.stopAmbience();
         [...this.sources].forEach((clean) => clean());
     }

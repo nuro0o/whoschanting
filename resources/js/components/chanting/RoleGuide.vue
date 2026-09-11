@@ -23,13 +23,23 @@ const allegiances = [
             'lamplighter',
             'medium',
             'bellkeeper',
+            'exorcist',
+            'oathkeeper',
+            'tracker',
+            'herbalist',
         ],
     },
     {
         id: 'cult',
         name: 'Cult',
         purpose: 'Keep the ritual alive.',
-        roles: ['veilweaver', 'acolyte', 'dreamweaver'],
+        roles: [
+            'veilweaver',
+            'acolyte',
+            'dreamweaver',
+            'phantasm',
+            'counterfeiter',
+        ],
     },
 ];
 </script>
@@ -53,7 +63,12 @@ const allegiances = [
             <p class="role-guide__intro">
                 Your character is cosmetic. Your secret role decides your side
                 and abilities. These are the possible roles, not a reveal of who
-                has them. The mix depends on the number of players.
+                has them. Classic preserves the familiar lineup; its Illusions
+                variant adds haunting and forged readings. Hard introduces
+                Tracker and Herbalist alongside more deceptive roles. Chaos
+                draws a fresh cast with possible duplicates. Custom uses the
+                host’s exact role counts. Check the room’s Modes settings for
+                your gathering.
             </p>
         </header>
         <div class="role-guide__sides">
@@ -96,8 +111,8 @@ const allegiances = [
                                 v-if="minimumPlayers?.[roleId]"
                                 class="role-guide__subtitle"
                             >
-                                Available with {{ minimumPlayers[roleId] }}+
-                                players
+                                In this preset with
+                                {{ minimumPlayers[roleId] }}+ players
                             </p>
                             <p class="role-guide__description">
                                 {{ roles[roleId].description }}
