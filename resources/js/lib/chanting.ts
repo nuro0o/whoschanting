@@ -305,14 +305,14 @@ export const roles: Record<
         name: 'The Veilweaver',
         subtitle: 'Cult · master of misdirection',
         description:
-            'Chant for the ritual. You may veil another living player: their alignment appears reversed to the Oracle tonight, and your chosen curse takes hold at dawn. Choose a random puzzle or mind mist; misdirection unlocks at ritual level 3.',
+            'Chant for the ritual. You may veil another living player: their alignment appears reversed to the Oracle tonight, and your chosen curse takes hold at dawn. Choose a 3D puzzle with rings or towers, or mind mist with numbered lanterns. At ritual level 3, misdirection can redirect their next target unless they untangle its rings first.',
         symbol: '◈',
     },
     acolyte: {
         name: 'The Acolyte',
         subtitle: 'Cult · keeper of the ritual',
         description:
-            'Chant each night to complete your shared mission. You may also curse another living player: your chosen curse takes hold at dawn and grows stronger with the ritual. Choose a random puzzle or mind mist; misdirection unlocks at ritual level 3.',
+            'Chant each night to complete your shared mission. You may also curse another living player at dawn with a 3D ring or tower puzzle, or mind mist with numbered lanterns. Curses grow stronger with the ritual. At ritual level 3, misdirection can redirect their next target unless they untangle its rings first.',
         symbol: '✧',
     },
     oracle: {

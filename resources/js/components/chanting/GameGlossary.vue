@@ -102,15 +102,15 @@ const terms = [
     ],
     [
         'Puzzle curse',
-        'Solve a fresh cipher, ordering puzzle, missing pattern, arithmetic puzzle, odd-one-out, or reversal. The challenge opens in a modal. Solve it to return to the room; the phase timer continues while you work.',
+        'Manipulate a 3D ritual: rotate rune rings toward the north beacon or wake stone towers from shortest to tallest. Solve it to return to the room; the phase timer continues while you work. Keyboard controls are available, including when 3D is unavailable.',
     ],
     [
         'Mind mist',
-        'Blurs the village scenery and turns chat into gibberish. Complete the ordered focus challenge to restore your view and read chat again. The focus challenge opens in a modal. Complete it to return to the room; the phase timer continues.',
+        'Blurs the village scenery and turns chat into gibberish. Find the numbered lanterns in a 3D mist and light them from lowest to highest, ignoring word decoys. Complete the challenge to return to the room and read chat again; the phase timer continues.',
     ],
     [
         'Misdirection',
-        'Only appears at ritual level 3, from two-thirds progress. Your next chosen night or vote target changes once to another legal player. The Medium can only be redirected to another banished player. Abstaining does not trigger it. It fades at the following dawn.',
+        'Only appears at ritual level 3, from two-thirds progress. Your next chosen night or vote target changes once to another legal player unless you first solve its 3D rune rings. You can keep playing or open the optional puzzle. The Medium can only be redirected to another banished player. Abstaining does not trigger it. It fades at the following dawn.',
     ],
     [
         'Chant',

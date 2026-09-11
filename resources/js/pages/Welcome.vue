@@ -205,11 +205,12 @@ withDefaults(
                             <strong>Curses wake at dawn.</strong> The Veilweaver
                             curses the player they veil; Acolytes may choose a
                             curse target while chanting. Puzzle and mind mist
-                            curses lock you in a challenge until solved or
+                            curses lock you in a 3D puzzle until solved or
                             expired, while the game keeps moving. At ritual
                             level 3, from two-thirds progress, misdirection can
-                            redirect the next chosen target once. Every curse
-                            fades at the following dawn.
+                            redirect the next chosen target once, unless you
+                            first untangle its rune rings. Every curse fades at
+                            the following dawn.
                         </p>
                         <p>
                             <strong>The ritual is a race.</strong> When the

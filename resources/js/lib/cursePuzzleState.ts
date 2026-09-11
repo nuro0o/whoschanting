@@ -31,6 +31,7 @@ export function selectCurseObject(
         answer.length >= challenge.answer_length ||
         answer.includes(id) ||
         !challenge.options.some((option) => option.id === id)
-    ) return answer;
+    )
+        return answer;
     return [...answer, id];
 }

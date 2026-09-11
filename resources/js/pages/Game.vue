@@ -145,19 +145,20 @@ const curseChoices: {
 }[] = [
     {
         type: 'puzzle',
-        label: 'Random puzzle',
-        description: 'A fresh puzzle to solve before returning to the village.',
+        label: '3D puzzle',
+        description: 'Align rune rings or wake stone towers in height order.',
     },
     {
         type: 'mist',
         label: 'Mind mist',
         description:
-            'Obscure the village and chat until a focus challenge is solved.',
+            'Obscure the village and chat until they light lanterns in the mist.',
     },
     {
         type: 'misdirection',
         label: 'Misdirection',
-        description: 'Redirect their next targeted vote or night action.',
+        description:
+            'Redirect their next target unless they untangle the rune rings.',
     },
 ];
 const limitedAbility = computed(

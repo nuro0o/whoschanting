@@ -186,7 +186,7 @@ class GameTest extends TestCase
         $this->expire($room);
         $this->expire($room);
         $recap = $this->engine->access($room->code, 'secret-0')['recap'];
-        $this->assertSame('modes-v1', $recap['rules_version']);
+        $this->assertSame('spatial-curses-v1', $recap['rules_version']);
         $actions = array_column($recap['rounds'][0]['night']['actions'], null, 'player_id');
         $this->assertTrue($actions[$r['warden']]['prevented_curse']);
         $this->assertTrue($actions[$r['lamplighter']]['visited']);
@@ -1524,6 +1524,65 @@ class GameTest extends TestCase
             $this->act($room, $identity, 'solve_curse', ['curse_id' => $curse['id'], 'answer' => $curse['solution']]);
             $this->assertTrue($this->act($room, $identity, 'night')['me']['submitted']);
         }
+    }
+
+    public function test_spatial_curses_require_the_current_solution_and_preserve_the_phase_deadline(): void
+    {
+        foreach (['rings', 'towers', 'lanterns'] as $kind) {
+            [$room, $identities] = $this->match();
+            $roles = $this->roles($room);
+            $this->expire($room);
+            $this->expire($room);
+            $id = $roles['oracle'];
+            $curse = ['id' => (string) Str::uuid(), 'type' => $kind === 'lanterns' ? 'mist' : 'puzzle',
+                'level' => 3, 'day' => $room->state['day'], ...app(CurseEngine::class)->challenge($kind, 3)];
+            $state = $room->fresh()->state;
+            $state['players'][$id]['curse'] = $curse;
+            $room->update(['state' => $state]);
+            $deadline = $room->fresh()->deadline;
+            $view = $this->engine->access($room->code, $identities[$id]);
+            $this->assertSame($kind, $view['me']['curse']['challenge']['scene']['kind']);
+            $this->assertArrayNotHasKey('solution', $view['me']['curse']);
+            $payload = ['curse_id' => $curse['id'], 'answer' => array_reverse($curse['solution'])];
+            $this->assertRejected(fn () => $this->act($room, $identities[$id], 'solve_curse', $payload));
+            $this->assertNotNull($room->fresh()->state['players'][$id]['curse']);
+            $solved = $this->act($room, $identities[$id], 'solve_curse', [...$payload, 'answer' => $curse['solution']]);
+            $this->assertNull($solved['me']['curse']);
+            $this->assertEquals($deadline, $room->fresh()->deadline);
+        }
+    }
+
+    public function test_misdirection_can_be_broken_before_it_redirects_a_vote(): void
+    {
+        [$room, $identities] = $this->match();
+        $roles = $this->roles($room);
+        $this->expire($room);
+        $this->expire($room);
+        $this->expire($room);
+        $id = $roles['oracle'];
+        $curse = app(CurseEngine::class)->create(4, 6, $room->state['day'], 'misdirection');
+        $state = $room->fresh()->state;
+        $state['players'][$id]['curse'] = $curse;
+        $room->update(['state' => $state]);
+        $this->assertRejected(fn () => $this->act($room, $identities[$id], 'solve_curse', [
+            'curse_id' => $curse['id'], 'answer' => array_column($curse['challenge']['scene']['rings'], 'options'),
+        ]));
+        $solved = $this->act($room, $identities[$id], 'solve_curse', ['curse_id' => $curse['id'], 'answer' => $curse['solution']]);
+        $this->assertNull($solved['me']['curse']);
+        $this->act($room, $identities[$id], 'vote', ['target' => $roles['acolyte']]);
+        $this->assertSame($roles['acolyte'], $room->fresh()->state['actions'][$id]['target']);
+    }
+
+    public function test_legacy_misdirection_cannot_be_cleared_with_an_empty_answer(): void
+    {
+        [$room, $identities] = $this->match();
+        $roles = $this->roles($room);
+        $this->expire($room);
+        $this->expire($room);
+        $curse = $this->afflict($room, $roles['oracle'], 'misdirection');
+        $this->assertRejected(fn () => $this->act($room, $identities[$roles['oracle']], 'solve_curse', [
+            'curse_id' => $curse['id'], 'answer' => [],
+        ]));
     }
 
     public function test_misdirection_changes_the_authoritative_vote_once_but_never_abstention(): void
