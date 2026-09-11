@@ -1,9 +1,12 @@
 <script setup lang="ts">
 import { computed } from 'vue';
+import CreatedCharacter from './CreatedCharacter.vue';
+import type { CreatorRecipe } from '@/lib/creator';
 import { characterIds, defaultCharacters } from '@/lib/chanting';
 import { cosmeticAccents, cosmeticBackgrounds } from '@/lib/progression';
 const props = defineProps<{
     character: string;
+    creator?: CreatorRecipe | null;
     decorative?: boolean;
     frame?: string;
     accent?: string;
@@ -19,7 +22,11 @@ const portraitImages: Record<string, string> = {
     drowned_regent: '/assets/chanting/unlocks/drowned_regent.png',
 };
 const portraitImage = computed(() => portraitImages[props.character]);
-const label = computed(() => defaultCharacters[index.value].name);
+const label = computed(() =>
+    props.character === 'custom'
+        ? 'Your created villager'
+        : defaultCharacters[index.value].name,
+);
 const tileIndex = computed(() => index.value % 8);
 const backdrop = computed(() =>
     props.background && props.background !== 'plain'
@@ -27,6 +34,11 @@ const backdrop = computed(() =>
         : undefined,
 );
 const artwork = computed(() => {
+    if (props.character === 'custom')
+        return {
+            backgroundImage:
+                'radial-gradient(ellipse at 50% 35%, #64776a, #213b3b)',
+        };
     const standalone =
         portraitImage.value ||
         (['ferryman', 'trickster'].includes(props.character)
@@ -71,8 +83,18 @@ const artwork = computed(() => {
                   }
                 : {}),
         }"
-        ><span v-if="backdrop" class="portrait-artwork" :style="artwork"></span
-    ></span>
+    >
+        <CreatedCharacter
+            v-if="character === 'custom'"
+            :recipe="creator"
+            :class="{ 'created-with-backdrop': backdrop }"
+        />
+        <span
+            v-else-if="backdrop"
+            class="portrait-artwork"
+            :style="artwork"
+        ></span>
+    </span>
 </template>
 <style scoped>
 .character-portrait.portrait-frame-copper {
@@ -107,6 +129,9 @@ const artwork = computed(() => {
     border-color: #f1c49f;
     outline: 2px solid #f1c49f;
     outline-offset: 3px;
+}
+.created-with-backdrop {
+    inset: 8%;
 }
 .portrait-artwork {
     position: absolute;

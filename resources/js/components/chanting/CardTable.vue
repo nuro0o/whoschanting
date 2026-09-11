@@ -264,6 +264,7 @@ onBeforeUnmount(() => {
                 <span class="seat-card" aria-hidden="true"></span>
                 <CharacterPortrait
                     :character="player.character"
+                    :creator="player.customization?.creator"
                     :frame="player.customization?.frame"
                     :accent="player.customization?.accent"
                     :background="player.customization?.background"
@@ -378,6 +379,7 @@ onBeforeUnmount(() => {
                 >
                     <CharacterPortrait
                         :character="player.character"
+                        :creator="player.customization?.creator"
                         :frame="player.customization?.frame"
                         :accent="player.customization?.accent"
                         :background="player.customization?.background"

@@ -123,9 +123,9 @@
     letter-spacing: 1.5px;
 }
 .landing-hero {
-    --hero-art-height: 765px;
+    --hero-art-height: clamp(900px, 90svh, 1100px);
     position: relative;
-    min-height: var(--hero-art-height);
+    min-height: 765px;
     padding: 58px max(6%, calc((100% - 1440px) / 2 + 6%)) 64px;
     overflow: hidden;
 }
@@ -1208,7 +1208,7 @@
 }
 @media (min-width: 1441px) {
     .landing-hero {
-        --hero-art-height: 805px;
+        min-height: 805px;
     }
     .hero-content h1 {
         font-size: 76px;
@@ -1654,6 +1654,66 @@
 .character-portrait--trickster {
     background-image: url('/assets/chanting/trickster-clown.png');
     background-size: 100% 100%;
+}
+.entry-character-disclosure {
+    margin: 6px 0;
+    border-top: 1px solid var(--account-line, var(--line));
+    border-bottom: 1px solid var(--account-line, var(--line));
+}
+.entry-character-disclosure > summary {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 15px 0;
+    list-style: none;
+}
+.entry-character-disclosure > summary::-webkit-details-marker {
+    display: none;
+}
+.entry-character-disclosure > summary .character-portrait {
+    width: 46px;
+    flex-shrink: 0;
+}
+.entry-character-disclosure > summary > span:nth-child(2) {
+    min-width: 0;
+}
+.entry-character-disclosure small {
+    display: block;
+    color: var(--account-muted, var(--muted));
+    font-size: 10px;
+}
+.entry-character-disclosure strong {
+    display: block;
+    color: var(--account-text, var(--cream));
+    font-size: 13px;
+    font-weight: 500;
+    overflow-wrap: anywhere;
+}
+.entry-character-change {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    margin-left: auto;
+    color: var(--account-green, var(--green));
+    font-size: 11px;
+    flex-shrink: 0;
+}
+.entry-character-disclosure > summary:hover .entry-character-change {
+    text-decoration: underline;
+    text-underline-offset: 3px;
+}
+.entry-character-disclosure .entry-character-collapse,
+.entry-character-disclosure[open] .entry-character-expand {
+    display: none;
+}
+.entry-character-disclosure[open] .entry-character-collapse {
+    display: inline;
+}
+.entry-character-disclosure[open] .entry-character-change svg {
+    transform: rotate(180deg);
+}
+.entry-character-disclosure .character-picker {
+    margin: 0 0 18px;
 }
 .character-picker {
     border: 0;

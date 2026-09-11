@@ -214,15 +214,18 @@ async function enter() {
                     <summary>
                         <CharacterPortrait
                             :character="character"
+                            :creator="selectedCharacter?.creator"
                             decorative
                         /><span
                             ><small>Your character</small
                             ><strong>{{
                                 selectedCharacter?.name ?? 'Choose a villager'
                             }}</strong></span
-                        ><span class="entry-character-change"
-                            >Change <ChevronDown :size="14"
-                        /></span>
+                        ><span class="entry-character-change">
+                            <span class="entry-character-expand">Change</span>
+                            <span class="entry-character-collapse">Close</span>
+                            <ChevronDown :size="14" aria-hidden="true" />
+                        </span>
                     </summary>
                     <CharacterPicker
                         v-model="character"

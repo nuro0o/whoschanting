@@ -206,6 +206,7 @@ onMounted(() => {
                 >
                     <CharacterPortrait
                         :character="player.character"
+                        :creator="player.customization?.creator"
                         :frame="player.customization?.frame"
                         :accent="player.customization?.accent"
                         :background="player.customization?.background"

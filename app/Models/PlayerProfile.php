@@ -13,7 +13,7 @@ use Illuminate\Database\Eloquent\Model;
  * @property int $cult_wins
  * @property list<string> $roles_played
  * @property array<string, string> $achievements
- * @property array{title:string, frame:string, accent:string, background?:string, character:string|null} $customization
+ * @property array{title:string, frame:string, accent:string, background?:string, character:string|null, creator?:array<string,int|string>|null} $customization
  */
 class PlayerProfile extends Model
 {

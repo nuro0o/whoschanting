@@ -1,3 +1,4 @@
+import type { CreatorRecipe } from './creator';
 import type { ChaosEvent, ModeSetup } from './gameModes';
 import type { MatchReward, PublicCustomization } from './progression';
 import type { TableChatMessage } from './tableChat';
@@ -238,6 +239,7 @@ export interface RoomState {
 }
 
 export interface Character {
+    creator?: CreatorRecipe | null;
     id: string;
     name: string;
     unlocked?: boolean;

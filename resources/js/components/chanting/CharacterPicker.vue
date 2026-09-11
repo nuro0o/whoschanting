@@ -8,9 +8,14 @@ const selected = defineModel<string>({ default: '' });
 const groupName = useId();
 const groups = computed(() => [
     {
+        id: 'custom',
+        characters: props.characters.filter((item) => item.id === 'custom'),
+    },
+    {
         id: 'original',
         characters: props.characters.filter(
-            (item) => characterIds.indexOf(item.id) < 16,
+            (item) =>
+                item.id !== 'custom' && characterIds.indexOf(item.id) < 16,
         ),
     },
     {
@@ -29,10 +34,14 @@ const groups = computed(() => [
         </p>
         <template v-for="group in groups" :key="group.id">
             <h3
-                v-if="group.id === 'earned' && group.characters.length"
+                v-if="group.id !== 'original' && group.characters.length"
                 class="character-unlock-heading"
             >
-                Earned in the village
+                {{
+                    group.id === 'custom'
+                        ? 'Made in the looking glass'
+                        : 'Earned in the village'
+                }}
             </h3>
             <div
                 class="character-choices"
@@ -59,7 +68,11 @@ const groups = computed(() => [
                                 : undefined
                         "
                     />
-                    <CharacterPortrait :character="character.id" decorative />
+                    <CharacterPortrait
+                        :character="character.id"
+                        :creator="character.creator"
+                        decorative
+                    />
                     <span class="character-choice-name">{{
                         character.name.replace('The ', '')
                     }}</span>

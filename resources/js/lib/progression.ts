@@ -1,3 +1,4 @@
+import type { CreatorCatalog, CreatorRecipe } from './creator';
 import type { Character } from './chanting';
 
 export interface EquippedCosmetics {
@@ -6,8 +7,10 @@ export interface EquippedCosmetics {
     accent: string;
     background: string;
     character: string | null;
+    creator?: CreatorRecipe | null;
 }
 export interface PublicCustomization {
+    creator?: CreatorRecipe | null;
     level: number;
     title: string;
     title_name: string;
@@ -33,6 +36,7 @@ export interface Cosmetic {
     unlocked: boolean;
 }
 export interface ProgressionData {
+    creator?: CreatorCatalog;
     characters?: Character[];
     profile: {
         xp: number;

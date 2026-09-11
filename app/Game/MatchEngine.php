@@ -62,11 +62,12 @@ class MatchEngine
             $this->progression->assertCharacterUnlocked($accountId, $character);
         }
         $this->ensure($accountId === null || User::whereKey($accountId)->whereNotNull('email_verified_at')->exists(), 'Verify your account before joining.');
+        $selected = $character ?? $characters[random_int(0, count($characters) - 1)];
 
         return ['id' => $id, 'identity' => hash('sha256', $identity), 'name' => $name,
-            'user_id' => $accountId, 'customization' => $accountId === null ? null : $this->progression->appearance($accountId),
+            'user_id' => $accountId, 'customization' => $accountId === null ? null : $this->progression->appearance($accountId, $selected),
             'alive' => true, 'ready' => false, 'role' => null, 'alignment' => null, 'results' => [],
-            'character' => $character ?? $characters[random_int(0, count($characters) - 1)]];
+            'character' => $selected];
     }
 
     public function join(string $code, string $identity, string $name, ?string $character = null, ?int $accountId = null): GameRoom
@@ -82,7 +83,11 @@ class MatchEngine
                         $this->progression->assertCharacterUnlocked($accountId, $character);
                     }
                     $s['players'][$existing]['user_id'] = $accountId;
-                    $s['players'][$existing]['customization'] = $this->progression->appearance($accountId);
+                    $selected = $character ?? $s['players'][$existing]['character'] ?? null;
+                    $appearance = $this->progression->appearance($accountId, $selected);
+                    if ($selected !== 'custom' || isset($appearance['creator'])) {
+                        $s['players'][$existing]['customization'] = $appearance;
+                    }
                     if ($character !== null) {
                         $s['players'][$existing]['character'] = $character;
                     }
@@ -207,9 +212,12 @@ class MatchEngine
         }
         if ($type === 'character') {
             $this->ensure($s['phase'] === 'lobby', 'Choose your character before the match begins.');
-            $this->ensure(in_array($a['character'] ?? null, array_column(config('game.characters'), 'id'), true), 'Choose a character from the village.');
+            $this->ensure(is_string($a['character'] ?? null), 'Choose a character from the village.');
             $this->progression->assertCharacterUnlocked($s['players'][$id]['user_id'] ?? null, $a['character']);
             $s['players'][$id]['character'] = $a['character'];
+            if (isset($s['players'][$id]['user_id'])) {
+                $s['players'][$id]['customization'] = $this->progression->appearance($s['players'][$id]['user_id'], $a['character']);
+            }
 
             return;
         }
@@ -249,7 +257,11 @@ class MatchEngine
             $roster = $this->modes->roster($setup, $count);
             foreach ($ids as $index => $pid) {
                 if (isset($s['players'][$pid]['user_id'])) {
-                    $s['players'][$pid]['customization'] = $this->progression->appearance($s['players'][$pid]['user_id']);
+                    $appearance = $this->progression->appearance($s['players'][$pid]['user_id'], $s['players'][$pid]['character'] ?? null);
+                    // A design cleared in another tab still has its valid lobby snapshot.
+                    if (($s['players'][$pid]['character'] ?? null) !== 'custom' || isset($appearance['creator'])) {
+                        $s['players'][$pid]['customization'] = $appearance;
+                    }
                 }
                 $s['players'][$pid]['role'] = $roster[$index];
                 $s['players'][$pid]['alignment'] = config('game.role_alignments')[$roster[$index]];

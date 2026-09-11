@@ -13,6 +13,8 @@ use Illuminate\Validation\ValidationException;
 
 class AccountProgression
 {
+    public function __construct(private CharacterCreator $creator = new CharacterCreator) {}
+
     /** @return array<string, mixed> */
     public function season(?CarbonImmutable $at = null): array
     {
@@ -63,7 +65,15 @@ class AccountProgression
         $eligible = $userId !== null && User::whereKey($userId)->whereNotNull('email_verified_at')->exists();
         $profile = $eligible ? PlayerProfile::find($userId) : null;
 
-        return $this->characters($this->level($profile->xp ?? 0), $profile->achievements ?? [], $eligible);
+        $level = $this->level($profile->xp ?? 0);
+        $characters = $this->characters($level, $profile->achievements ?? [], $eligible);
+        $recipe = $this->creator->saved($profile?->customization['creator'] ?? null, $level);
+        if ($eligible && $recipe !== null) {
+            $characters[] = ['id' => 'custom', 'name' => 'Your creation', 'unlocked' => true,
+                'requirement' => 'Created in the mirror', 'creator' => $recipe];
+        }
+
+        return $characters;
     }
 
     public function canUseCharacter(?int $userId, string $character): bool
@@ -82,7 +92,7 @@ class AccountProgression
     private function defaults(): array
     {
         return ['xp' => 0, 'matches' => 0, 'wins' => 0, 'town_wins' => 0, 'cult_wins' => 0, 'roles_played' => [], 'achievements' => [],
-            'customization' => ['title' => 'newcomer', 'frame' => 'plain', 'accent' => 'sea', 'background' => 'plain', 'character' => null]];
+            'customization' => ['title' => 'newcomer', 'frame' => 'plain', 'accent' => 'sea', 'background' => 'plain', 'character' => null, 'creator' => null]];
     }
 
     private function lockProfile(int $userId): PlayerProfile
@@ -204,6 +214,7 @@ class AccountProgression
         $level = $this->level($profile['xp']);
         $characters = $this->characterCatalog($userId);
         $equipped = array_replace($this->defaults()['customization'], $profile['customization']);
+        $equipped['creator'] = $this->creator->saved($equipped['creator'], $level);
         if ($equipped['character'] !== null && ! (collect($characters)->firstWhere('id', $equipped['character'])['unlocked'] ?? false)) {
             $equipped['character'] = null;
         }
@@ -231,6 +242,7 @@ class AccountProgression
                 'level' => $level, 'level_xp' => $profile['xp'] - (int) (config('progression.level_step') * $level * ($level - 1) / 2),
                 'next_level_xp' => config('progression.level_step') * $level, 'equipped' => $equipped],
             'characters' => $characters,
+            'creator' => $this->creator->catalog($level),
             'season' => [...$season, 'xp' => $xp, 'matches' => $current->matches ?? 0, 'wins' => $current->wins ?? 0,
                 'tier' => ['id' => $tier['id'], 'name' => $tier['name']], 'next_tier_xp' => $next, 'tiers' => $tiers,
                 'history' => $seasons->filter(fn (PlayerSeason $s): bool => $s->season_id !== $season['id'])->map(fn (PlayerSeason $s): array => [
@@ -294,8 +306,17 @@ class AccountProgression
                 }
                 $equipped[$field] = $item['id'];
             }
+            if (array_key_exists('creator', $input)) {
+                $equipped['creator'] = $input['creator'] === null ? null : $this->creator->validate($input['creator'], $this->level($profile->xp));
+            } else {
+                $equipped['creator'] = $this->creator->saved($equipped['creator'], $this->level($profile->xp));
+            }
             $character = $input['character'] ?? null;
-            if ($character !== null) {
+            if ($character === 'custom') {
+                if ($equipped['creator'] === null || ! User::whereKey($userId)->whereNotNull('email_verified_at')->exists()) {
+                    throw ValidationException::withMessages(['creator' => 'Create and save your villager before wearing it.']);
+                }
+            } elseif ($character !== null) {
                 $this->assertCharacterUnlocked($userId, $character);
             }
             $equipped['character'] = $character;
@@ -326,7 +347,7 @@ class AccountProgression
     /** Safe public allowlist; no account identifier or private statistics.
      * @return array<string, mixed>
      */
-    public function appearance(int $userId): array
+    public function appearance(int $userId, ?string $character = null): array
     {
         $profile = PlayerProfile::find($userId);
         $equipped = array_replace($this->defaults()['customization'], $profile->customization ?? []);
@@ -337,7 +358,15 @@ class AccountProgression
             }
         }
 
-        return ['level' => $this->level($profile->xp ?? 0), 'title' => $equipped['title'], 'title_name' => $titleName,
+        $appearance = ['level' => $this->level($profile->xp ?? 0), 'title' => $equipped['title'], 'title_name' => $titleName,
             'frame' => $equipped['frame'], 'accent' => $equipped['accent'], 'background' => $equipped['background']];
+        if ($character === 'custom') {
+            $recipe = $this->creator->saved($equipped['creator'], $appearance['level']);
+            if ($recipe !== null) {
+                $appearance['creator'] = $recipe;
+            }
+        }
+
+        return $appearance;
     }
 }

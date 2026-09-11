@@ -306,50 +306,6 @@
     background: var(--primary);
     filter: brightness(1.08);
 }
-.account-entry .entry-character-disclosure {
-    margin: 6px 0;
-    border-top: 1px solid var(--account-line);
-    border-bottom: 1px solid var(--account-line);
-}
-.entry-character-disclosure > summary {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 15px 0;
-    list-style: none;
-}
-.entry-character-disclosure > summary::-webkit-details-marker {
-    display: none;
-}
-.entry-character-disclosure > summary .character-portrait {
-    width: 46px;
-}
-.entry-character-disclosure > summary > span:nth-child(2) {
-    min-width: 0;
-}
-.entry-character-disclosure small {
-    display: block;
-    color: var(--account-muted);
-    font-size: 10px;
-}
-.entry-character-disclosure strong {
-    display: block;
-    color: var(--account-text);
-    font-size: 13px;
-    font-weight: 500;
-    overflow-wrap: anywhere;
-}
-.entry-character-change {
-    display: flex;
-    align-items: center;
-    gap: 7px;
-    margin-left: auto;
-    color: var(--account-green);
-    font-size: 11px;
-}
-.entry-character-disclosure[open] .entry-character-change svg {
-    transform: rotate(180deg);
-}
 .account-entry .character-picker {
     margin: 0 0 18px;
 }

@@ -11,6 +11,12 @@ import {
 } from '@lucide/vue';
 import { computed, reactive, ref } from 'vue';
 import CharacterPortrait from '@/components/chanting/CharacterPortrait.vue';
+import CreatorMirror from '@/components/chanting/CreatorMirror.vue';
+import {
+    creatorLockedOptions,
+    defaultCreator,
+    type CreatorRecipe,
+} from '@/lib/creator';
 import { characterIds, roomRequest, type Character } from '@/lib/chanting';
 import {
     cosmeticAccents,
@@ -28,7 +34,9 @@ const page = usePage();
 const data = ref(props.progression);
 const characters = computed(() => data.value.characters ?? props.characters);
 const originalCharacters = computed(() =>
-    characters.value.filter((item) => characterIds.indexOf(item.id) < 16),
+    characters.value.filter(
+        (item) => item.id !== 'custom' && characterIds.indexOf(item.id) < 16,
+    ),
 );
 const earnedCharacters = computed(() =>
     characters.value.filter((item) => characterIds.indexOf(item.id) >= 16),
@@ -39,6 +47,9 @@ const availableCharacters = computed(
 const draft = reactive({
     ...data.value.profile.equipped,
     background: data.value.profile.equipped.background ?? 'plain',
+    creator: data.value.profile.equipped.creator
+        ? { ...data.value.profile.equipped.creator }
+        : null,
 });
 const pending = ref(false);
 const error = ref('');
@@ -53,10 +64,39 @@ const tabs = [
 const changed = computed(() =>
     Object.keys(draft).some(
         (key) =>
-            draft[key as keyof typeof draft] !==
-            data.value.profile.equipped[key as keyof typeof draft],
+            JSON.stringify(draft[key as keyof typeof draft] ?? null) !==
+            JSON.stringify(
+                data.value.profile.equipped[key as keyof typeof draft] ?? null,
+            ),
     ),
 );
+const mirrorOpen = ref(draft.character === 'custom');
+const lockedPieces = computed(() =>
+    creatorLockedOptions(draft.creator, data.value.creator),
+);
+const mirrorRecipe = computed({
+    get: () => draft.creator ?? data.value.creator?.default ?? defaultCreator,
+    set: (recipe: CreatorRecipe) => {
+        draft.creator = { ...recipe };
+        draft.character = 'custom';
+        saved.value = false;
+    },
+});
+function showPortraits() {
+    mirrorOpen.value = false;
+    if (lockedPieces.value.length) {
+        draft.creator = data.value.profile.equipped.creator
+            ? { ...data.value.profile.equipped.creator }
+            : null;
+        draft.character = data.value.profile.equipped.character;
+    }
+}
+function openMirror() {
+    mirrorOpen.value = true;
+    draft.creator = { ...mirrorRecipe.value };
+    draft.character = 'custom';
+    saved.value = false;
+}
 const titleName = computed(
     () =>
         data.value.cosmetics.titles.find((item) => item.id === draft.title)
@@ -74,14 +114,19 @@ const groups = [
 const previewCharacter = computed(
     () => draft.character ?? characters.value[0]?.id ?? 'fisherman',
 );
-const characterName = computed(
-    () =>
-        characters.value.find((item) => item.id === previewCharacter.value)
-            ?.name ?? 'The Fisherman',
+const characterName = computed(() =>
+    previewCharacter.value === 'custom'
+        ? 'Your creation'
+        : (characters.value.find((item) => item.id === previewCharacter.value)
+              ?.name ?? 'The Fisherman'),
 );
 function revert() {
     if (pending.value) return;
-    Object.assign(draft, data.value.profile.equipped);
+    Object.assign(draft, data.value.profile.equipped, {
+        creator: data.value.profile.equipped.creator
+            ? { ...data.value.profile.equipped.creator }
+            : null,
+    });
     error.value = '';
     saved.value = false;
 }
@@ -113,7 +158,7 @@ function revealFocusedControl(event: FocusEvent) {
     });
 }
 async function save() {
-    if (pending.value || !changed.value) return;
+    if (pending.value || !changed.value || lockedPieces.value.length) return;
     pending.value = true;
     error.value = '';
     saved.value = false;
@@ -123,7 +168,11 @@ async function save() {
             { ...draft },
         );
         data.value = result.progression;
-        Object.assign(draft, result.progression.profile.equipped);
+        Object.assign(draft, result.progression.profile.equipped, {
+            creator: result.progression.profile.equipped.creator
+                ? { ...result.progression.profile.equipped.creator }
+                : null,
+        });
         saved.value = true;
     } catch (caught) {
         error.value =
@@ -178,6 +227,7 @@ function moveTab(event: KeyboardEvent, index: number) {
                     :character="
                         draft.character ?? characters[0]?.id ?? 'fisherman'
                     "
+                    :creator="draft.creator"
                     :frame="draft.frame"
                     :accent="draft.accent"
                     :background="draft.background"
@@ -309,13 +359,56 @@ function moveTab(event: KeyboardEvent, index: number) {
                     your role stays a secret.
                 </p>
             </div>
+            <div
+                v-if="data.creator"
+                class="wardrobe-mode"
+                role="group"
+                aria-label="Choose how to make your character"
+            >
+                <button
+                    type="button"
+                    :aria-pressed="!mirrorOpen"
+                    :disabled="pending"
+                    @click="showPortraits"
+                >
+                    Village portraits <span>Choose a familiar face</span>
+                </button>
+                <button
+                    type="button"
+                    :aria-pressed="mirrorOpen"
+                    :disabled="pending"
+                    @click="openMirror"
+                >
+                    Create your own <span>Step into the looking glass</span
+                    ><Sparkles :size="19" aria-hidden="true" />
+                </button>
+            </div>
             <form
                 class="wardrobe-form"
+                :class="{ 'wardrobe-form--mirror': mirrorOpen && data.creator }"
                 :aria-busy="pending"
                 @submit.prevent="save"
                 @focusin="revealFocusedControl"
             >
+                <CreatorMirror
+                    v-if="mirrorOpen && data.creator"
+                    v-model="mirrorRecipe"
+                    :catalog="data.creator"
+                    :disabled="pending"
+                    :changed="changed"
+                    :notice="
+                        saved && !changed
+                            ? 'Your appearance is saved.'
+                            : undefined
+                    "
+                    :error="error"
+                    :frame="draft.frame"
+                    :accent="draft.accent"
+                    :background="draft.background"
+                    @revert="revert"
+                />
                 <aside
+                    v-show="!mirrorOpen || !data.creator"
                     ref="previewElement"
                     class="wardrobe-preview"
                     aria-label="Live character preview"
@@ -337,6 +430,7 @@ function moveTab(event: KeyboardEvent, index: number) {
                         <figure class="preview-full">
                             <CharacterPortrait
                                 :character="previewCharacter"
+                                :creator="draft.creator"
                                 :frame="draft.frame"
                                 :accent="draft.accent"
                                 :background="draft.background"
@@ -346,6 +440,7 @@ function moveTab(event: KeyboardEvent, index: number) {
                         <figure class="preview-table">
                             <CharacterPortrait
                                 :character="previewCharacter"
+                                :creator="draft.creator"
                                 :frame="draft.frame"
                                 :accent="draft.accent"
                                 :background="draft.background"
@@ -372,7 +467,11 @@ function moveTab(event: KeyboardEvent, index: number) {
                     /></a>
                 </aside>
                 <div class="wardrobe-controls">
-                    <fieldset class="wardrobe-fieldset" :disabled="pending">
+                    <fieldset
+                        v-show="!mirrorOpen || !data.creator"
+                        class="wardrobe-fieldset"
+                        :disabled="pending"
+                    >
                         <legend>
                             Base character
                             <span class="character-count"
@@ -422,6 +521,34 @@ function moveTab(event: KeyboardEvent, index: number) {
                                 /><span>{{ character.name }}</span></label
                             >
                         </div>
+                        <button
+                            v-if="data.creator"
+                            type="button"
+                            class="wardrobe-open-mirror"
+                            @click="openMirror"
+                        >
+                            <CharacterPortrait
+                                v-if="draft.creator"
+                                character="custom"
+                                :creator="draft.creator"
+                                decorative
+                            /><Sparkles
+                                v-else
+                                :size="22"
+                                aria-hidden="true"
+                            /><span
+                                ><strong>{{
+                                    draft.creator
+                                        ? 'Your creation'
+                                        : 'Create your own villager'
+                                }}</strong
+                                ><small>{{
+                                    draft.creator
+                                        ? 'Wear and edit in the looking glass'
+                                        : 'Choose a face, hair, hat, and clothes'
+                                }}</small></span
+                            ><ArrowRight :size="17" aria-hidden="true" />
+                        </button>
                         <template v-if="earnedCharacters.length">
                             <h3 class="wardrobe-unlock-heading">
                                 Earned in the village
@@ -544,6 +671,7 @@ function moveTab(event: KeyboardEvent, index: number) {
                                     v-else-if="group.field === 'frame'"
                                     class="frame-swatch"
                                     :character="previewCharacter"
+                                    :creator="draft.creator"
                                     :frame="item.id"
                                     :accent="draft.accent"
                                     :background="draft.background"
@@ -573,6 +701,14 @@ function moveTab(event: KeyboardEvent, index: number) {
                     <p v-if="error" class="wardrobe-error" role="alert">
                         {{ error }}
                     </p>
+                    <p
+                        v-if="lockedPieces.length"
+                        class="wardrobe-error"
+                        role="status"
+                    >
+                        Choose unlocked creator pieces before saving your
+                        appearance.
+                    </p>
                     <div id="wardrobe-save" class="wardrobe-save">
                         <p role="status">
                             {{
@@ -594,7 +730,11 @@ function moveTab(event: KeyboardEvent, index: number) {
                             </button>
                             <button
                                 type="submit"
-                                :disabled="pending || !changed"
+                                :disabled="
+                                    pending ||
+                                    !changed ||
+                                    lockedPieces.length > 0
+                                "
                             >
                                 {{ pending ? 'Saving…' : 'Save customization'
                                 }}<Check
@@ -1710,6 +1850,108 @@ progress::-moz-progress-bar {
     .wardrobe-options--frame,
     .wardrobe-options--background {
         grid-template-columns: minmax(0, 1fr);
+    }
+}
+.wardrobe-mode {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 24px;
+}
+.wardrobe-mode button {
+    position: relative;
+    text-align: left;
+    border: 1px solid var(--account-line);
+    padding: 16px 20px;
+    font-family: 'Fraunces', Georgia, serif;
+    font-size: 20px;
+}
+.wardrobe-mode button span {
+    display: block;
+    font-family: 'DM Sans', sans-serif;
+    color: var(--account-muted);
+    font-size: 10px;
+    margin-top: 6px;
+}
+.wardrobe-mode button svg {
+    position: absolute;
+    right: 18px;
+    top: 20px;
+    color: var(--account-brass);
+}
+.wardrobe-mode button[aria-pressed='true'] {
+    border-color: var(--account-green);
+    background: color-mix(in srgb, var(--account-green) 9%, transparent);
+}
+.wardrobe-mode button:focus-visible,
+.wardrobe-open-mirror:focus-visible {
+    outline: 2px solid var(--account-green);
+    outline-offset: 3px;
+}
+.wardrobe-open-mirror {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    text-align: left;
+    border: 1px solid var(--account-line);
+    padding: 15px;
+    margin-top: 15px;
+    width: 100%;
+}
+.wardrobe-open-mirror > span {
+    flex: 1;
+}
+.wardrobe-open-mirror strong,
+.wardrobe-open-mirror small {
+    display: block;
+    font-weight: 400;
+}
+.wardrobe-open-mirror strong {
+    font-family: 'Fraunces', Georgia, serif;
+    font-size: 17px;
+}
+.wardrobe-open-mirror small {
+    font-size: 10px;
+    color: var(--account-muted);
+    margin-top: 4px;
+}
+.wardrobe-open-mirror .character-portrait {
+    width: 42px;
+    height: 49px;
+    border-radius: 24px 24px 3px 3px;
+    flex: none;
+}
+.wardrobe-form--mirror {
+    display: block;
+}
+.wardrobe-form--mirror .wardrobe-controls {
+    margin-top: 30px;
+}
+@media (min-width: 851px) {
+    .wardrobe-form--mirror .wardrobe-controls {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0 28px;
+    }
+    .wardrobe-form--mirror .wardrobe-save,
+    .wardrobe-form--mirror .wardrobe-error {
+        grid-column: 1 / -1;
+    }
+}
+@media (max-width: 700px) {
+    .wardrobe-mode {
+        gap: 8px;
+    }
+    .wardrobe-mode button {
+        padding: 13px 12px;
+        font-size: 17px;
+    }
+    .wardrobe-mode button span {
+        font-size: 9px;
+        line-height: 1.5;
+    }
+    .wardrobe-mode button svg {
+        display: none;
     }
 }
 </style>

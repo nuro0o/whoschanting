@@ -17,7 +17,7 @@ class CharacterCustomizerTest extends TestCase
 {
     use RefreshDatabase;
 
-    private array $outfit = ['title' => 'newcomer', 'frame' => 'plain', 'accent' => 'storm', 'background' => 'harbor', 'character' => 'mariner'];
+    private array $outfit = ['title' => 'newcomer', 'frame' => 'plain', 'accent' => 'storm', 'background' => 'harbor', 'character' => 'mariner', 'creator' => null];
 
     protected function setUp(): void
     {
@@ -50,7 +50,7 @@ class CharacterCustomizerTest extends TestCase
         $progression->rememberCharacter($user->id, 'archivist');
         $legacy = ['title' => 'newcomer', 'frame' => 'plain', 'accent' => 'sea', 'character' => 'archivist'];
         PlayerProfile::findOrFail($user->id)->update(['customization' => $legacy]);
-        $this->assertEquals([...$legacy, 'background' => 'plain'], $progression->view($user->id)['profile']['equipped']);
+        $this->assertEquals([...$legacy, 'background' => 'plain', 'creator' => null], $progression->view($user->id)['profile']['equipped']);
         $this->assertSame('plain', $progression->appearance($user->id)['background']);
         $this->actingAs($user)->postJson('/account/customization', $legacy)->assertOk()
             ->assertJsonPath('progression.profile.equipped.background', 'plain');

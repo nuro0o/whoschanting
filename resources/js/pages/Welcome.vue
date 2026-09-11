@@ -97,6 +97,7 @@ withDefaults(
                     <RoomEntry
                         :characters="characters"
                         :preferred-character="preferredCharacter"
+                        compact-characters
                     />
                     <p class="tutorial-invitation">
                         First time here?

@@ -21,7 +21,7 @@ class ProgressionController extends Controller
     {
         $input = $request->validate(['title' => ['required', 'string', 'max:40'], 'frame' => ['required', 'string', 'max:40'],
             'accent' => ['required', 'string', 'max:40'], 'background' => ['sometimes', 'string', 'max:40'],
-            'character' => ['nullable', 'string', 'max:40']]);
+            'character' => ['nullable', 'string', 'max:40'], 'creator' => ['sometimes', 'nullable', 'array']]);
         $result = $progression->customize($request->user()->id, $input);
         $request->session()->forget('chanting.characters.'.$request->user()->id);
 
