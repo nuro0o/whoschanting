@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\GameController;
+use App\Http\Controllers\LegalController;
 use App\Http\Controllers\ProgressionController;
 use App\Http\Controllers\StoreCheckoutController;
 use App\Http\Middleware\EnsureVerifiedAccount;
@@ -8,6 +9,12 @@ use App\Http\Middleware\PrivateGameResponse;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/', [GameController::class, 'home'])->middleware(EnsureVerifiedAccount::class)->name('home');
+
+foreach (['contact', 'privacy', 'terms', 'refunds'] as $document) {
+    Route::get('/'.$document, [LegalController::class, 'show'])->defaults('document', $document)
+        ->middleware(PrivateGameResponse::class)->name($document);
+}
+Route::post('/refunds', [LegalController::class, 'withdraw'])->middleware([PrivateGameResponse::class, 'throttle:5,1'])->name('refunds.submit');
 
 Route::inertia('/tutorial', 'Tutorial')->middleware(PrivateGameResponse::class)->name('tutorial');
 

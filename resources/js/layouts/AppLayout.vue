@@ -1,5 +1,6 @@
 ﻿<script setup lang="ts">
 import { Link, router, usePage } from '@inertiajs/vue3';
+import LegalLinks from '@/components/LegalLinks.vue';
 import { ArrowUpRight, Eye, LogOut, Waves } from '@lucide/vue';
 import { onMounted, onUnmounted } from 'vue';
 import { logout } from '@/routes';
@@ -80,6 +81,12 @@ onUnmounted(() => document.body.classList.remove('account-theme'));
             <Link href="/#how-to-play"
                 >How to play <ArrowUpRight :size="13"
             /></Link>
+            <LegalLinks />
         </footer>
     </div>
 </template>
+<style scoped>
+.registry-footer {
+    flex-wrap: wrap;
+}
+</style>

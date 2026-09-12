@@ -76,7 +76,7 @@ When reusing the Geniousverse Stripe account, deploy the compatibility guard add
 
 ## Payment lifecycle
 
-`POST /account/store/checkout` accepts only a bundle ID. A durable UUID order snapshots its Price, amount, currency, cosmetics and exact Checkout parameters. Requests retry with the same Stripe idempotency key; an open session is reused, a processing payment blocks another payment for that bundle, and owned bundles cannot be purchased again. Orders without a recorded session older than 23 hours require support verification instead of risking reuse beyond Stripe's idempotency retention window.
+`POST /account/store/checkout` accepts a bundle ID, explicit terms acceptance, and the current terms version. A durable UUID order snapshots its Price, amount, currency, cosmetics and exact Checkout parameters, with a separate legal acceptance record. Requests retry with the same Stripe idempotency key; an open session is reused, a processing payment blocks another payment for that bundle, and owned bundles cannot be purchased again. Orders without a recorded session older than 23 hours require support verification instead of risking reuse beyond Stripe's idempotency retention window. See [public policies and support](legal-support.md) for consent and withdrawal handling.
 
 The success redirect does not grant ownership. Signed events and the authenticated `GET /account/store/status?session_id=...` endpoint retrieve the Stripe session and verify its order metadata, payment status, line item and price. Status reads are scoped to the current verified account. The store polls briefly and offers manual refresh for delayed payments. Repeated events preserve one ownership grant and its original paid timestamp.
 

@@ -12,6 +12,7 @@ void createInertiaApp({
     layout: (name) => {
         switch (true) {
             case name === 'Welcome' ||
+                name === 'Legal' ||
                 name === 'Game' ||
                 name === 'Tutorial' ||
                 name === 'RoomBrowser':

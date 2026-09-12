@@ -53,6 +53,7 @@ class User extends Authenticatable implements MustVerifyEmail, PasskeyUser
             'welcome_email_sent_at' => 'datetime',
             'password' => 'hashed',
             'two_factor_confirmed_at' => 'datetime',
+            'terms_accepted_at' => 'datetime',
         ];
     }
 }

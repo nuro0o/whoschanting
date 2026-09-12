@@ -58,6 +58,35 @@ const checkoutStatusElement = ref<HTMLElement>();
 const checkoutStatus = ref<CheckoutStatus | null>(null);
 const checkingPayment = ref(false);
 const previewBundle = ref<StoreBundle | null>(null);
+const consentBundleId = ref<string | null>(null);
+const consentBundle = computed(() =>
+    bundles.value.find((bundle) => bundle.id === consentBundleId.value),
+);
+const termsAccepted = ref(false);
+const consentError = ref('');
+const consentErrorElement = ref<HTMLElement>();
+let consentVersion = '';
+function chooseBundle(bundle: StoreBundle) {
+    if (
+        checkoutBundleId.value ||
+        checkingPayment.value ||
+        checkoutStatus.value === 'pending' ||
+        bundle.owned ||
+        !bundle.available
+    )
+        return;
+    termsAccepted.value = false;
+    consentError.value = '';
+    consentVersion = page.props.legal?.version ?? '';
+    consentBundleId.value = bundle.id;
+}
+function closeConsent(open: boolean) {
+    if (open || checkoutBundleId.value) return;
+    consentBundleId.value = null;
+    termsAccepted.value = false;
+    consentError.value = '';
+    consentVersion = '';
+}
 let sessionId = '';
 let paymentTimer: ReturnType<typeof setTimeout> | undefined;
 let mounted = false;
@@ -86,15 +115,22 @@ async function checkout(bundle: StoreBundle) {
         checkingPayment.value ||
         checkoutStatus.value === 'pending' ||
         !bundle.available ||
-        bundle.owned
+        bundle.owned ||
+        !termsAccepted.value ||
+        consentBundleId.value !== bundle.id
     )
         return;
     checkoutBundleId.value = bundle.id;
     checkoutError.value = '';
+    consentError.value = '';
     try {
         const result = await roomRequest<{ url: string }>(
             '/account/store/checkout',
-            { bundle_id: bundle.id },
+            {
+                bundle_id: bundle.id,
+                terms: true,
+                terms_version: consentVersion,
+            },
         );
         const destination = new URL(result.url);
         if (
@@ -105,13 +141,13 @@ async function checkout(bundle: StoreBundle) {
         }
         window.location.assign(destination.href);
     } catch (caught) {
-        checkoutError.value =
+        consentError.value =
             caught instanceof Error
                 ? caught.message
                 : 'Checkout could not be opened. Please try again.';
         checkoutBundleId.value = null;
         await nextTick();
-        checkoutStatusElement.value?.focus();
+        consentErrorElement.value?.focus();
     }
 }
 async function checkPayment(manual = false) {
@@ -429,7 +465,7 @@ function transactionName(itemId: string | null) {
                                         checkoutStatus === 'pending' ||
                                         !bundle.available
                                     "
-                                    @click="checkout(bundle)"
+                                    @click="chooseBundle(bundle)"
                                     >{{
                                         checkoutBundleId === bundle.id
                                             ? 'Opening checkout…'
@@ -650,6 +686,111 @@ function transactionName(itemId: string | null) {
             through play.
         </p>
 
+        <Dialog :open="!!consentBundle" @update:open="closeConsent">
+            <DialogContent
+                class="account-theme store-consent-dialog"
+                :show-close-button="!checkoutBundleId"
+                @escape-key-down="checkoutBundleId && $event.preventDefault()"
+                @pointer-down-outside="
+                    checkoutBundleId && $event.preventDefault()
+                "
+            >
+                <template v-if="consentBundle">
+                    <DialogHeader
+                        ><DialogTitle
+                            >Make {{ consentBundle.name }} yours.</DialogTitle
+                        ><DialogDescription
+                            >Review your purchase before continuing to secure
+                            checkout with Stripe.</DialogDescription
+                        ></DialogHeader
+                    >
+                    <form @submit.prevent="checkout(consentBundle)">
+                        <dl class="store-receipt">
+                            <div>
+                                <dt>{{ consentBundle.name }}</dt>
+                                <dd>{{ money(consentBundle) }}</dd>
+                            </div>
+                            <div>
+                                <dt>Payment</dt>
+                                <dd>One time</dd>
+                            </div>
+                        </dl>
+                        <p class="store-consent-copy">
+                            Your digital cosmetics unlock when payment is
+                            confirmed. Your statutory withdrawal and refund
+                            rights remain. Read our
+                            <a href="/refunds" target="_blank" rel="noopener"
+                                >Refunds policy<span class="sr-only">
+                                    (opens in a new tab)</span
+                                ></a
+                            >.
+                        </p>
+                        <label class="store-consent-label" for="store-terms"
+                            ><input
+                                id="store-terms"
+                                v-model="termsAccepted"
+                                type="checkbox"
+                                required
+                                :disabled="!!checkoutBundleId"
+                            /><span
+                                >I agree to the
+                                <a href="/terms" target="_blank" rel="noopener"
+                                    >Terms of Service<span class="sr-only">
+                                        (opens in a new tab)</span
+                                    ></a
+                                >
+                                for this purchase.</span
+                            ></label
+                        >
+                        <p class="store-consent-copy">
+                            Our
+                            <a href="/privacy" target="_blank" rel="noopener"
+                                >Privacy Notice<span class="sr-only">
+                                    (opens in a new tab)</span
+                                ></a
+                            >
+                            explains how we use your information.
+                        </p>
+                        <p
+                            v-if="consentError"
+                            ref="consentErrorElement"
+                            class="store-error"
+                            role="alert"
+                            tabindex="-1"
+                        >
+                            {{ consentError }}
+                            <a href="/settings/profile#store"
+                                >Refresh the store</a
+                            >
+                            to load the current terms and try again.
+                        </p>
+                        <DialogFooter
+                            ><Button
+                                type="button"
+                                variant="secondary"
+                                :disabled="!!checkoutBundleId"
+                                @click="closeConsent(false)"
+                                >Cancel</Button
+                            ><Button
+                                type="submit"
+                                :disabled="
+                                    !!checkoutBundleId ||
+                                    !termsAccepted ||
+                                    !consentBundle.available ||
+                                    consentBundle.owned
+                                "
+                                >{{
+                                    checkoutBundleId
+                                        ? 'Opening checkout…'
+                                        : 'Continue to Stripe'
+                                }}<ExternalLink
+                                    :size="13"
+                                    aria-hidden="true" /></Button
+                        ></DialogFooter>
+                    </form>
+                </template>
+            </DialogContent>
+        </Dialog>
         <Dialog
             :open="!!previewBundle"
             @update:open="!$event && (previewBundle = null)"
@@ -748,6 +889,44 @@ function transactionName(itemId: string | null) {
 </template>
 
 <style scoped>
+:global(.account-theme.store-consent-dialog) {
+    max-width: min(560px, calc(100vw - 2rem));
+    max-height: calc(100dvh - 2rem);
+    overflow-y: auto;
+}
+.store-consent-copy {
+    font-size: 12px;
+    line-height: 1.8;
+    color: var(--account-muted);
+    margin: 17px 0;
+}
+.store-consent-label {
+    display: flex;
+    align-items: start;
+    gap: 10px;
+    font-size: 13px;
+    line-height: 1.8;
+    cursor: pointer;
+}
+.store-consent-label input {
+    width: 17px;
+    height: 17px;
+    flex-shrink: 0;
+    margin-top: 4px;
+    accent-color: var(--account-green);
+}
+.store-consent-dialog a {
+    text-decoration: underline;
+    text-underline-offset: 3px;
+}
+.store-consent-dialog :is(input, a):focus-visible {
+    outline: 2px solid var(--account-green);
+    outline-offset: 3px;
+}
+.store-consent-dialog .store-error {
+    margin-bottom: 18px;
+    line-height: 1.8;
+}
 .premium-collection {
     padding: 30px 0;
 }

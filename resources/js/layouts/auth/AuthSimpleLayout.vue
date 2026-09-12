@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { Link, usePage } from '@inertiajs/vue3';
+import LegalLinks from '@/components/LegalLinks.vue';
 import { ArrowLeft, Eye, Moon, Sparkles } from '@lucide/vue';
 import { computed } from 'vue';
 import { home } from '@/routes';
@@ -107,5 +108,13 @@ const scene = computed(() => {
                 <p class="auth-bottom-note">GOOD COMPANY. TERRIBLE SECRETS.</p>
             </section>
         </main>
+        <footer class="auth-legal-footer"><LegalLinks /></footer>
     </div>
 </template>
+<style scoped>
+.auth-legal-footer {
+    padding: 18px clamp(20px, 5vw, 72px);
+    border-top: 1px solid var(--line);
+    color: var(--muted);
+}
+</style>

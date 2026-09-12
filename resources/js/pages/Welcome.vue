@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { t } from '@/i18n';
 import { Head } from '@inertiajs/vue3';
+import LegalLinks from '@/components/LegalLinks.vue';
 import { ArrowDown, Eye, Moon, Users, Vote, Waves } from '@lucide/vue';
 import RoomEntry from '@/components/chanting/RoomEntry.vue';
 import RoleGuide from '@/components/chanting/RoleGuide.vue';
@@ -301,6 +302,7 @@ withDefaults(
             <span class="footer-edition">{{
                 t('welcome.footer.edition')
             }}</span>
+            <LegalLinks />
         </footer>
     </div>
 </template>

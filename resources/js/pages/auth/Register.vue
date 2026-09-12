@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Form, Head } from '@inertiajs/vue3';
+import { Form, Head, usePage } from '@inertiajs/vue3';
 import InputError from '@/components/InputError.vue';
 import PasswordInput from '@/components/PasswordInput.vue';
 import TextLink from '@/components/TextLink.vue';
@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
 import { login } from '@/routes';
 import { store } from '@/routes/register';
+const page = usePage();
 
 defineProps<{
     passwordRules: string;
@@ -119,6 +120,48 @@ defineOptions({
             <p class="auth-email-help">
                 We’ll email you a verification link to activate your account.
             </p>
+            <div class="registration-terms">
+                <input
+                    type="hidden"
+                    name="terms_version"
+                    :value="page.props.legal?.version ?? ''"
+                />
+                <label for="register-terms"
+                    ><input
+                        id="register-terms"
+                        type="checkbox"
+                        name="terms"
+                        value="1"
+                        required
+                        :disabled="processing"
+                        :aria-invalid="Boolean(errors.terms)"
+                        :aria-describedby="
+                            errors.terms ? 'terms-error' : undefined
+                        "
+                    /><span
+                        >I agree to the
+                        <a href="/terms" target="_blank" rel="noopener"
+                            >Terms of Service<span class="sr-only">
+                                (opens in a new tab)</span
+                            ></a
+                        >.</span
+                    ></label
+                >
+                <p>
+                    Read our
+                    <a href="/privacy" target="_blank" rel="noopener"
+                        >Privacy Notice<span class="sr-only">
+                            (opens in a new tab)</span
+                        ></a
+                    >
+                    to understand how we use your information.
+                </p>
+                <InputError
+                    id="terms-error"
+                    :message="errors.terms || errors.terms_version"
+                    role="alert"
+                />
+            </div>
 
             <Button
                 type="submit"
@@ -139,3 +182,34 @@ defineOptions({
         </div>
     </Form>
 </template>
+<style scoped>
+.registration-terms {
+    font-size: 13px;
+    line-height: 1.7;
+}
+.registration-terms label {
+    display: flex;
+    align-items: start;
+    gap: 10px;
+    cursor: pointer;
+}
+.registration-terms input[type='checkbox'] {
+    margin-top: 4px;
+    width: 17px;
+    height: 17px;
+    flex-shrink: 0;
+    accent-color: var(--green);
+}
+.registration-terms > p {
+    margin-top: 10px;
+    color: var(--muted);
+}
+.registration-terms a {
+    text-decoration: underline;
+    text-underline-offset: 3px;
+}
+.registration-terms :is(input, a):focus-visible {
+    outline: 2px solid var(--green);
+    outline-offset: 3px;
+}
+</style>

@@ -36,6 +36,10 @@ class StripeCheckout
             $pending->refresh();
             if ($pending->status === 'pending') {
                 if (($session['status'] ?? null) === 'open') {
+                    if (($pending->legal_acceptance['terms_version'] ?? null) !== config('legal.version')) {
+                        $pending->update(['legal_acceptance' => $this->acceptance()]);
+                    }
+
                     return $this->checkoutUrl($session);
                 }
                 throw ValidationException::withMessages(['bundle_id' => 'Your earlier payment is still processing. Check the store again shortly.']);
@@ -60,6 +64,10 @@ class StripeCheckout
                     throw ValidationException::withMessages(['bundle_id' => 'Your earlier checkout needs verification. Please contact support before trying again.']);
                 }
 
+                if (($existing->legal_acceptance['terms_version'] ?? null) !== config('legal.version')) {
+                    $existing->update(['legal_acceptance' => $this->acceptance()]);
+                }
+
                 return $existing;
             }
             $id = (string) Str::uuid();
@@ -68,6 +76,7 @@ class StripeCheckout
             return PaidOrder::create(['id' => $id, 'user_id' => $user->id, 'bundle_id' => $bundleId,
                 'price_id' => $bundle['price_id'], 'amount' => $bundle['amount'], 'currency' => $bundle['currency'],
                 'cosmetics' => $bundle['cosmetics'], 'status' => 'pending',
+                'legal_acceptance' => $this->acceptance(),
                 'checkout_parameters' => [
                     'mode' => 'payment', 'client_reference_id' => $id, 'customer_email' => $user->email,
                     'line_items' => [['price' => $bundle['price_id'], 'quantity' => 1]],
@@ -76,6 +85,7 @@ class StripeCheckout
                     'expires_at' => now()->addHour()->timestamp,
                     'success_url' => route('profile.edit').'?checkout=success&session_id={CHECKOUT_SESSION_ID}#store',
                     'cancel_url' => route('profile.edit').'?checkout=cancelled#store',
+                    'custom_text' => ['submit' => ['message' => 'One-time cosmetic purchase. Terms: '.url('/terms').'. Privacy: '.url('/privacy').'. Refunds and withdrawal: '.url('/refunds').'. Statutory withdrawal rights remain.']],
                 ],
             ]);
         });
@@ -88,6 +98,14 @@ class StripeCheckout
         PaidOrder::whereKey($order->id)->update(['stripe_session_id' => $session['id']]);
 
         return $this->checkoutUrl($session);
+    }
+
+    /** @return array<string,string|bool> */
+    private function acceptance(): array
+    {
+        return ['terms_version' => config('legal.version'), 'accepted_at' => now()->toISOString(),
+            'terms_url' => url('/terms'), 'privacy_url' => url('/privacy'), 'refunds_url' => url('/refunds'),
+            'withdrawal_waived' => false];
     }
 
     /** @param array<string,mixed> $session */

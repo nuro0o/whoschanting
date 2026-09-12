@@ -6,6 +6,7 @@ use App\Game\AccountProgression;
 use App\Game\StripeCheckout;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Throwable;
 
@@ -13,7 +14,8 @@ class StoreCheckoutController extends Controller
 {
     public function checkout(Request $request, StripeCheckout $stripe): JsonResponse
     {
-        $input = $request->validate(['bundle_id' => ['required', 'string', 'max:80']]);
+        $input = $request->validate(['bundle_id' => ['required', 'string', 'max:80'],
+            'terms' => ['required', 'accepted'], 'terms_version' => ['required', Rule::in([config('legal.version')])]]);
         try {
             return response()->json(['url' => $stripe->checkout($request->user(), $input['bundle_id'])]);
         } catch (ValidationException $exception) {
