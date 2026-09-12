@@ -1,6 +1,14 @@
 ﻿<script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import { Check, Flame, LockKeyhole, RotateCcw } from '@lucide/vue';
+import {
+    Check,
+    CheckCircle2,
+    CircleUserRound,
+    Flame,
+    LockKeyhole,
+    RotateCcw,
+    Skull,
+} from '@lucide/vue';
 import {
     eliminationLabel,
     roles,
@@ -33,7 +41,7 @@ const props = defineProps<{
     eligibleTargetIds?: string[];
     hauntedSeatId?: string | null;
 }>();
-const emit = defineEmits<{ select: [id: string] }>();
+const emit = defineEmits<{ select: [id: string]; inspect: [id: string] }>();
 const scene = ref<InstanceType<typeof RitualTableScene>>();
 const projectedSeats = ref<{ left: string; top: string }[]>([]);
 const sceneReady = ref(false);
@@ -132,7 +140,10 @@ function selectable(player: Player) {
     );
 }
 function seatLabel(player: Player) {
-    const identity = `${player.name}${player.id === props.meId ? ', you' : ''}`;
+    const ready =
+        (props.phase === 'lobby' && player.ready) ||
+        (props.phase === 'discussion' && player.discussion_ready);
+    const identity = `${player.name}${player.id === props.meId ? ', you' : ''}${ready && player.alive ? ', ready' : ''}`;
     if (props.phase === 'finished' && player.role)
         return `${identity}, ${roles[player.role]?.name ?? player.role}${player.alive ? '' : `, ${eliminationLabel(player.elimination_reason)}`}`;
     return `${identity}${!player.alive ? `, ${eliminationLabel(player.elimination_reason)}` : ''}${selectable(player) ? ', select as target' : ''}`;
@@ -239,7 +250,7 @@ onBeforeUnmount(() => {
                 aria-hidden="true"
             ></div>
             <component
-                :is="selectable(player) ? 'button' : 'div'"
+                is="button"
                 v-for="(player, index) in players"
                 :key="player.id"
                 class="table-seat"
@@ -256,15 +267,22 @@ onBeforeUnmount(() => {
                         ? (projectedSeats[index] ?? seatStyle(index))
                         : seatStyle(index)
                 "
-                :type="selectable(player) ? 'button' : undefined"
-                :role="selectable(player) ? undefined : 'group'"
-                :aria-label="seatLabel(player)"
+                type="button"
+                :aria-label="
+                    selectable(player)
+                        ? seatLabel(player)
+                        : `${seatLabel(player)}, view details`
+                "
                 :aria-pressed="
                     selectable(player)
                         ? selectedTarget === player.id
                         : undefined
                 "
-                @click="selectable(player) && emit('select', player.id)"
+                @click="
+                    selectable(player)
+                        ? emit('select', player.id)
+                        : emit('inspect', player.id)
+                "
             >
                 <span class="seat-card" aria-hidden="true"></span>
                 <CharacterPortrait
@@ -309,16 +327,18 @@ onBeforeUnmount(() => {
                     :class="{ 'is-cult': player.alignment === 'cult' }"
                     >{{ roles[player.role]?.name ?? player.role }}</span
                 >
-                <span v-else-if="!player.alive" class="seat-banished">{{
-                    eliminationLabel(player.elimination_reason)
-                }}</span>
+                <span v-else-if="!player.alive" class="seat-banished"
+                    ><Skull :size="12" aria-hidden="true" />{{
+                        eliminationLabel(player.elimination_reason)
+                    }}</span
+                >
                 <span
                     v-else-if="
                         (phase === 'discussion' && player.discussion_ready) ||
                         (phase === 'lobby' && player.ready)
                     "
                     class="seat-ready"
-                    >Ready</span
+                    ><CheckCircle2 :size="12" aria-hidden="true" /> Ready</span
                 >
             </component>
         </div>
@@ -370,17 +390,25 @@ onBeforeUnmount(() => {
             </p>
             <div>
                 <component
-                    :is="selectable(player) ? 'button' : 'div'"
+                    is="button"
                     v-for="player in players"
                     :key="player.id"
-                    :type="selectable(player) ? 'button' : undefined"
-                    :aria-label="seatLabel(player)"
+                    type="button"
+                    :aria-label="
+                        selectable(player)
+                            ? seatLabel(player)
+                            : `${seatLabel(player)}, view details`
+                    "
                     :aria-pressed="
                         selectable(player)
                             ? selectedTarget === player.id
                             : undefined
                     "
-                    @click="selectable(player) && emit('select', player.id)"
+                    @click="
+                        selectable(player)
+                            ? emit('select', player.id)
+                            : emit('inspect', player.id)
+                    "
                 >
                     <CharacterPortrait
                         :character="player.character"
@@ -392,38 +420,95 @@ onBeforeUnmount(() => {
                     />
                     <span
                         ><strong :title="player.name">{{ player.name }}</strong
-                        ><small>{{
-                            phase === 'finished' && player.role
-                                ? (roles[player.role]?.name ?? player.role)
-                                : !player.alive
-                                  ? eliminationLabel(player.elimination_reason)
-                                  : player.id === meId
-                                    ? 'You'
-                                    : selectedTarget === player.id && canSelect
-                                      ? 'Selected'
-                                      : 'Villager'
-                        }}</small></span
+                        ><small
+                            ><component
+                                :is="
+                                    !player.alive
+                                        ? Skull
+                                        : (phase === 'lobby' && player.ready) ||
+                                            (phase === 'discussion' &&
+                                                player.discussion_ready)
+                                          ? CheckCircle2
+                                          : CircleUserRound
+                                "
+                                :size="12"
+                                aria-hidden="true"
+                            />{{
+                                phase === 'finished' && player.role
+                                    ? (roles[player.role]?.name ?? player.role)
+                                    : !player.alive
+                                      ? eliminationLabel(
+                                            player.elimination_reason,
+                                        )
+                                      : player.id === meId
+                                        ? 'You'
+                                        : selectedTarget === player.id &&
+                                            canSelect
+                                          ? 'Selected'
+                                          : (phase === 'lobby' &&
+                                                  player.ready) ||
+                                              (phase === 'discussion' &&
+                                                  player.discussion_ready)
+                                            ? 'Ready'
+                                            : 'Alive'
+                            }}</small
+                        ></span
                     >
                 </component>
             </div>
         </div>
+        <nav
+            class="player-inspection"
+            aria-label="Inspect villagers without selecting a target"
+        >
+            <p>
+                VILLAGER DETAILS
+                <span>Public status &amp; your private notes</span>
+            </p>
+            <div>
+                <button
+                    v-for="player in players"
+                    :key="player.id"
+                    type="button"
+                    :aria-label="`View details for ${player.name}`"
+                    @click="emit('inspect', player.id)"
+                >
+                    <CharacterPortrait
+                        :character="player.character"
+                        :creator="player.customization?.creator"
+                        :frame="player.customization?.frame"
+                        :accent="player.customization?.accent"
+                        :background="player.customization?.background"
+                        decorative
+                    />{{ player.name }} <span>Details</span>
+                </button>
+            </div>
+        </nav>
         <details class="table-seating-list">
             <summary>
                 Seating list <span>{{ players.length }} villagers</span>
             </summary>
             <div>
                 <component
-                    :is="selectable(player) ? 'button' : 'span'"
+                    is="button"
                     v-for="player in players"
                     :key="player.id"
-                    :type="selectable(player) ? 'button' : undefined"
-                    :aria-label="seatLabel(player)"
+                    type="button"
+                    :aria-label="
+                        selectable(player)
+                            ? seatLabel(player)
+                            : `${seatLabel(player)}, view details`
+                    "
                     :aria-pressed="
                         selectable(player)
                             ? selectedTarget === player.id
                             : undefined
                     "
-                    @click="selectable(player) && emit('select', player.id)"
+                    @click="
+                        selectable(player)
+                            ? emit('select', player.id)
+                            : emit('inspect', player.id)
+                    "
                 >
                     {{ player.name
                     }}<small>{{
@@ -440,6 +525,51 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
+.player-inspection {
+    margin: 16px 20px;
+}
+.player-inspection p {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    color: #c6d7cf;
+    font-size: 12px;
+    letter-spacing: 0.06em;
+}
+.player-inspection p span {
+    letter-spacing: 0;
+    opacity: 0.85;
+}
+.player-inspection > div {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 10px;
+}
+.player-inspection button {
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 9px 12px;
+    border: 1px solid #ffffff24;
+    border-radius: 6px;
+    background: #ffffff06;
+    font-size: 14px;
+    color: #ece7d9;
+}
+.player-inspection button span {
+    color: #b0d2c1;
+    font-size: 12px;
+}
+.player-inspection button:hover {
+    background: #ffffff13;
+}
+.player-inspection button:focus-visible {
+    outline: 2px solid #dcecbc;
+    outline-offset: 3px;
+}
+
 .table-clock {
     position: absolute;
     top: 50%;
@@ -462,7 +592,7 @@ onBeforeUnmount(() => {
 }
 .table-clock > span,
 .table-clock > small {
-    font-size: 9px;
+    font-size: 12px;
     font-weight: 600;
     letter-spacing: 1px;
     text-transform: uppercase;
@@ -501,7 +631,7 @@ onBeforeUnmount(() => {
     }
     .table-panel-immersive .table-camera-hint {
         padding: 2px 10px 7px;
-        font-size: 10px;
+        font-size: 12px;
     }
     .table-panel-immersive .table-camera-hint span {
         display: none;
@@ -514,7 +644,7 @@ onBeforeUnmount(() => {
     }
     .table-compact-roster > p {
         margin: 0 0 6px;
-        font-size: 9px;
+        font-size: 12px;
         letter-spacing: 1px;
         color: #d8d7b9;
     }
@@ -525,9 +655,9 @@ onBeforeUnmount(() => {
     }
     .table-compact-roster > div {
         display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
+        grid-template-columns: repeat(2, minmax(0, 1fr));
         gap: 4px;
-        max-height: 82px;
+        max-height: 184px;
         overflow-y: auto;
         overscroll-behavior: contain;
     }
@@ -536,7 +666,8 @@ onBeforeUnmount(() => {
         align-items: center;
         gap: 6px;
         min-width: 0;
-        padding: 3px 5px;
+        padding: 8px;
+        min-height: 56px;
         border: 1px solid #52614b;
         background: #182a2a;
         color: #e1dfc2;
@@ -544,8 +675,8 @@ onBeforeUnmount(() => {
         font: inherit;
     }
     .table-compact-roster :deep(.character-portrait) {
-        width: 25px;
-        flex: 0 0 25px;
+        width: 32px;
+        flex: 0 0 32px;
     }
     .table-compact-roster > div > * > span {
         display: block;
@@ -556,13 +687,13 @@ onBeforeUnmount(() => {
         overflow: hidden;
         white-space: nowrap;
         text-overflow: ellipsis;
-        font-size: 10px;
+        font-size: 12px;
         font-weight: 500;
     }
     .table-compact-roster small {
         display: block;
         color: #aabcaa;
-        font-size: 8px;
+        font-size: 12px;
     }
     .table-compact-roster button {
         cursor: pointer;
@@ -586,7 +717,7 @@ onBeforeUnmount(() => {
     border: 1px solid #afa67d70;
     border-radius: 3px;
     font: inherit;
-    font-size: 10px;
+    font-size: 12px;
     cursor: pointer;
     background: transparent;
 }
@@ -640,7 +771,7 @@ onBeforeUnmount(() => {
     }
     .table-panel-immersive .card-table .table-seat .seat-name {
         max-width: 76px;
-        font-size: 10px;
+        font-size: 12px;
     }
     .table-panel-immersive .card-table.is-crowded .table-seat {
         width: 54px;
@@ -657,7 +788,7 @@ onBeforeUnmount(() => {
     }
     .table-panel-immersive .card-table.is-crowded .seat-name {
         max-width: 54px;
-        font-size: 9px;
+        font-size: 12px;
     }
 }
 .table-panel-immersive .table-topline {
@@ -681,7 +812,7 @@ onBeforeUnmount(() => {
 .table-camera-hint span {
     display: block;
     margin-top: 4px;
-    font-size: 10px;
+    font-size: 12px;
     color: #9eafa4;
 }
 .table-seating-list {
@@ -738,7 +869,7 @@ onBeforeUnmount(() => {
     }
     .table-camera-hint {
         padding-bottom: 7px;
-        font-size: 10px;
+        font-size: 12px;
     }
 }
 .table-reset:hover {
@@ -761,7 +892,7 @@ onBeforeUnmount(() => {
     gap: 8px;
     color: #c3cbaa;
     padding: 3px 14px 7px;
-    font-size: 10px;
+    font-size: 12px;
 }
 .table-summoning-status strong {
     color: #efe8ca;
@@ -780,7 +911,7 @@ onBeforeUnmount(() => {
 }
 @media (max-width: 420px) {
     .table-summoning-status {
-        font-size: 9px;
+        font-size: 12px;
         gap: 5px;
     }
     .summoning-state {
@@ -861,6 +992,69 @@ onBeforeUnmount(() => {
     }
     .is-crowded .phantom-face {
         --phantom-size: 35px;
+    }
+}
+.table-panel-immersive .table-seat {
+    cursor: pointer;
+}
+.table-panel-immersive .table-seat:focus-visible {
+    outline: 2px solid #f0d4a4;
+    outline-offset: 4px;
+    border-radius: 4px;
+}
+.table-panel-immersive .seat-name {
+    font-size: 14px;
+    max-width: 112px;
+    line-height: 1.35;
+    padding: 4px 7px;
+    font-weight: 600;
+}
+.table-panel-immersive .is-crowded .seat-name {
+    font-size: 13px;
+    max-width: 94px;
+}
+.table-panel-immersive .seat-name small {
+    font-size: 11px;
+}
+.table-panel-immersive .seat-banished,
+.table-panel-immersive .seat-ready {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 12px;
+    line-height: 1.4;
+}
+.table-panel-immersive .seat-final-role {
+    font-size: 12px;
+}
+.table-panel-immersive .is-selected .seat-name {
+    border-color: #f1c49f;
+    color: #fff1da;
+    background: #354c41;
+}
+.player-inspection :deep(.character-portrait) {
+    width: 28px;
+    flex: 0 0 28px;
+}
+.table-compact-roster small {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+.table-compact-roster button[aria-pressed='true'] {
+    box-shadow: inset 0 0 0 1px #d7dea6;
+}
+@media (max-width: 900px) {
+    .table-compact-roster strong {
+        font-size: 13px;
+        line-height: 1.4;
+    }
+    .player-inspection {
+        margin: 12px;
+    }
+    .player-inspection > div {
+        max-height: 150px;
+        overflow-y: auto;
     }
 }
 </style>

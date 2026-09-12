@@ -123,7 +123,46 @@ export type PrivateNightResult = { day: number; target: string } & (
     | { kind: 'oath'; kept: boolean }
 );
 
+export interface PublicClaim {
+    id: string;
+    player_id: string;
+    day: number;
+    role: string;
+    body: string;
+    target_id: string | null;
+}
+export interface DiscussionResponse {
+    id: string;
+    player_id: string;
+    day: number;
+    prompt_id: string;
+    question?: string;
+    body: string;
+    target_id: string | null;
+}
+export interface Prediction {
+    cultist_ids: string[];
+    winner: 'town' | 'cult';
+    day: number;
+}
+export interface PredictionResult extends Prediction {
+    player_id: string;
+    correct_picks: number;
+    total_cultists: number;
+    exact: boolean;
+    winner_correct: boolean;
+    informed: boolean;
+}
+export interface MatchFeedbackResponse {
+    engagement: 'engaged' | 'mixed' | 'waiting';
+    body: string;
+}
 export interface MatchRecapData {
+    claims?: PublicClaim[];
+    responses?: DiscussionResponse[];
+    predictions?: PredictionResult[];
+    winner?: 'town' | 'cult' | null;
+    win_reason?: string | null;
     mode_setup?: ModeSetup;
     roster?: 'classic' | 'illusions';
     rules_version: string;
@@ -184,6 +223,13 @@ export interface Curse {
     challenge: CurseChallenge | null;
 }
 export interface RoomState {
+    table?: {
+        claims: PublicClaim[];
+        prompt: { id: string; question: string } | null;
+        responses: DiscussionResponse[];
+        extension: { voter_ids: string[]; used: boolean; seconds: number };
+        predictions: PredictionResult[];
+    };
     match_id: string | null;
     mode_setup?: ModeSetup;
     mode_preview?: {
@@ -216,6 +262,8 @@ export interface RoomState {
     recap: MatchRecapData | null;
     players: Player[];
     me: {
+        prediction?: Prediction | null;
+        feedback?: MatchFeedbackResponse | null;
         elimination_reason?: 'shot' | 'guilt' | null;
         customization?: PublicCustomization | null;
         account_progression?: boolean;
@@ -258,6 +306,9 @@ export interface Character {
     unlocked?: boolean;
     requirement?: string;
     seasonal?: boolean;
+    collection?: 'classics' | 'levelup' | 'seasonal' | 'custom';
+    season_id?: string | null;
+    season_name?: string | null;
     hidden?: boolean;
     role_name?: string;
 }
@@ -311,9 +362,16 @@ export const defaultCharacters: Character[] = characterIds.map((id) => ({
               .join(' ')}`,
     unlocked: !characterRequirements[id] && !seasonalCharacters[id],
     requirement: seasonalCharacters[id]?.role ?? characterRequirements[id],
+    collection: seasonalCharacters[id]
+        ? 'seasonal'
+        : characterRequirements[id]
+          ? 'levelup'
+          : 'classics',
     ...(seasonalCharacters[id]
         ? {
               seasonal: true,
+              season_id: '2026-Q3',
+              season_name: 'Season 3 · 2026',
               hidden: true,
               role_name: seasonalCharacters[id].role,
           }

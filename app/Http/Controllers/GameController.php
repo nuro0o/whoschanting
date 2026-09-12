@@ -76,7 +76,7 @@ class GameController extends Controller
     public function action(Request $request, string $code): JsonResponse
     {
         $data = $request->validate([
-            'type' => ['required', 'string', 'in:ready,start,night,vote,chat,rematch,character,discussion_ready,solve_curse,roster,exorcise,oath,configure_mode'],
+            'type' => ['required', 'string', 'in:ready,start,night,vote,chat,rematch,character,discussion_ready,solve_curse,roster,exorcise,oath,configure_mode,claim,discussion_response,prediction,transfer_host,remove_player,extend_discussion,feedback'],
             'phase_id' => ['required', 'integer', 'min:1'],
             'target' => ['nullable', 'string', 'uuid'],
             'use_ability' => ['sometimes', 'boolean'],
@@ -84,6 +84,11 @@ class GameController extends Controller
             'forged_alignment' => ['sometimes', 'string', 'in:town,cult'],
             'curse_type' => ['nullable', 'string', 'in:puzzle,mist,misdirection'],
             'body' => ['nullable', 'string', 'max:280'],
+            'role' => ['required_if:type,claim', 'string', Rule::in(array_keys(config('game.role_alignments')))],
+            'cultist_ids' => ['present_if:type,prediction', 'array', 'list', 'max:'.config('game.max_players')],
+            'cultist_ids.*' => ['required', 'string', 'uuid', 'distinct'],
+            'winner' => ['required_if:type,prediction', 'string', 'in:town,cult'],
+            'engagement' => ['required_if:type,feedback', 'string', 'in:engaged,mixed,waiting'],
             'curse_id' => ['required_if:type,solve_curse', 'uuid'],
             'answer' => ['required_if:type,solve_curse', 'array', 'list', 'max:12'],
             'answer.*' => ['required', 'string', 'uuid'],

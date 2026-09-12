@@ -5,7 +5,6 @@ import {
     Check,
     ChevronDown,
     Circle,
-    Copy,
     Eye,
     LoaderCircle,
     Moon,
@@ -15,8 +14,6 @@ import {
     LockKeyhole,
     EyeOff,
     Send,
-    ShieldCheck,
-    Vote,
     Maximize2,
     Minimize2,
 } from '@lucide/vue';
@@ -44,6 +41,7 @@ import {
 import SecretRole from '@/components/chanting/SecretRole.vue';
 import PersonalJournal from '@/components/chanting/PersonalJournal.vue';
 import RoomBriefing from '@/components/chanting/RoomBriefing.vue';
+import PhaseTransition from '@/components/chanting/PhaseTransition.vue';
 import RitualWarning from '@/components/chanting/RitualWarning.vue';
 import RoomEvents from '@/components/chanting/RoomEvents.vue';
 import RoomHelp from '@/components/chanting/RoomHelp.vue';
@@ -52,8 +50,22 @@ import CharacterPortrait from '@/components/chanting/CharacterPortrait.vue';
 import MatchRewards from '@/components/chanting/MatchRewards.vue';
 import CursePanel from '@/components/chanting/CursePanel.vue';
 import MatchRecap from '@/components/chanting/MatchRecap.vue';
+import TableStories from '@/components/chanting/TableStories.vue';
+import BanishedPredictions from '@/components/chanting/BanishedPredictions.vue';
+import TableHostControls from '@/components/chanting/TableHostControls.vue';
+import MatchFeedback from '@/components/chanting/MatchFeedback.vue';
 import CardTable from '@/components/chanting/CardTable.vue';
 import DiscussionAbility from '@/components/chanting/DiscussionAbility.vue';
+import PersistentActionBar from '@/components/chanting/PersistentActionBar.vue';
+import PlayerDetailsDrawer from '@/components/chanting/PlayerDetailsDrawer.vue';
+import LobbyInvites from '@/components/chanting/LobbyInvites.vue';
+import ReadabilityControl from '@/components/chanting/ReadabilityControl.vue';
+import SpectatorView from '@/components/chanting/SpectatorView.vue';
+import {
+    actionConsequence,
+    lobbyBlockers,
+    newPublicEvents,
+} from '@/lib/gameUx';
 import GameAtmosphere from '@/components/chanting/GameAtmosphere.vue';
 import RitualDisturbances from '@/components/chanting/RitualDisturbances.vue';
 import type { RitualDisturbance } from '@/lib/ritualDisturbances';
@@ -77,6 +89,8 @@ import {
     nightActionLabel,
 } from '@/lib/roleActions';
 import '../../css/chanting.css';
+import '../../css/table-experience.css';
+import '../../css/game-upgrades.css';
 
 const props = withDefaults(
     defineProps<{
@@ -160,6 +174,7 @@ const pending = ref(false);
 const disconnected = ref(false);
 const live = ref(false);
 const target = ref<string | null>(null);
+const inspectedPlayerId = ref<string | null>(null);
 const useAbility = ref(false);
 const forgedAlignment = ref<'town' | 'cult'>('cult');
 const selectedCurse = ref<Curse['type']>('puzzle');
@@ -201,7 +216,6 @@ watch(useAbility, () => {
 const actionSerial = ref(0);
 const revealed = ref(false);
 const message = ref('');
-const copied = ref(false);
 type RoomView = 'play' | 'role' | 'journal' | 'chat' | 'help';
 const activeView = ref<RoomView>('play');
 const hasRoom = computed(() => !!state.value);
@@ -228,6 +242,132 @@ const hintDismissed = ref(false);
 const readMessageIds = ref<Set<string>>(new Set());
 const readResultCount = ref(0);
 const personalJournal = ref<InstanceType<typeof PersonalJournal>>();
+const inviteUrl = ref('');
+const receipt = ref<{
+    match: string | null;
+    seat: string;
+    text: string;
+} | null>(null);
+const catchUp = ref<{ title: string; events: string[]; ritual: string } | null>(
+    null,
+);
+const settingsNotice = ref('');
+let resumed = false;
+const spectator = computed(
+    () =>
+        !!state.value &&
+        !state.value.me.alive &&
+        !['lobby', 'finished'].includes(state.value.phase),
+);
+const privateVisible = computed(
+    () => revealed.value && !puzzleCursed.value && !mistCursed.value,
+);
+const startBlockers = computed(() =>
+    state.value
+        ? lobbyBlockers(state.value, modeEditorOpen.value && modeDirty.value)
+        : [],
+);
+const currentConsequence = computed(() =>
+    state.value &&
+    privateVisible.value &&
+    ['night', 'voting'].includes(state.value.phase) &&
+    !state.value.me.submitted
+        ? actionConsequence(state.value, {
+              target: target.value,
+              useAbility: useAbility.value,
+              curse: selectedCurse.value,
+              forgedAlignment: forgedAlignment.value,
+          })
+        : '',
+);
+const visibleReceipt = computed(() =>
+    privateVisible.value &&
+    receipt.value?.match === state.value?.match_id &&
+    receipt.value?.seat === state.value?.me.id
+        ? (receipt.value?.text ?? '')
+        : '',
+);
+const dockReveal = computed(
+    () =>
+        !!state.value?.me.alive &&
+        !state.value.me.submitted &&
+        ['night', 'voting'].includes(state.value.phase) &&
+        !revealed.value &&
+        !puzzleCursed.value &&
+        !mistCursed.value,
+);
+const dockLabel = computed(() => {
+    if (!state.value?.me.alive || state.value.me.submitted) return '';
+    if (state.value.phase === 'night') return 'Confirm night action';
+    if (state.value.phase === 'voting')
+        return target.value
+            ? `Confirm vote: ${state.value.players.find((p) => p.id === target.value)?.name ?? 'player'}`
+            : 'Confirm abstention';
+    if (state.value.phase === 'reveal') return 'Ready for night';
+    if (state.value.phase === 'discussion') return 'Ready for voting';
+    return '';
+});
+const dockDisabled = computed(
+    () =>
+        pending.value ||
+        disconnected.value ||
+        seconds.value === 0 ||
+        puzzleCursed.value ||
+        mistCursed.value ||
+        (state.value?.phase === 'reveal' && !roleRead.value) ||
+        (state.value?.phase === 'night' &&
+            requiresTarget.value &&
+            !target.value),
+);
+const dockTitle = computed(() => {
+    if (spectator.value) return 'Watching from the shore';
+    if (puzzleCursed.value || mistCursed.value)
+        return 'Clear your curse to act';
+    if (disconnected.value) return 'Reconnecting to the village';
+    if (state.value?.me.submitted) return 'Your choice is locked in';
+    if (state.value?.phase === 'night' && !revealed.value)
+        return 'Your night action is hidden';
+    if (state.value?.phase === 'reveal')
+        return roleRead.value
+            ? 'Your role is read. Ready when you are.'
+            : 'Read your private role before getting ready';
+    if (state.value?.phase === 'discussion')
+        return 'Ready means you are happy to end discussion early';
+    if (state.value?.phase === 'voting' && !privateVisible.value)
+        return 'Your ballot is hidden';
+    return target.value
+        ? `Selected: ${state.value?.players.find((p) => p.id === target.value)?.name ?? 'player'}`
+        : 'Review your choice before confirming';
+});
+async function confirmDock() {
+    if (dockDisabled.value || !state.value || state.value.me.submitted) return;
+    if (state.value.phase === 'night')
+        await act('night', {
+            target: target.value,
+            use_ability: useAbility.value,
+            ...(useAbility.value && state.value.me.role === 'counterfeiter'
+                ? { forged_alignment: forgedAlignment.value }
+                : {}),
+            curse_type:
+                canCurse.value && target.value ? selectedCurse.value : null,
+        });
+    else if (state.value.phase === 'voting')
+        await act('vote', { target: target.value });
+    else if (state.value.phase === 'reveal') await act('ready');
+    else if (state.value.phase === 'discussion') await act('discussion_ready');
+}
+async function reviewDock() {
+    actionDetailsOpen.value = true;
+    await navigate('play', false);
+    await nextTick();
+    document
+        .getElementById('table-action-details')
+        ?.scrollIntoView({ block: 'center' });
+    document
+        .getElementById('action-details-toggle')
+        ?.focus({ preventScroll: true });
+    if (state.value?.phase === 'reveal') await showRole();
+}
 const chatVisible = ref(false);
 let chatObserver: IntersectionObserver | undefined;
 const unreadChat = computed(
@@ -239,7 +379,7 @@ const unreadChat = computed(
         ).length ?? 0,
 );
 const newResults = computed(() =>
-    revealed.value
+    privateVisible.value
         ? Math.max(
               0,
               (state.value?.me.results.length ?? 0) - readResultCount.value,
@@ -364,12 +504,7 @@ const myReady = computed(
         false,
 );
 const canStart = computed(
-    () =>
-        !!state.value &&
-        state.value.players.length >= state.value.rules.min_players &&
-        readyCount.value === state.value.players.length &&
-        !state.value.mode_preview?.error &&
-        !(modeEditorOpen.value && modeDirty.value),
+    () => !!state.value && startBlockers.value.length === 0,
 );
 const lobbyPlayerCount = computed(() =>
     state.value?.phase === 'lobby' && state.value.mode_setup?.mode === 'custom'
@@ -523,6 +658,7 @@ const canSelectSeat = computed(
         state.value.me.alive &&
         !state.value.me.submitted &&
         !pending.value &&
+        !disconnected.value &&
         !puzzleCursed.value &&
         !mistCursed.value &&
         (state.value.phase === 'voting' ||
@@ -544,6 +680,43 @@ const nightLabel = computed(() =>
         ? nightActionLabel(state.value, useAbility.value, target.value)
         : '',
 );
+const selectedPlayer = computed(() =>
+    state.value?.players.find((player) => player.id === target.value),
+);
+const turnSelection = computed(() => {
+    if (!state.value || !state.value.me.alive || state.value.me.submitted)
+        return '';
+    if (state.value.phase === 'voting')
+        return selectedPlayer.value?.name ?? 'Abstain';
+    if (state.value.phase !== 'night' || !revealed.value) return '';
+    return (
+        selectedPlayer.value?.name ??
+        (requiresTarget.value ? 'Choose a target' : nightLabel.value)
+    );
+});
+const turnBlocker = computed(() => {
+    if (!state.value?.me.alive || state.value.me.submitted) return '';
+    if (disconnected.value)
+        return 'Reconnecting to the village. Please wait before confirming.';
+    if (['night', 'voting'].includes(state.value.phase)) {
+        if (puzzleCursed.value)
+            return 'Break your Soul Bind in Play to unlock your action. The timer keeps running.';
+        if (mistCursed.value)
+            return 'Clear the Mind Mist in Play to unlock your action. The timer keeps running.';
+        if (seconds.value === 0)
+            return 'Time is up. Waiting for the village to resolve this phase.';
+        if (
+            state.value.phase === 'night' &&
+            revealed.value &&
+            requiresTarget.value &&
+            !target.value
+        )
+            return 'Choose an eligible villager below before confirming.';
+    }
+    if (state.value.phase === 'reveal' && !roleRead.value)
+        return 'Read your role first to unlock Ready for night.';
+    return '';
+});
 
 const showPrivateTools = computed(
     () =>
@@ -592,7 +765,7 @@ watch(
     { immediate: true },
 );
 function reviewAction() {
-    const controls = document.getElementById('current-action');
+    const controls = document.getElementById('turn-confirmation');
     controls?.focus({ preventScroll: true });
     controls?.scrollIntoView({ block: 'start', behavior: 'instant' });
 }
@@ -600,6 +773,57 @@ function reviewAction() {
 function accept(next: RoomState) {
     if (disposed || (state.value && next.revision < state.value.revision))
         return;
+    const previous = state.value;
+    const sameMatch =
+        previous?.match_id === next.match_id && previous?.me.id === next.me.id;
+    if (!sameMatch) {
+        receipt.value = null;
+        catchUp.value = null;
+        inspectedPlayerId.value = null;
+    }
+    if (
+        previous?.phase === 'lobby' &&
+        next.phase === 'lobby' &&
+        JSON.stringify([previous.mode_setup, previous.roster]) !==
+            JSON.stringify([next.mode_setup, next.roster])
+    ) {
+        const before = modeName(previous.mode_setup, previous.roster);
+        const after = modeName(next.mode_setup, next.roster);
+        const cast =
+            next.mode_setup?.mode === 'custom'
+                ? Object.entries(next.mode_setup.roles)
+                      .map(
+                          ([role, count]) =>
+                              `${count} ${roles[role]?.name ?? role}`,
+                      )
+                      .join(', ')
+                : '';
+        settingsNotice.value = `${before === after ? `${after} settings updated` : `Mode changed: ${before} → ${after}`}${cast ? `. New cast: ${cast}` : ''}. Everyone needs to mark ready again.`;
+    }
+    if (next.phase !== 'lobby') settingsNotice.value = '';
+    const dawn = previous?.phase === 'night' && next.phase !== 'night';
+    if (
+        next.match_id &&
+        !['lobby', 'reveal'].includes(next.phase) &&
+        (dawn || resumed || disconnected.value || !previous)
+    ) {
+        const events =
+            sameMatch && previous
+                ? newPublicEvents(previous.log, next.log)
+                : next.log.slice(-3);
+        const delta =
+            sameMatch && previous
+                ? next.ritual.tokens - previous.ritual.tokens
+                : 0;
+        catchUp.value = {
+            title: dawn
+                ? `Dawn · Day ${next.day}`
+                : `Caught up · Day ${next.day}`,
+            events: events.slice(-4),
+            ritual: `Ritual: ${next.ritual.tokens} of ${next.ritual.threshold} steps${delta > 0 ? ` (+${delta})` : ''}${next.ritual.final_vote ? '. The final vote is upon us.' : '.'}`,
+        };
+    }
+    resumed = false;
     offset = Date.parse(next.server_time) - Date.now();
     state.value = next;
     outsider.value = false;
@@ -685,6 +909,26 @@ function connect(id: number) {
 }
 async function act(type: string, extra: object = {}) {
     if (!state.value || pending.value) return false;
+    const submittedState = state.value;
+    const fields = extra as {
+        target?: string | null;
+        use_ability?: boolean;
+        curse_type?: string;
+        forged_alignment?: string;
+    };
+    const actionReceipt = ['night', 'vote'].includes(type)
+        ? {
+              match: submittedState.match_id,
+              seat: submittedState.me.id,
+              text: `${type === 'night' ? 'Night' : 'Day'} ${submittedState.day} submitted choice confirmed: ${actionConsequence(submittedState, { target: fields.target ?? null, useAbility: fields.use_ability ?? false, curse: fields.curse_type ?? 'puzzle', forgedAlignment: fields.forged_alignment ?? 'cult' })}`,
+          }
+        : ['exorcise', 'oath'].includes(type)
+          ? {
+                match: submittedState.match_id,
+                seat: submittedState.me.id,
+                text: `Day ${submittedState.day} submitted choice confirmed: ${type === 'exorcise' ? 'Use your exorcism on' : 'Make a public oath to vote for'} ${submittedState.players.find((p) => p.id === fields.target)?.name ?? 'a villager'}. ${type === 'exorcise' ? 'Your once-per-match exorcism is spent.' : 'Your oath is public and final.'}`,
+            }
+          : null;
     pending.value = true;
     error.value = '';
     if (type === 'solve_curse') curseError.value = '';
@@ -696,6 +940,12 @@ async function act(type: string, extra: object = {}) {
             ),
         );
         if (type === 'night' || type === 'vote') actionSerial.value++;
+        if (
+            actionReceipt &&
+            state.value?.match_id === actionReceipt.match &&
+            state.value?.me.id === actionReceipt.seat
+        )
+            receipt.value = actionReceipt;
         return true;
     } catch (cause) {
         const actionError =
@@ -717,26 +967,12 @@ async function sendChat() {
     )
         message.value = '';
 }
-async function copyInvite() {
-    try {
-        await navigator.clipboard.writeText(
-            `${window.location.origin}/rooms/${props.code}`,
-        );
-        copied.value = true;
-    } catch {
-        error.value = `Copy the room code to invite your friends: ${props.code}`;
-    }
-}
 function onResume() {
     if (document.visibilityState === 'visible') {
+        resumed = true;
         void refresh();
         markChatRead();
     }
-}
-async function revealRoleForAction() {
-    revealed.value = true;
-    await nextTick();
-    document.getElementById('current-action')?.focus({ preventScroll: true });
 }
 watch([revealed, activeView], () => {
     if (revealed.value && activeView.value === 'role') roleRead.value = true;
@@ -776,6 +1012,7 @@ watch(
 watch(
     () => state.value?.phase_id,
     () => {
+        inspectedPlayerId.value = null;
         target.value = null;
         useAbility.value = false;
         selectedCurse.value = 'puzzle';
@@ -813,6 +1050,7 @@ watch(hasRoom, (available) => {
     }
 });
 onMounted(() => {
+    inviteUrl.value = `${window.location.origin}/rooms/${encodeURIComponent(props.code)}`;
     fullscreenAvailable.value = !!document.fullscreenEnabled;
     document.addEventListener('fullscreenchange', syncFullscreen);
     try {
@@ -851,10 +1089,28 @@ onBeforeUnmount(() => {
     <Head :title="`Room ${code}`" />
     <div
         class="chanting game-page"
-        :class="{ 'is-immersive': hasRoom }"
+        :class="{
+            'is-immersive': hasRoom,
+            'has-persistent-actions':
+                state && !['lobby', 'finished'].includes(state.phase),
+        }"
         :data-phase="state?.phase"
         :data-winner="state?.winner"
     >
+        <PhaseTransition
+            v-if="state"
+            :phase="state.phase"
+            :phase-id="state.phase_id"
+            :day="state.day"
+            :final-vote="state.ritual.final_vote"
+        />
+        <PlayerDetailsDrawer
+            v-if="state"
+            :state="state"
+            :player-id="inspectedPlayerId"
+            :private-visible="revealed && !puzzleCursed && !mistCursed"
+            @close="inspectedPlayerId = null"
+        />
         <GameAtmosphere
             v-if="!loading"
             :phase="state?.phase ?? 'lobby'"
@@ -953,6 +1209,11 @@ onBeforeUnmount(() => {
                     :can-select="canSelectSeat"
                     :eligible-target-ids="targets.map((player) => player.id)"
                     @select="selectSeat"
+                    @inspect="
+                        !puzzleCursed &&
+                        !mistCursed &&
+                        (inspectedPlayerId = $event)
+                    "
                 >
                     <template #briefing>
                         <RoomBriefing
@@ -962,134 +1223,38 @@ onBeforeUnmount(() => {
                             :pending="pending"
                             :revealed="revealed"
                             :role-read="roleRead"
+                            :countdown="tableDisplay.value"
+                            :urgent="tableDisplay.urgent"
+                            :selection="turnSelection"
+                            :blocker="turnBlocker"
                         >
                             <template #controls>
-                                <template
+                                <button
                                     v-if="
                                         state.phase === 'reveal' &&
                                         !state.me.submitted
                                     "
+                                    class="button"
+                                    @click="showRole"
                                 >
-                                    <button class="button" @click="showRole">
-                                        <Eye :size="16" />{{
-                                            roleRead
-                                                ? 'Read my role again'
-                                                : 'Reveal my role'
-                                        }}
-                                    </button>
-                                    <button
-                                        class="button primary"
-                                        :disabled="pending || !roleRead"
-                                        @click="act('ready')"
-                                    >
-                                        <ShieldCheck :size="17" />Ready for
-                                        night
-                                    </button>
-                                </template>
-                                <template
-                                    v-if="
-                                        state.phase === 'night' &&
-                                        state.me.alive &&
-                                        !state.me.submitted
-                                    "
+                                    <Eye :size="16" />{{
+                                        roleRead
+                                            ? 'Read my role again'
+                                            : 'Reveal my role'
+                                    }}
+                                </button>
+                                <button
+                                    v-if="state.phase === 'discussion'"
+                                    class="button"
+                                    @click="showChat"
                                 >
-                                    <button
-                                        v-if="!revealed"
-                                        class="button primary"
-                                        @click="revealRoleForAction"
+                                    <MessageCircle :size="17" />Open chat
+                                    <span
+                                        v-if="unreadChat"
+                                        class="room-badge"
+                                        >{{ unreadChat }}</span
                                     >
-                                        <Eye :size="16" />Reveal role &amp;
-                                        action
-                                    </button>
-                                    <template v-else>
-                                        <button
-                                            class="button primary"
-                                            :disabled="
-                                                pending ||
-                                                mistCursed ||
-                                                puzzleCursed ||
-                                                disconnected ||
-                                                (requiresTarget && !target) ||
-                                                (puzzleCursed && !!target)
-                                            "
-                                            :aria-describedby="
-                                                puzzleCursed
-                                                    ? 'night-curse-help'
-                                                    : undefined
-                                            "
-                                            @click="
-                                                act('night', {
-                                                    target,
-                                                    use_ability: useAbility,
-                                                    ...(useAbility &&
-                                                    state.me.role ===
-                                                        'counterfeiter'
-                                                        ? {
-                                                              forged_alignment:
-                                                                  forgedAlignment,
-                                                          }
-                                                        : {}),
-                                                    curse_type:
-                                                        canCurse && target
-                                                            ? selectedCurse
-                                                            : null,
-                                                })
-                                            "
-                                        >
-                                            {{ nightLabel }}<Check :size="16" />
-                                        </button>
-                                    </template>
-                                </template>
-                                <template v-if="state.phase === 'discussion'">
-                                    <button class="button" @click="showChat">
-                                        <MessageCircle :size="17" />Open chat
-                                        <span
-                                            v-if="unreadChat"
-                                            class="room-badge"
-                                            >{{ unreadChat }}</span
-                                        >
-                                    </button>
-                                    <button
-                                        v-if="
-                                            state.me.alive &&
-                                            !state.me.submitted
-                                        "
-                                        class="button primary"
-                                        :disabled="pending"
-                                        @click="act('discussion_ready')"
-                                    >
-                                        <Check :size="17" />Ready for voting
-                                    </button>
-                                </template>
-                                <template
-                                    v-if="
-                                        state.phase === 'voting' &&
-                                        state.me.alive &&
-                                        !state.me.submitted
-                                    "
-                                >
-                                    <button
-                                        class="button primary"
-                                        :disabled="
-                                            pending ||
-                                            puzzleCursed ||
-                                            mistCursed ||
-                                            disconnected
-                                        "
-                                        :aria-describedby="
-                                            puzzleCursed
-                                                ? 'vote-curse-help'
-                                                : undefined
-                                        "
-                                        @click="act('vote', { target })"
-                                    >
-                                        {{
-                                            target
-                                                ? `Confirm vote: ${targets.find((p) => p.id === target)?.name}`
-                                                : 'Confirm abstention'
-                                        }}<Vote :size="16" />
-                                    </button>
-                                </template>
+                                </button>
                                 <button
                                     v-if="state.phase === 'finished' && host"
                                     class="button primary"
@@ -1110,6 +1275,18 @@ onBeforeUnmount(() => {
                                         {{ state.players.length }} villagers
                                         ready.</strong
                                     >
+                                    <ul
+                                        v-if="startBlockers.length"
+                                        class="start-blockers"
+                                        aria-label="Before the game can start"
+                                    >
+                                        <li
+                                            v-for="blocker in startBlockers"
+                                            :key="blocker"
+                                        >
+                                            {{ blocker }}
+                                        </li>
+                                    </ul>
                                     <p id="lobby-start-hint">
                                         {{
                                             state.players.length <
@@ -1427,7 +1604,7 @@ onBeforeUnmount(() => {
                                     </label>
                                     <div
                                         v-if="canChooseNightTarget"
-                                        class="target-list"
+                                        class="target-list player-target-list"
                                         role="group"
                                         aria-label="Night target"
                                     >
@@ -1445,8 +1622,26 @@ onBeforeUnmount(() => {
                                                 mistCursed ||
                                                 disconnected
                                             "
-                                            @click="target = player.id"
+                                            @click="selectSeat(player.id)"
                                         >
+                                            <CharacterPortrait
+                                                :character="player.character"
+                                                :creator="
+                                                    player.customization
+                                                        ?.creator
+                                                "
+                                                :frame="
+                                                    player.customization?.frame
+                                                "
+                                                :accent="
+                                                    player.customization?.accent
+                                                "
+                                                :background="
+                                                    player.customization
+                                                        ?.background
+                                                "
+                                                decorative
+                                            />
                                             <Check
                                                 v-if="target === player.id"
                                                 :size="15"
@@ -1463,7 +1658,7 @@ onBeforeUnmount(() => {
                                                 selected: target === null,
                                             }"
                                             :aria-pressed="target === null"
-                                            :disabled="pending"
+                                            :disabled="!canSelectSeat"
                                             @click="target = null"
                                         >
                                             <Moon :size="15" /><span>{{
@@ -1562,7 +1757,7 @@ onBeforeUnmount(() => {
                                     class="game-panel action-panel"
                                 >
                                     <div
-                                        class="target-list"
+                                        class="target-list player-target-list"
                                         role="group"
                                         aria-label="Vote to banish"
                                     >
@@ -1580,8 +1775,26 @@ onBeforeUnmount(() => {
                                                 mistCursed ||
                                                 disconnected
                                             "
-                                            @click="target = player.id"
+                                            @click="selectSeat(player.id)"
                                         >
+                                            <CharacterPortrait
+                                                :character="player.character"
+                                                :creator="
+                                                    player.customization
+                                                        ?.creator
+                                                "
+                                                :frame="
+                                                    player.customization?.frame
+                                                "
+                                                :accent="
+                                                    player.customization?.accent
+                                                "
+                                                :background="
+                                                    player.customization
+                                                        ?.background
+                                                "
+                                                decorative
+                                            />
                                             <Check
                                                 v-if="target === player.id"
                                                 :size="15"
@@ -1597,7 +1810,7 @@ onBeforeUnmount(() => {
                                                 selected: target === null,
                                             }"
                                             :aria-pressed="target === null"
-                                            :disabled="pending"
+                                            :disabled="!canSelectSeat"
                                             @click="target = null"
                                         >
                                             <Circle :size="15" /><span
@@ -1676,20 +1889,8 @@ onBeforeUnmount(() => {
                     </button>
                 </p>
             </Transition>
-            <p
-                v-if="!state.me.alive && state.phase !== 'finished'"
-                class="spectator-banner"
-            >
-                {{
-                    state.me.elimination_reason === 'guilt'
-                        ? 'You left the village with guilt after shooting someone who was not a cultist.'
-                        : state.me.elimination_reason === 'shot'
-                          ? 'You were shot by a vigilante.'
-                          : 'You’ve been banished.'
-                }}
-                Watch the story unfold—your seat is saved for the next match.
-            </p>
             <div class="game-tools">
+                <ReadabilityControl />
                 <button
                     v-if="fullscreenAvailable"
                     class="button fullscreen-toggle"
@@ -1812,6 +2013,39 @@ onBeforeUnmount(() => {
                 </button>
             </nav>
             <div ref="workspace" class="room-workspace" :data-view="activeView">
+                <section
+                    v-if="catchUp && !puzzleCursed && !mistCursed"
+                    class="game-panel round-catch-up"
+                    aria-label="Round catch-up"
+                >
+                    <div class="catch-up-heading">
+                        <h2>{{ catchUp.title }}</h2>
+                        <button
+                            class="quiet-link"
+                            aria-label="Dismiss round catch-up"
+                            @click="catchUp = null"
+                        >
+                            Dismiss
+                        </button>
+                    </div>
+                    <p>{{ catchUp.ritual }}</p>
+                    <ul v-if="catchUp.events.length">
+                        <li
+                            v-for="(event, index) in catchUp.events"
+                            :key="index"
+                        >
+                            {{ event }}
+                        </li>
+                    </ul>
+                    <p v-else>No new public events since your last update.</p>
+                    <button class="button" @click="openResults">
+                        {{
+                            privateVisible && newResults
+                                ? `${newResults} new private results`
+                                : 'Open private results'
+                        }}
+                    </button>
+                </section>
                 <CursePanel
                     v-if="
                         state.me.curse &&
@@ -1854,6 +2088,17 @@ onBeforeUnmount(() => {
                     aria-label="Play"
                     v-show="activeView === 'play'"
                 >
+                    <SpectatorView
+                        v-if="spectator"
+                        :state="state"
+                        :private-visible="privateVisible"
+                        :blocked="puzzleCursed || mistCursed"
+                        :pending="pending || disconnected"
+                        :error="error"
+                        :submit="act"
+                        @reveal="revealed = true"
+                        @journal="navigate('journal')"
+                    />
                     <aside
                         v-if="
                             currentChaosEvent &&
@@ -1874,6 +2119,13 @@ onBeforeUnmount(() => {
                         aria-label="Gathering setup"
                     >
                         <h2>Your gathering</h2>
+                        <p
+                            v-if="settingsNotice"
+                            class="settings-change-notice"
+                            role="status"
+                        >
+                            {{ settingsNotice }}
+                        </p>
                         <p>
                             Send your friends an invite. Once everyone is ready,
                             the host can let the secrets begin.
@@ -2034,23 +2286,7 @@ onBeforeUnmount(() => {
                                 the cult wins immediately.
                             </p>
                         </div>
-                        <div class="invite-line">
-                            <code>{{ code }}</code
-                            ><button
-                                class="button"
-                                @click="copyInvite"
-                                :aria-label="
-                                    copied
-                                        ? 'Invite copied'
-                                        : 'Copy invite link'
-                                "
-                            >
-                                <Check v-if="copied" :size="18" /><Copy
-                                    v-else
-                                    :size="18"
-                                />{{ copied ? 'Copied' : 'Invite friends' }}
-                            </button>
-                        </div>
+                        <LobbyInvites :url="inviteUrl" :code="code" />
                         <CharacterPicker
                             v-if="signedIn"
                             :model-value="state.me.character"
@@ -2169,7 +2405,26 @@ onBeforeUnmount(() => {
                             }}.
                         </p>
                     </section>
-                    <RoomEvents :log="state.log" />
+                    <TableStories
+                        v-if="!['lobby', 'reveal'].includes(state.phase)"
+                        :state="state"
+                        :pending="pending"
+                        :blocked="puzzleCursed || mistCursed"
+                        :mist="mistCursed"
+                        :error="error"
+                        :submit="act"
+                    />
+                    <BanishedPredictions
+                        v-if="state.phase === 'finished'"
+                        :state="state"
+                        :pending="pending"
+                        :error="error"
+                        :submit="act"
+                    />
+                    <RoomEvents
+                        v-if="!spectator && !puzzleCursed && !mistCursed"
+                        :log="state.log"
+                    />
                     <MatchRewards
                         v-if="state.phase === 'finished'"
                         :linked="!!state.me.account_progression"
@@ -2179,6 +2434,14 @@ onBeforeUnmount(() => {
                         v-if="state.phase === 'finished' && state.recap"
                         :recap="state.recap"
                         :players="state.players"
+                        :match-id="state.match_id"
+                    />
+                    <MatchFeedback
+                        v-if="state.phase === 'finished'"
+                        :state="state"
+                        :pending="pending"
+                        :error="error"
+                        :submit="act"
                     />
 
                     <div class="room-village-details">
@@ -2266,6 +2529,12 @@ onBeforeUnmount(() => {
                                         : `${state.players.filter((p) => p.alive).length} villagers remain`
                                 }}
                             </p>
+                            <TableHostControls
+                                :state="state"
+                                :pending="pending"
+                                :error="error"
+                                :submit="act"
+                            />
                         </section>
                         <section class="game-panel ritual-panel">
                             <div class="ritual-heading">
@@ -2523,6 +2792,31 @@ onBeforeUnmount(() => {
                     />
                 </section>
             </div>
+            <PersistentActionBar
+                id="turn-confirmation"
+                tabindex="-1"
+                v-if="!['lobby', 'finished'].includes(state.phase)"
+                :phase="phaseLabel"
+                :time="tableDisplay.value"
+                :urgent="tableDisplay.urgent"
+                :title="dockTitle"
+                :consequence="currentConsequence"
+                :receipt="visibleReceipt"
+                :label="
+                    dockReveal || puzzleCursed || mistCursed ? '' : dockLabel
+                "
+                :disabled="dockDisabled"
+                :pending="pending"
+                :reveal="dockReveal"
+                :can-review="
+                    !spectator &&
+                    !state.me.submitted &&
+                    (actionDetailsAvailable || state.phase === 'reveal')
+                "
+                @confirm="confirmDock"
+                @reveal="revealed = true"
+                @review="reviewDock"
+            />
             <p class="game-bottom-note">
                 Your seat stays with this browser. Refresh freely. ·
                 <button class="quiet-link" @click="navigate('help')">
@@ -2534,6 +2828,73 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
+.round-catch-up {
+    border-left: 3px solid #a9c69b;
+    padding: 18px;
+}
+.catch-up-heading {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+.round-catch-up h2 {
+    font-size: 22px;
+    margin: 0;
+}
+.round-catch-up p,
+.round-catch-up li,
+.start-blockers {
+    font-size: 14px;
+    line-height: 1.6;
+    color: #c9d5c6;
+}
+.round-catch-up ul,
+.start-blockers {
+    padding-left: 20px;
+    margin: 12px 0;
+}
+.round-catch-up .button {
+    margin-top: 10px;
+    min-height: 44px;
+}
+.settings-change-notice {
+    padding: 12px;
+    border-left: 2px solid #cfb885;
+    background: #bfa26318;
+    color: #efe0ba;
+    font-size: 14px;
+    line-height: 1.6;
+}
+.is-immersive.has-persistent-actions .game-main {
+    grid-template-rows: auto auto minmax(0, 1fr) auto;
+}
+.is-immersive .persistent-action-bar {
+    grid-area: 4 / 1 / 5 / 3;
+    margin-top: 14px;
+}
+@media (max-width: 900px) {
+    .is-immersive.has-persistent-actions .game-main {
+        grid-template-rows: repeat(5, max-content);
+    }
+    .is-immersive.has-persistent-actions .game-main {
+        padding-bottom: 240px;
+    }
+    .is-immersive .persistent-action-bar {
+        position: fixed;
+        z-index: 15;
+        inset: auto 0 0;
+        grid-area: auto;
+        margin: 0;
+        padding-bottom: max(10px, env(safe-area-inset-bottom));
+    }
+    .is-immersive.has-persistent-actions
+        .game-main:has(textarea:focus, input:focus)
+        .persistent-action-bar {
+        position: static;
+        grid-row: 6;
+    }
+}
 .chat-messages.is-ritual-glitch .chat-message {
     animation: ritual-chat-drift 0.9s ease-in-out both;
 }
@@ -3015,6 +3376,17 @@ onBeforeUnmount(() => {
     }
     .is-immersive .room-chat .chat-message strong {
         font-size: 11px;
+    }
+}
+/* Short desktop windows need the chat to scroll away so table controls remain reachable. */
+@media (min-width: 901px) and (max-height: 760px) {
+    .is-immersive .room-workspace {
+        scroll-padding-block: 16px;
+    }
+    .is-immersive
+        .room-workspace[data-view]:not([data-view='journal'])
+        .room-chat {
+        position: static;
     }
 }
 @media (max-width: 1000px) and (min-width: 901px) {

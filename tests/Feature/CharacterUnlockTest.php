@@ -84,6 +84,43 @@ class CharacterUnlockTest extends TestCase
             ->assertUnprocessable()->assertJsonValidationErrors('character');
     }
 
+    public function test_character_collections_keep_their_release_season_after_the_quarter_changes(): void
+    {
+        $progression = app(AccountProgression::class);
+        $this->travelTo(now()->setDate(2027, 4, 1));
+
+        $catalog = collect($progression->characterCatalog());
+        $this->assertSame('2027-Q2', $progression->season()['id']);
+        $this->assertCount(16, $catalog->where('collection', 'classics'));
+        $this->assertSame(['tidecaller', 'cartographer', 'maskmaker', 'drowned_regent'],
+            $catalog->where('collection', 'levelup')->pluck('id')->values()->all());
+        foreach ($catalog->where('seasonal', true) as $character) {
+            $this->assertSame('2026-Q3', $character['season_id']);
+            $this->assertSame('Season 3 · 2026', $character['season_name']);
+            $this->assertTrue($character['hidden']);
+        }
+        $this->travelBack();
+    }
+
+    public function test_catalog_exposes_new_named_seasons_without_reassigning_existing_characters(): void
+    {
+        config([
+            'progression.character_seasons.2026-Q4' => ['name' => 'The Long Night'],
+            'progression.character_unlocks.winter_warden' => [
+                'achievement' => 'seasonal_warden', 'seasonal' => true, 'season_id' => '2026-Q4',
+            ],
+            'game.characters' => [...config('game.characters'), ['id' => 'winter_warden', 'name' => 'The Winter Warden']],
+        ]);
+
+        $catalog = collect(app(AccountProgression::class)->characterCatalog());
+        $winter = $catalog->firstWhere('id', 'winter_warden');
+        $this->assertSame('seasonal', $winter['collection']);
+        $this->assertSame('2026-Q4', $winter['season_id']);
+        $this->assertSame('The Long Night', $winter['season_name']);
+        $this->assertFalse($winter['unlocked']);
+        $this->assertSame('2026-Q3', $catalog->firstWhere('id', 'seasonal_warden')['season_id']);
+    }
+
     public function test_engine_enforces_unlocks_for_creation_join_recovery_actions_and_remembering(): void
     {
         $engine = app(MatchEngine::class);

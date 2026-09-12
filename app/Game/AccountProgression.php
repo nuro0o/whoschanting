@@ -47,21 +47,26 @@ class AccountProgression
         return array_map(function (array $character) use ($level, $achievements, $account): array {
             $unlock = config('progression.character_unlocks.'.$character['id']);
             if ($unlock === null) {
-                return [...$character, 'unlocked' => true, 'requirement' => 'Available from the start'];
+                return [...$character, 'collection' => 'classics', 'unlocked' => true, 'requirement' => 'Available from the start'];
             }
             $unlocked = $account && (isset($unlock['achievement'])
                 ? isset($achievements[$unlock['achievement']]) : $level >= $unlock['level']);
             if ($unlock['seasonal'] ?? false) {
                 $roleName = config('progression.seasonal_achievements.'.$unlock['achievement'].'.role_name');
+                $seasonId = $unlock['season_id'] ?? null;
+                $seasonName = $seasonId === null ? 'Seasonal characters'
+                    : config('progression.character_seasons.'.$seasonId.'.name', $seasonId);
 
                 return [...$character, 'name' => $unlocked ? $character['name'] : '?', 'unlocked' => $unlocked,
-                    'requirement' => $roleName, 'seasonal' => true, 'hidden' => ! $unlocked, 'role_name' => $roleName];
+                    'requirement' => $roleName, 'seasonal' => true, 'collection' => 'seasonal',
+                    'season_id' => $seasonId, 'season_name' => $seasonName,
+                    'hidden' => ! $unlocked, 'role_name' => $roleName];
             }
             $requirement = isset($unlock['achievement'])
                 ? 'Earn '.config('progression.achievements.'.$unlock['achievement'].'.name').' — '.($unlock['description'] ?? config('progression.achievements.'.$unlock['achievement'].'.description'))
                 : 'Reach level '.$unlock['level'].' ('.number_format((int) (config('progression.level_step') * $unlock['level'] * ($unlock['level'] - 1) / 2)).' lifetime XP)';
 
-            return [...$character, 'unlocked' => $unlocked, 'requirement' => $requirement];
+            return [...$character, 'collection' => 'levelup', 'unlocked' => $unlocked, 'requirement' => $requirement];
         }, array_values(config('game.characters')));
     }
 
@@ -75,7 +80,7 @@ class AccountProgression
         $characters = $this->characters($level, $profile->achievements ?? [], $eligible);
         $recipe = $this->creator->saved($profile?->customization['creator'] ?? null, $level);
         if (config('character_creator.enabled') && $eligible && $recipe !== null) {
-            $characters[] = ['id' => 'custom', 'name' => 'Your creation', 'unlocked' => true,
+            $characters[] = ['id' => 'custom', 'name' => 'Your creation', 'collection' => 'custom', 'unlocked' => true,
                 'requirement' => 'Created in the mirror', 'creator' => $recipe];
         }
 

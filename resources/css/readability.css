@@ -1,0 +1,92 @@
+/* Keep decisions and private evidence legible at the default size. */
+:is(.table-panel, .game-panel, .personal-journal, .player-drawer)
+    :is(
+        .seat-name,
+        .seat-final-role,
+        .seat-banished,
+        .seat-ready,
+        .board-label,
+        .board-kicker,
+        .board-storage,
+        .recap-hint
+    ) {
+    font-size: max(12px, 0.75rem) !important;
+}
+[data-chanting-text='large']
+    :is(
+        .chanting,
+        .game-shell,
+        .game-page,
+        .game-panel,
+        .table-panel,
+        .personal-journal,
+        .player-drawer,
+        .lobby-invites,
+        .persistent-action-bar
+    )
+    :is(p, li, label, input, textarea, select, button, summary) {
+    font-size: max(16px, 1rem) !important;
+    line-height: 1.55;
+}
+[data-chanting-text='large']
+    :is(
+        .seat-name,
+        .seat-final-role,
+        .seat-banished,
+        .seat-ready,
+        .board-storage,
+        .recap-stats dt,
+        .eyebrow
+    ) {
+    font-size: 14px !important;
+}
+[data-chanting-contrast='high']
+    :is(
+        .game-panel,
+        .table-panel,
+        .personal-journal,
+        .player-drawer,
+        .readability-options,
+        .persistent-action-bar
+    ) {
+    background: #091b17 !important;
+    border-color: #b0c5b7 !important;
+    color: #fffceb !important;
+}
+[data-chanting-contrast='high']
+    :is(
+        .game-panel,
+        .table-panel,
+        .personal-journal,
+        .player-drawer,
+        .persistent-action-bar
+    )
+    :is(p, span, small, label, li, dt, dd, h2, h3, h4) {
+    color: #fffceb;
+    opacity: 1;
+}
+[data-chanting-contrast='high']
+    :is(
+        .game-panel,
+        .table-panel,
+        .personal-journal,
+        .player-drawer,
+        .persistent-action-bar
+    )
+    :is(input, textarea, select, button) {
+    border-color: #a1b7a9;
+}
+
+.chanting label.quiet-link:has(input[type='checkbox']) {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 44px;
+    font-size: 14px !important;
+    line-height: 1.5;
+}
+.chanting label.quiet-link input[type='checkbox'] {
+    width: 18px;
+    height: 18px;
+    flex-shrink: 0;
+}

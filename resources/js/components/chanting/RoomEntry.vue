@@ -3,7 +3,7 @@ import { computed, ref } from 'vue';
 import { usePage } from '@inertiajs/vue3';
 import {
     ArrowRight,
-    ChevronDown,
+    ChevronRight,
     KeyRound,
     LoaderCircle,
     Plus,
@@ -211,7 +211,15 @@ async function enter() {
                     v-if="signedIn && compactCharacters"
                     class="entry-character-disclosure"
                 >
-                    <summary>
+                    <summary
+                        :aria-disabled="pending"
+                        @click="pending && $event.preventDefault()"
+                        @keydown="
+                            pending &&
+                            ['Enter', ' '].includes($event.key) &&
+                            $event.preventDefault()
+                        "
+                    >
                         <CharacterPortrait
                             :character="character"
                             :creator="selectedCharacter?.creator"
@@ -224,7 +232,7 @@ async function enter() {
                         ><span class="entry-character-change">
                             <span class="entry-character-expand">Change</span>
                             <span class="entry-character-collapse">Close</span>
-                            <ChevronDown :size="14" aria-hidden="true" />
+                            <ChevronRight :size="18" aria-hidden="true" />
                         </span>
                     </summary>
                     <CharacterPicker

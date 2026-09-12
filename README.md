@@ -30,6 +30,12 @@ Open `/tutorial`, or choose **Practice solo** on the home page or dashboard, for
 
 Practice is local to the page: it creates no rooms, match archives or XP rewards. Restart at any time; refreshing begins a new practice. No `.env` changes or migrations are needed. Rebuild the frontend after updating.
 
+## Stories, predictions, and role practice
+
+The village record lets living players publish one unverified role claim and one answer to a shared question each discussion, keeping their stories across rounds. Every living player can agree to a single 30-second discussion extension. Banished players can seal a private prediction, revealed and scored after the match. Hosts can transfer control or remove lobby seats with confirmation.
+
+The recap now includes a step-through reveal, and `/tutorial` offers Counterfeiter, Tracker, and Bellkeeper exercises alongside the Oracle round. Optional private post-match feedback helps assess whether every role feels involved; `php artisan game:feedback` summarizes responses by role. See [table experience](docs/table-experience.md) for rules, deployment, and playtest guidance. No database migration is required for these additions.
+
 ## Account progression
 
 Verified accounts have a **Progression** page at `/progression`, linked from the dashboard and account navigation. It includes lifetime XP and levels, quarterly seasons, eight permanent achievements, recent match rewards, and a wardrobe for titles, portrait frames, accent colors and character preferences. Cosmetics never change roles or abilities. Levels and equipped cosmetics appear in rooms; wardrobe changes apply when joining a lobby or starting a match.
@@ -178,7 +184,7 @@ Domain registration/DNS, hosting, TLS, and production credentials are external s
 
 Supervise the queue worker and Reverb. Run Laravel’s scheduler continuously (or `schedule:run` every minute, which runs the sub-minute tick). Run `php artisan migrate --force`, cache configuration, and restart workers on deploy. Multi-server deployments also need shared session/cache infrastructure and Reverb scaling configuration.
 
-Not included in the first milestone: account-based cross-device seat recovery, host transfer/kicking, public matchmaking, moderation tools, automated room retention, or a larger role roster. Private rooms should be played with trusted friends. The default poll fallback works without Reverb, but production should run all services above.
+Public matchmaking, moderation tools, and automated room retention are not included. Private rooms should be played with trusted friends. The default poll fallback works without Reverb, but production should run all services above.
 
 ### Illusions roster
 

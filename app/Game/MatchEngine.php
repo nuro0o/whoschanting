@@ -13,7 +13,7 @@ use Illuminate\Validation\ValidationException;
 
 class MatchEngine
 {
-    public function __construct(private CurseEngine $curses, private GameModes $modes = new GameModes, private AccountProgression $progression = new AccountProgression) {}
+    public function __construct(private CurseEngine $curses, private GameModes $modes = new GameModes, private AccountProgression $progression = new AccountProgression, private TableExperience $table = new TableExperience) {}
 
     /** @return array<string, mixed> */
     public function rules(): array
@@ -210,6 +210,9 @@ class MatchEngine
             && in_array($p['curse']['type'] ?? null, ['puzzle', 'mist'], true)) {
             $this->ensure($type === 'solve_curse', 'Break your curse before returning to the village. It also fades at the next dawn.');
         }
+        if ($this->table->act($room, $s, $id, $a)) {
+            return;
+        }
         if ($type === 'character') {
             $this->ensure($s['phase'] === 'lobby', 'Choose your character before the match begins.');
             $this->ensure(is_string($a['character'] ?? null), 'Choose a character from the village.');
@@ -242,6 +245,7 @@ class MatchEngine
             $s = array_replace($s, ['day' => 0, 'tokens' => 0, 'threshold' => 0, 'winner' => null, 'win_reason' => null,
                 'mission' => null, 'awards' => [], 'messages' => [], 'log' => ['The village gathers again.'], 'cult_banished' => false]);
             unset($s['match_id'], $s['match_rules'], $s['started_at'], $s['finished_at'], $s['rounds'], $s['missed_actions'], $s['chaos_event'], $s['match_rewards']);
+            unset($s['claims'], $s['responses'], $s['predictions'], $s['feedback'], $s['discussion_extension']);
             $this->phase($room, $s, 'lobby');
 
             return;
@@ -748,6 +752,7 @@ class MatchEngine
     /** @param array<string, mixed> $s */
     private function phase(GameRoom $room, array &$s, string $phase): void
     {
+        $s['discussion_extension'] = ['voter_ids' => [], 'used' => false];
         if ($phase === 'night') {
             $setup = $s['match_rules']['mode_setup'] ?? $this->modes->setup($s);
             $s['chaos_event'] = null;
@@ -837,6 +842,7 @@ class MatchEngine
             'roster' => $s['roster'] ?? 'classic',
             'mode_setup' => $setup, 'mode_preview' => $preview, 'chaos_event' => $s['chaos_event'] ?? null,
             'server_time' => now()->toISOString(), 'host_id' => $s['host_id'],
+            'table' => $this->table->view($s, $id),
             'ritual' => ['tokens' => $s['tokens'], 'threshold' => $s['threshold'], 'level' => $this->curses->level($s['tokens'], $s['threshold']),
                 'final_vote' => $s['threshold'] > 0 && $s['tokens'] >= $s['threshold'] && in_array($s['phase'], ['discussion', 'voting'], true)],
             'winner' => $s['winner'], 'win_reason' => $s['win_reason'], 'players' => $players,
@@ -846,6 +852,8 @@ class MatchEngine
                 'customization' => $me['customization'] ?? null,
                 'account_progression' => isset($me['user_id']),
                 'match_reward' => $s['phase'] === 'finished' ? ($s['match_rewards'][$id] ?? null) : null,
+                'prediction' => isset($s['predictions'][$id]) ? array_intersect_key($s['predictions'][$id], array_flip(['cultist_ids', 'winner', 'day'])) : null,
+                'feedback' => isset($s['feedback'][$id]) ? array_intersect_key($s['feedback'][$id], array_flip(['engagement', 'body'])) : null,
                 'curse' => $this->curses->view($me['curse'] ?? null),
                 'curse_notice' => $me['curse_notice'] ?? null,
                 'previous_protection_target' => $this->previousProtection($me, $s['day']),
@@ -875,6 +883,9 @@ class MatchEngine
     private function recap(array $s): array
     {
         return ['rules_version' => $s['match_rules']['version'] ?? 'legacy',
+            'winner' => $s['winner'], 'win_reason' => $s['win_reason'],
+            'claims' => $s['claims'] ?? [], 'responses' => $s['responses'] ?? [],
+            'predictions' => $this->table->predictionResults($s),
             'mode_setup' => $s['match_rules']['mode_setup'] ?? $this->modes->setup($s),
             'roster' => $s['match_rules']['roster'] ?? 'classic',
             'player_count' => $s['match_rules']['player_count'] ?? count($s['players']),

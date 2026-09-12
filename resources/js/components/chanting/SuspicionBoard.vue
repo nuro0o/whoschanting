@@ -1,36 +1,34 @@
-<script lang="ts">
-// Preserve drafts if a room is revisited while browser storage is unavailable.
-const unsavedBoards = new Map<string, SuspicionBoardData>();
-</script>
-
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue';
+import { computed, ref, watch, useId } from 'vue';
+import { useSuspicionBoard } from '@/composables/useSuspicionBoard';
 import { Link, LockKeyhole, X } from '@lucide/vue';
 import CharacterPortrait from './CharacterPortrait.vue';
 import { eliminationLabel, roles, type RoomState } from '@/lib/chanting';
 import { journalResultLabel } from '@/lib/personalJournal';
 import { privateResultText } from '@/lib/roleActions';
 import {
-    decodeSuspicionBoard,
-    emptySuspicionEntry,
     linkedSuspicionResults,
     MAX_SUSPICION_NOTE_LENGTH,
-    serializeSuspicionBoard,
-    suspicionBoardStorageKey,
-    updateSuspicionEntry,
-    type SuspicionBoardData,
     type SuspicionEntry,
     type SuspicionStance,
 } from '@/lib/suspicionBoard';
 
-const props = defineProps<{ state: RoomState; visible: boolean }>();
-const entries = ref<SuspicionBoardData>({});
+const props = defineProps<{
+    state: RoomState;
+    visible: boolean;
+    playerId?: string;
+}>();
+const instanceId = useId();
+const {
+    storageKey,
+    editable,
+    storageState,
+    saveMessage,
+    entryFor,
+    updateEntry,
+} = useSuspicionBoard(() => props.state);
 const selectedId = ref('');
 const chosenResult = ref('');
-const mounted = ref(false);
-const storageState = ref<
-    'empty' | 'saved' | 'unavailable' | 'invalid' | 'waiting'
->('waiting');
 const roleIds = Object.keys(roles);
 const stances: { id: SuspicionStance; label: string }[] = [
     { id: 'unmarked', label: 'Unmarked' },
@@ -40,20 +38,11 @@ const stances: { id: SuspicionStance; label: string }[] = [
 const players = computed(() =>
     props.state.players.filter((player) => player.id !== props.state.me.id),
 );
-const storageKey = computed(() =>
-    suspicionBoardStorageKey(
-        props.state.id,
-        props.state.me.id,
-        props.state.match_id,
-    ),
-);
-const editable = computed(
-    () => !!storageKey.value && props.state.phase !== 'lobby' && mounted.value,
-);
 const selectedPlayer = computed(
     () =>
-        players.value.find((player) => player.id === selectedId.value) ??
-        players.value[0],
+        players.value.find(
+            (player) => player.id === (props.playerId || selectedId.value),
+        ) ?? players.value[0],
 );
 const selectedEntry = computed(() => entryFor(selectedPlayer.value?.id));
 const linkedResults = computed(() =>
@@ -67,69 +56,12 @@ const availableResults = computed(() =>
         )
         .reverse(),
 );
-const saveMessage = computed(
-    () =>
-        ({
-            empty: 'Autosaves on this browser, for this match.',
-            saved: 'Saved on this browser, for this match.',
-            unavailable:
-                'Saving unavailable. Changes stay in memory until this page closes or reloads.',
-            invalid:
-                'Saved board could not be read. Editing starts a new saved board.',
-            waiting: 'Your suspicion board opens when a match starts.',
-        })[storageState.value],
-);
-
-function entryFor(id: string | undefined): SuspicionEntry {
-    return (id && entries.value[id]) || emptySuspicionEntry();
-}
 function seatNumber(id: string) {
     return props.state.players.findIndex((player) => player.id === id) + 1;
 }
-function loadBoard() {
-    entries.value = {};
-    selectedId.value = '';
-    chosenResult.value = '';
-    storageState.value = 'waiting';
-    if (!mounted.value || !storageKey.value) return;
-    const draft = unsavedBoards.get(storageKey.value);
-    if (draft) {
-        entries.value = draft;
-        storageState.value = 'unavailable';
-        return;
-    }
-    try {
-        const decoded = decodeSuspicionBoard(
-            localStorage.getItem(storageKey.value),
-            players.value.map((player) => player.id),
-            roleIds,
-            props.state.me.results.length,
-        );
-        entries.value = decoded.entries;
-        storageState.value = decoded.invalid
-            ? 'invalid'
-            : Object.keys(decoded.entries).length
-              ? 'saved'
-              : 'empty';
-    } catch {
-        storageState.value = 'unavailable';
-    }
-}
 function update(patch: Partial<SuspicionEntry>) {
     const player = selectedPlayer.value;
-    if (!editable.value || !storageKey.value || !player) return;
-    entries.value = updateSuspicionEntry(entries.value, player.id, patch);
-    try {
-        localStorage.setItem(
-            storageKey.value,
-            serializeSuspicionBoard(entries.value),
-        );
-        unsavedBoards.delete(storageKey.value);
-        storageState.value = 'saved';
-    } catch {
-        unsavedBoards.set(storageKey.value, entries.value);
-        storageState.value = 'unavailable';
-    }
+    if (player) updateEntry(player.id, patch);
 }
 function changeClaim(event: Event) {
     const role = (event.target as HTMLSelectElement).value;
@@ -157,21 +89,28 @@ function removeResult(index: number) {
         ),
     });
 }
-watch(storageKey, loadBoard, { flush: 'sync' });
+watch(
+    storageKey,
+    () => {
+        selectedId.value = '';
+        chosenResult.value = '';
+    },
+    { flush: 'sync' },
+);
 watch(
     () => selectedPlayer.value?.id,
     () => {
         chosenResult.value = '';
     },
 );
-onMounted(() => {
-    mounted.value = true;
-    loadBoard();
-});
 </script>
 
 <template>
-    <div v-if="visible" id="journal-suspicions" class="suspicion-board">
+    <div
+        v-if="visible"
+        :id="playerId ? `${instanceId}-suspicions` : 'journal-suspicions'"
+        class="suspicion-board"
+    >
         <header class="board-heading">
             <h3>Your suspicion board</h3>
             <p>
@@ -190,8 +129,13 @@ onMounted(() => {
         >
             <LockKeyhole :size="13" aria-hidden="true" /> {{ saveMessage }}
         </p>
-        <div v-if="editable && players.length" class="board-layout">
+        <div
+            v-if="editable && players.length"
+            class="board-layout"
+            :class="{ 'board-single': playerId }"
+        >
             <nav
+                v-if="!playerId"
                 class="board-roster"
                 aria-label="Players on your suspicion board"
             >
@@ -201,7 +145,7 @@ onMounted(() => {
                     type="button"
                     class="board-player"
                     :aria-pressed="selectedPlayer?.id === player.id"
-                    aria-controls="suspicion-detail"
+                    :aria-controls="`${instanceId}-suspicion-detail`"
                     @click="selectedId = player.id"
                 >
                     <CharacterPortrait
@@ -248,16 +192,16 @@ onMounted(() => {
             </nav>
             <section
                 v-if="selectedPlayer"
-                id="suspicion-detail"
+                :id="`${instanceId}-suspicion-detail`"
                 class="board-detail"
-                aria-labelledby="suspicion-player-name"
+                :aria-labelledby="`${instanceId}-suspicion-player-name`"
             >
                 <header class="board-detail-heading">
                     <p class="board-kicker">
                         YOUR PRIVATE READ · SEAT
                         {{ seatNumber(selectedPlayer.id) }}
                     </p>
-                    <h4 id="suspicion-player-name">
+                    <h4 :id="`${instanceId}-suspicion-player-name`">
                         {{ selectedPlayer.name }}
                     </h4>
                     <p>
@@ -285,13 +229,15 @@ onMounted(() => {
                         </button>
                     </div>
                 </fieldset>
-                <label class="board-label" for="suspicion-claim"
+                <label
+                    class="board-label"
+                    :for="`${instanceId}-suspicion-claim`"
                     >Claimed role</label
                 >
                 <select
-                    id="suspicion-claim"
+                    :id="`${instanceId}-suspicion-claim`"
                     :value="selectedEntry.claimedRole ?? ''"
-                    aria-describedby="suspicion-claim-help"
+                    :aria-describedby="`${instanceId}-suspicion-claim-help`"
                     @change="changeClaim"
                 >
                     <option value="">No claim</option>
@@ -299,22 +245,28 @@ onMounted(() => {
                         {{ roles[role].name }}
                     </option>
                 </select>
-                <p id="suspicion-claim-help" class="board-help">
+                <p
+                    :id="`${instanceId}-suspicion-claim-help`"
+                    class="board-help"
+                >
                     A claim you record, never a revealed role.
                 </p>
-                <label class="board-label" for="suspicion-note"
+                <label class="board-label" :for="`${instanceId}-suspicion-note`"
                     >Notes about {{ selectedPlayer.name }}</label
                 >
                 <textarea
-                    id="suspicion-note"
+                    :id="`${instanceId}-suspicion-note`"
                     :value="selectedEntry.note"
                     :maxlength="MAX_SUSPICION_NOTE_LENGTH"
                     rows="4"
                     placeholder="What did they claim? Does their story add up?"
-                    aria-describedby="suspicion-note-help"
+                    :aria-describedby="`${instanceId}-suspicion-note-help`"
                     @input="changeNote"
                 ></textarea>
-                <p id="suspicion-note-help" class="board-note-count">
+                <p
+                    :id="`${instanceId}-suspicion-note-help`"
+                    class="board-note-count"
+                >
                     Private to this browser
                     <span
                         >{{ selectedEntry.note.length }}/{{
@@ -336,10 +288,15 @@ onMounted(() => {
                         class="board-attach"
                         @submit.prevent="attachResult"
                     >
-                        <label class="board-label" for="suspicion-result"
+                        <label
+                            class="board-label"
+                            :for="`${instanceId}-suspicion-result`"
                             >Attach one of your results</label
                         >
-                        <select id="suspicion-result" v-model="chosenResult">
+                        <select
+                            :id="`${instanceId}-suspicion-result`"
+                            v-model="chosenResult"
+                        >
                             <option value="">Choose a clue…</option>
                             <option
                                 v-for="entry in availableResults"
@@ -421,6 +378,9 @@ onMounted(() => {
 </template>
 
 <style scoped>
+.board-layout.board-single {
+    grid-template-columns: minmax(0, 1fr);
+}
 .suspicion-board {
     color: #eee8da;
     min-width: 0;
@@ -445,7 +405,7 @@ onMounted(() => {
     align-items: baseline;
     gap: 6px;
     color: #c2ceb8;
-    font-size: 11px;
+    font-size: 12px;
     line-height: 1.6;
     margin: 0 0 20px;
 }
@@ -509,12 +469,12 @@ onMounted(() => {
 }
 .board-seat,
 .board-claim {
-    font-size: 11px;
+    font-size: 12px;
     color: #b7c5be;
     line-height: 1.5;
 }
 .board-mark {
-    font-size: 11px;
+    font-size: 12px;
     line-height: 1.4;
     font-weight: 600;
 }
@@ -540,7 +500,7 @@ onMounted(() => {
 }
 .board-kicker {
     color: #ddc398;
-    font-size: 10px;
+    font-size: 12px;
     letter-spacing: 0.11em;
     margin: 0 0 9px;
 }
@@ -620,7 +580,7 @@ onMounted(() => {
     justify-content: space-between;
     gap: 12px;
     color: #b7c5be;
-    font-size: 10px;
+    font-size: 12px;
     line-height: 1.6;
     margin: 8px 0 24px;
 }
@@ -700,7 +660,7 @@ onMounted(() => {
 }
 .board-evidence-top span {
     color: #ddc398;
-    font-size: 10px;
+    font-size: 12px;
     line-height: 1.6;
     letter-spacing: 0.03em;
 }

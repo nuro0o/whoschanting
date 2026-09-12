@@ -5,14 +5,18 @@ return [
     'win_xp' => 40,
     'attendance_xp' => 20,
     'level_step' => 250,
+    // Character collections stay attached to their release season as time advances.
+    'character_seasons' => [
+        '2026-Q3' => ['name' => 'Season 3 · 2026'],
+    ],
     'character_unlocks' => [
         'tidecaller' => ['level' => 2],
         'cartographer' => ['level' => 3],
         'maskmaker' => ['achievement' => 'many_faces', 'description' => 'Complete qualifying matches as 5 different roles.'],
         'drowned_regent' => ['achievement' => 'veteran', 'description' => 'Participate in 25 qualifying completed matches.'],
-        'seasonal_warden' => ['achievement' => 'seasonal_warden', 'seasonal' => true],
-        'seasonal_cultist' => ['achievement' => 'seasonal_cultist', 'seasonal' => true],
-        'seasonal_oathkeeper' => ['achievement' => 'seasonal_oathkeeper', 'seasonal' => true],
+        'seasonal_warden' => ['achievement' => 'seasonal_warden', 'seasonal' => true, 'season_id' => '2026-Q3'],
+        'seasonal_cultist' => ['achievement' => 'seasonal_cultist', 'seasonal' => true, 'season_id' => '2026-Q3'],
+        'seasonal_oathkeeper' => ['achievement' => 'seasonal_oathkeeper', 'seasonal' => true, 'season_id' => '2026-Q3'],
     ],
     'seasonal_achievements' => [
         'seasonal_warden' => ['role' => 'warden', 'role_name' => 'Warden', 'character' => 'seasonal_warden'],

@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 
+/** @property array<string, mixed> $recap */
 class GameMatch extends Model
 {
     public $incrementing = false;

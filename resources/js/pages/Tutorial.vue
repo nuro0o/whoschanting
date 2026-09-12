@@ -11,6 +11,8 @@ import {
 } from '@lucide/vue';
 import { computed, nextTick, ref, watch } from 'vue';
 import CharacterPortrait from '@/components/chanting/CharacterPortrait.vue';
+import RolePractice from '@/components/chanting/RolePractice.vue';
+import { practiceScenarios, type PracticeScenario } from '@/lib/rolePractice';
 import {
     createTutorialState,
     resolveTutorialVote,
@@ -25,6 +27,8 @@ import '../../css/chanting.css';
 import '../../css/tutorial.css';
 
 const state = ref(createTutorialState());
+const scenario = ref<PracticeScenario | null>(null);
+const chooserHeading = ref<HTMLElement | null>(null);
 const heading = ref<HTMLElement | null>(null);
 const steps = ['welcome', 'night', 'evidence', 'curse', 'vote', 'recap'];
 const labels = [
@@ -62,6 +66,13 @@ const roles = {
 
 function dispatch(action: TutorialAction) {
     state.value = tutorialReducer(state.value, action);
+}
+async function chooseScenario(next: PracticeScenario | null) {
+    scenario.value = next;
+    if (next === 'oracle') state.value = createTutorialState();
+    await nextTick();
+    if (next === null) chooserHeading.value?.focus();
+    if (next === 'oracle') heading.value?.focus();
 }
 function selectPlayer(id: TutorialTarget) {
     dispatch(
@@ -102,7 +113,62 @@ watch(
                     timer</span
                 >
             </div>
-            <nav class="tutorial-progress" aria-label="Tutorial progress">
+            <section
+                v-if="scenario === null"
+                class="scenario-chooser"
+                aria-labelledby="scenario-heading"
+            >
+                <p class="eyebrow tutorial-chapter">CHOOSE YOUR PRACTICE</p>
+                <h1 id="scenario-heading" ref="chooserHeading" tabindex="-1">
+                    A secret role.<br /><em>A choice worth practicing.</em>
+                </h1>
+                <p class="tutorial-lede">
+                    Start with a full Oracle round, or explore one tricky night
+                    as another role. Every scenario is solo and lets you try
+                    again.
+                </p>
+                <ol class="scenario-list">
+                    <li
+                        v-for="(item, index) in practiceScenarios"
+                        :key="item.id"
+                    >
+                        <button @click="chooseScenario(item.id)">
+                            <span class="scenario-number" aria-hidden="true"
+                                >0{{ index + 1 }}</span
+                            >
+                            <span class="scenario-copy"
+                                ><span class="eyebrow"
+                                    >{{ item.faction }} ·
+                                    {{ item.length }}</span
+                                ><strong>{{ item.name }}</strong
+                                ><span>{{ item.description }}</span></span
+                            >
+                            <ArrowRight :size="20" aria-hidden="true" />
+                        </button>
+                    </li>
+                </ol>
+                <p class="tutorial-small">
+                    Scripted choices. No account or live match needed.
+                </p>
+            </section>
+            <RolePractice
+                v-else-if="scenario !== 'oracle'"
+                :key="scenario"
+                :role="scenario"
+                @back="chooseScenario(null)"
+            />
+            <button
+                v-if="scenario === 'oracle'"
+                class="button scenario-back"
+                @click="chooseScenario(null)"
+            >
+                All scenarios
+            </button>
+            <nav
+                v-if="scenario === 'oracle'"
+                class="tutorial-progress"
+                aria-label="Tutorial progress"
+            >
                 <ol>
                     <li
                         v-for="(label, index) in labels"
@@ -124,7 +190,7 @@ watch(
                 </ol>
             </nav>
 
-            <div class="tutorial-layout">
+            <div v-if="scenario === 'oracle'" class="tutorial-layout">
                 <section
                     class="tutorial-lesson"
                     aria-labelledby="tutorial-heading"
@@ -186,8 +252,8 @@ watch(
                         </div>
                         <p>
                             Your role card is reliable. Your goal is to help the
-                            Town banish <strong>every cultist</strong> before
-                            the summoning.
+                            Town banish
+                            <strong>every cultist</strong> before the summoning.
                         </p>
                         <button
                             class="button primary tutorial-next"
@@ -518,7 +584,9 @@ watch(
                             <button
                                 v-if="selectable && player.id !== 'you'"
                                 class="tutorial-seat"
-                                :class="{ selected: selected === player.id }"
+                                :class="{
+                                    selected: selected === player.id,
+                                }"
                                 :aria-pressed="selected === player.id"
                                 :aria-label="`Select ${player.name}`"
                                 @click="
@@ -541,7 +609,9 @@ watch(
                             <div
                                 v-else
                                 class="tutorial-seat"
-                                :class="{ 'your-seat': player.id === 'you' }"
+                                :class="{
+                                    'your-seat': player.id === 'you',
+                                }"
                             >
                                 <CharacterPortrait
                                     :character="player.character"
@@ -666,7 +736,7 @@ watch(
                 </aside>
             </div>
 
-            <footer class="tutorial-footer">
+            <footer v-if="scenario === 'oracle'" class="tutorial-footer">
                 <span>One guided round. No live match is created.</span
                 ><button @click="dispatch({ type: 'restart' })">
                     <RotateCcw :size="14" /> Restart practice
@@ -675,3 +745,88 @@ watch(
         </main>
     </div>
 </template>
+
+<style scoped>
+.scenario-chooser {
+    padding: 24px 0 36px;
+    max-width: 820px;
+}
+.scenario-chooser .tutorial-lede {
+    max-width: 620px;
+}
+.scenario-list {
+    list-style: none;
+    padding: 0;
+    margin: 30px 0 22px;
+    border-top: 1px solid var(--line);
+}
+.scenario-list li {
+    border-bottom: 1px solid var(--line);
+}
+.scenario-list button {
+    display: flex;
+    align-items: center;
+    gap: 24px;
+    width: 100%;
+    padding: 24px 14px;
+    text-align: left;
+    color: var(--cream);
+    background: transparent;
+    border: 0;
+}
+.scenario-list button:hover {
+    background: #20342e;
+}
+.scenario-list button:focus-visible,
+.scenario-back:focus-visible {
+    outline: 2px solid var(--green);
+    outline-offset: 3px;
+}
+.scenario-number {
+    font:
+        25px 'Fraunces',
+        Georgia,
+        serif;
+    color: var(--green);
+}
+.scenario-copy {
+    display: grid;
+    gap: 7px;
+    flex: 1;
+    min-width: 0;
+}
+.scenario-copy .eyebrow {
+    font-size: 10px;
+    color: var(--green);
+}
+.scenario-copy strong {
+    font:
+        26px 'Fraunces',
+        Georgia,
+        serif;
+}
+.scenario-copy > span:last-child {
+    color: var(--muted);
+    font-size: 13px;
+    line-height: 1.7;
+}
+.scenario-list svg {
+    flex-shrink: 0;
+    color: var(--green);
+}
+.scenario-back {
+    margin-bottom: 25px;
+}
+@media (max-width: 680px) {
+    .scenario-list button {
+        gap: 14px;
+        padding: 20px 4px;
+    }
+    .scenario-copy strong {
+        font-size: 23px;
+    }
+    .scenario-number {
+        font-size: 20px;
+    }
+}
+</style>

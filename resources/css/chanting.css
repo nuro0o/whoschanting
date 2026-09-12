@@ -1666,6 +1666,15 @@
     gap: 12px;
     padding: 15px 0;
     list-style: none;
+    cursor: pointer;
+}
+.entry-character-disclosure > summary:focus-visible {
+    outline: 2px solid var(--account-green, var(--green));
+    outline-offset: 4px;
+}
+.entry-character-disclosure > summary[aria-disabled='true'] {
+    cursor: wait;
+    opacity: 0.6;
 }
 .entry-character-disclosure > summary::-webkit-details-marker {
     display: none;
@@ -1710,7 +1719,7 @@
     display: inline;
 }
 .entry-character-disclosure[open] .entry-character-change svg {
-    transform: rotate(180deg);
+    transform: rotate(90deg);
 }
 .entry-character-disclosure .character-picker {
     margin: 0 0 18px;
