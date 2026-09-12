@@ -22,6 +22,7 @@ class CharacterCreatorTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        config(['character_creator.enabled' => true]);
         $this->withoutVite();
         Event::fake([RoomUpdated::class]);
     }

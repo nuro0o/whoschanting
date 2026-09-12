@@ -68,7 +68,7 @@ class AccountProgression
         $level = $this->level($profile->xp ?? 0);
         $characters = $this->characters($level, $profile->achievements ?? [], $eligible);
         $recipe = $this->creator->saved($profile?->customization['creator'] ?? null, $level);
-        if ($eligible && $recipe !== null) {
+        if (config('character_creator.enabled') && $eligible && $recipe !== null) {
             $characters[] = ['id' => 'custom', 'name' => 'Your creation', 'unlocked' => true,
                 'requirement' => 'Created in the mirror', 'creator' => $recipe];
         }
@@ -214,7 +214,7 @@ class AccountProgression
         $level = $this->level($profile['xp']);
         $characters = $this->characterCatalog($userId);
         $equipped = array_replace($this->defaults()['customization'], $profile['customization']);
-        $equipped['creator'] = $this->creator->saved($equipped['creator'], $level);
+        $equipped['creator'] = config('character_creator.enabled') ? $this->creator->saved($equipped['creator'], $level) : null;
         if ($equipped['character'] !== null && ! (collect($characters)->firstWhere('id', $equipped['character'])['unlocked'] ?? false)) {
             $equipped['character'] = null;
         }
@@ -242,7 +242,7 @@ class AccountProgression
                 'level' => $level, 'level_xp' => $profile['xp'] - (int) (config('progression.level_step') * $level * ($level - 1) / 2),
                 'next_level_xp' => config('progression.level_step') * $level, 'equipped' => $equipped],
             'characters' => $characters,
-            'creator' => $this->creator->catalog($level),
+            ...(config('character_creator.enabled') ? ['creator' => $this->creator->catalog($level)] : []),
             'season' => [...$season, 'xp' => $xp, 'matches' => $current->matches ?? 0, 'wins' => $current->wins ?? 0,
                 'tier' => ['id' => $tier['id'], 'name' => $tier['name']], 'next_tier_xp' => $next, 'tiers' => $tiers,
                 'history' => $seasons->filter(fn (PlayerSeason $s): bool => $s->season_id !== $season['id'])->map(fn (PlayerSeason $s): array => [
@@ -292,6 +292,10 @@ class AccountProgression
      */
     public function customize(int $userId, array $input): array
     {
+        if (! config('character_creator.enabled') && (($input['character'] ?? null) === 'custom' || ($input['creator'] ?? null) !== null)) {
+            throw ValidationException::withMessages(['character' => 'Character creation is temporarily unavailable. Choose a village character.']);
+        }
+
         return DB::transaction(function () use ($userId, $input): array {
             $profile = $this->lockProfile($userId);
             $catalog = $this->catalog($this->level($profile->xp), $profile->achievements,
@@ -306,10 +310,13 @@ class AccountProgression
                 }
                 $equipped[$field] = $item['id'];
             }
-            if (array_key_exists('creator', $input)) {
-                $equipped['creator'] = $input['creator'] === null ? null : $this->creator->validate($input['creator'], $this->level($profile->xp));
-            } else {
-                $equipped['creator'] = $this->creator->saved($equipped['creator'], $this->level($profile->xp));
+            // While paused, retain stored designs even when the wardrobe sends null.
+            if (config('character_creator.enabled')) {
+                if (array_key_exists('creator', $input)) {
+                    $equipped['creator'] = $input['creator'] === null ? null : $this->creator->validate($input['creator'], $this->level($profile->xp));
+                } else {
+                    $equipped['creator'] = $this->creator->saved($equipped['creator'], $this->level($profile->xp));
+                }
             }
             $character = $input['character'] ?? null;
             if ($character === 'custom') {

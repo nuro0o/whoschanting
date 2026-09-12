@@ -1,6 +1,8 @@
 <?php
 
 return [
+    // Paused while the village cast is expanded. Keep saved designs for later.
+    'enabled' => false,
     'default' => ['version' => 1, 'body_type' => 'type1', 'pose' => 'front', 'face' => 'harbor', 'hair' => 'cropped', 'hat' => 'none', 'outfit' => 'mariner',
         'detail' => 'none', 'skin' => 'warm', 'hair_color' => 'ink', 'outfit_color' => 'sea'],
     'options' => [
