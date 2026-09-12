@@ -60,7 +60,16 @@ export async function roomRequest<T>(url: string, body?: object): Promise<T> {
     return data as T;
 }
 
+export function eliminationLabel(reason?: 'shot' | 'guilt' | null): string {
+    return reason === 'guilt'
+        ? 'Left in guilt'
+        : reason === 'shot'
+          ? 'Shot'
+          : 'Banished';
+}
+
 export interface Player {
+    elimination_reason?: 'shot' | 'guilt' | null;
     customization?: PublicCustomization | null;
     oath?: { day: number; target_id: string } | null;
     id: string;
@@ -73,6 +82,8 @@ export interface Player {
     alignment?: string;
 }
 export interface RecapNightAction {
+    shot_fired?: boolean;
+    guilty?: boolean;
     tracked_target_id?: string | null;
     forged_alignment?: string | null;
     forged?: boolean;
@@ -100,6 +111,7 @@ export type PrivateNightResult = { day: number; target: string } & (
     | { kind: 'visits'; visited: boolean }
     | { kind: 'tracking'; visited_target: string | null }
     | { kind: 'herbs' }
+    | { kind: 'shot'; guilty: boolean }
     | { kind: 'protection' }
     | { kind: 'spirit'; alignment: string }
     | { kind: 'bell'; prevented: number }
@@ -204,6 +216,7 @@ export interface RoomState {
     recap: MatchRecapData | null;
     players: Player[];
     me: {
+        elimination_reason?: 'shot' | 'guilt' | null;
         customization?: PublicCustomization | null;
         account_progression?: boolean;
         match_reward?: MatchReward | null;
@@ -244,6 +257,9 @@ export interface Character {
     name: string;
     unlocked?: boolean;
     requirement?: string;
+    seasonal?: boolean;
+    hidden?: boolean;
+    role_name?: string;
 }
 export const characterIds = [
     'mariner',
@@ -266,7 +282,18 @@ export const characterIds = [
     'cartographer',
     'maskmaker',
     'drowned_regent',
+    'seasonal_warden',
+    'seasonal_cultist',
+    'seasonal_oathkeeper',
 ];
+export const seasonalCharacters: Record<
+    string,
+    { name: string; role: string }
+> = {
+    seasonal_warden: { name: 'The Knight', role: 'Warden' },
+    seasonal_cultist: { name: 'The Dark Elf', role: 'Cultist' },
+    seasonal_oathkeeper: { name: 'The Paladin', role: 'Oathkeeper' },
+};
 const characterRequirements: Record<string, string> = {
     tidecaller: 'Reach level 2 (250 lifetime XP)',
     cartographer: 'Reach level 3 (750 lifetime XP)',
@@ -276,18 +303,34 @@ const characterRequirements: Record<string, string> = {
 };
 export const defaultCharacters: Character[] = characterIds.map((id) => ({
     id,
-    name: `The ${id
-        .split('_')
-        .map((word) => word[0].toUpperCase() + word.slice(1))
-        .join(' ')}`,
-    unlocked: !characterRequirements[id],
-    requirement: characterRequirements[id],
+    name: seasonalCharacters[id]
+        ? '?'
+        : `The ${id
+              .split('_')
+              .map((word) => word[0].toUpperCase() + word.slice(1))
+              .join(' ')}`,
+    unlocked: !characterRequirements[id] && !seasonalCharacters[id],
+    requirement: seasonalCharacters[id]?.role ?? characterRequirements[id],
+    ...(seasonalCharacters[id]
+        ? {
+              seasonal: true,
+              hidden: true,
+              role_name: seasonalCharacters[id].role,
+          }
+        : {}),
 }));
 
 export const roles: Record<
     string,
     { name: string; subtitle: string; description: string; symbol: string }
 > = {
+    vigilante: {
+        name: 'The Vigilante',
+        subtitle: 'Town · one shot, one heavy conscience',
+        symbol: '⌖',
+        description:
+            'Once per match at night, shoot another living player. They are eliminated at dawn. If their true allegiance is not Cult, you also leave the village with guilt and become a spectator. Night actions still resolve before the shot. Curse protection does not stop it; disruption does, but spends your shot. Keep watch to save it.',
+    },
     tracker: {
         name: 'The Tracker',
         subtitle: 'Town · follower of midnight footsteps',

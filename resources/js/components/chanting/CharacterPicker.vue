@@ -2,6 +2,7 @@
 import { LockKeyhole } from '@lucide/vue';
 import { computed, useId } from 'vue';
 import CharacterPortrait from './CharacterPortrait.vue';
+import SealedCharacter from './SealedCharacter.vue';
 import { characterIds, type Character } from '@/lib/chanting';
 const props = defineProps<{ characters: Character[]; disabled?: boolean }>();
 const selected = defineModel<string>({ default: '' });
@@ -21,8 +22,12 @@ const groups = computed(() => [
     {
         id: 'earned',
         characters: props.characters.filter(
-            (item) => characterIds.indexOf(item.id) >= 16,
+            (item) => characterIds.indexOf(item.id) >= 16 && !item.seasonal,
         ),
+    },
+    {
+        id: 'seasonal',
+        characters: props.characters.filter((item) => item.seasonal),
     },
 ]);
 </script>
@@ -40,12 +45,19 @@ const groups = computed(() => [
                 {{
                     group.id === 'custom'
                         ? 'Made in the looking glass'
-                        : 'Earned in the village'
+                        : group.id === 'seasonal'
+                          ? 'Seasonal characters'
+                          : 'Earned in the village'
                 }}
             </h3>
             <div
                 class="character-choices"
-                :class="{ 'character-choices--earned': group.id === 'earned' }"
+                :class="{
+                    'character-choices--earned': [
+                        'earned',
+                        'seasonal',
+                    ].includes(group.id),
+                }"
             >
                 <label
                     v-for="character in group.characters"
@@ -60,15 +72,24 @@ const groups = computed(() => [
                         v-model="selected"
                         type="radio"
                         :value="character.id"
-                        :aria-label="character.name"
+                        :aria-label="
+                            character.hidden
+                                ? `? · ${character.role_name}`
+                                : character.name
+                        "
                         :disabled="character.unlocked === false"
                         :aria-describedby="
-                            group.id === 'earned'
+                            ['earned', 'seasonal'].includes(group.id)
                                 ? `${groupName}-${character.id}-requirement`
                                 : undefined
                         "
                     />
+                    <SealedCharacter
+                        v-if="character.hidden"
+                        class="character-portrait"
+                    />
                     <CharacterPortrait
+                        v-else
                         :character="character.id"
                         :creator="character.creator"
                         decorative
@@ -77,7 +98,7 @@ const groups = computed(() => [
                         character.name.replace('The ', '')
                     }}</span>
                     <small
-                        v-if="group.id === 'earned'"
+                        v-if="['earned', 'seasonal'].includes(group.id)"
                         :id="`${groupName}-${character.id}-requirement`"
                         class="character-requirement"
                     >

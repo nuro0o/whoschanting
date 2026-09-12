@@ -3,7 +3,7 @@ import { Link, usePage } from '@inertiajs/vue3';
 import { ArrowRight, Sparkles } from '@lucide/vue';
 import { computed } from 'vue';
 import CharacterPortrait from './CharacterPortrait.vue';
-import { defaultCharacters } from '@/lib/chanting';
+import { defaultCharacters, seasonalCharacters } from '@/lib/chanting';
 import type { MatchReward } from '@/lib/progression';
 const props = defineProps<{ linked: boolean; reward?: MatchReward | null }>();
 const unlockedCharacters = computed(() =>
@@ -53,7 +53,10 @@ const page = usePage();
                             :character="character.id"
                             decorative
                         />
-                        <span>{{ character.name }}</span>
+                        <span>{{
+                            seasonalCharacters[character.id]?.name ??
+                            character.name
+                        }}</span>
                     </li>
                 </ul>
                 <p>

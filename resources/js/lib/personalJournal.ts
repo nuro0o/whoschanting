@@ -32,6 +32,7 @@ export function journalResultLabel(result: PrivateNightResult): string {
         visits: 'Lamplighter watch',
         tracking: 'Tracking',
         herbs: 'Village protection',
+        shot: 'Vigilante shot',
         protection: 'Warden protection',
         spirit: 'Spirit reading',
         bell: 'Bell rung',

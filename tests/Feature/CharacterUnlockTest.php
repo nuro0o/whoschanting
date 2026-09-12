@@ -55,7 +55,7 @@ class CharacterUnlockTest extends TestCase
         $this->assertSame('stranger', $starters[15]);
         foreach ([null, $user->id] as $account) {
             $catalog = collect($progression->characterCatalog($account));
-            $this->assertCount(20, $catalog);
+            $this->assertCount(23, $catalog);
             $this->assertSame($starters, $catalog->where('unlocked', true)->pluck('id')->values()->all());
             foreach (array_keys(config('progression.character_unlocks')) as $id) {
                 $this->assertFalse($catalog->firstWhere('id', $id)['unlocked']);
@@ -63,7 +63,7 @@ class CharacterUnlockTest extends TestCase
             }
         }
         $this->actingAs($user)->get('/progression')->assertInertia(fn (Assert $page) => $page
-            ->has('characters', 20)->where('characters.16.unlocked', false)->where('progression.characters.16.unlocked', false));
+            ->has('characters', 23)->where('characters.16.unlocked', false)->where('progression.characters.16.unlocked', false));
     }
 
     public function test_locked_choices_are_rejected_by_all_http_entry_points(): void
@@ -112,8 +112,8 @@ class CharacterUnlockTest extends TestCase
         $profile->update(['xp' => 749]);
         $this->assertFalse($progression->canUseCharacter($user->id, 'cartographer'));
         $profile->update(['xp' => 750, 'achievements' => ['many_faces' => now()->toISOString(), 'veteran' => now()->toISOString()]]);
-        foreach (array_keys(config('progression.character_unlocks')) as $id) {
-            $this->assertTrue($progression->canUseCharacter($user->id, $id));
+        foreach (config('progression.character_unlocks') as $id => $unlock) {
+            $this->assertSame(! ($unlock['seasonal'] ?? false), $progression->canUseCharacter($user->id, $id));
         }
         $user->forceFill(['email_verified_at' => null])->save();
         $this->assertFalse($progression->canUseCharacter($user->id, 'tidecaller'));

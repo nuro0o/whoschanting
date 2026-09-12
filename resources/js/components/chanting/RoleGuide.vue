@@ -17,6 +17,7 @@ const allegiances = [
         name: 'Town',
         purpose: 'Uncover the cult.',
         roles: [
+            'vigilante',
             'townsperson',
             'oracle',
             'warden',

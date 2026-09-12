@@ -6,6 +6,7 @@ use App\Events\RoomUpdated;
 use App\Game\AccountProgression;
 use App\Game\CurseEngine;
 use App\Game\MatchEngine;
+use App\Game\SeasonalAchievements;
 use App\Models\GameMatch;
 use App\Models\GameRoom;
 use App\Models\User;
@@ -187,7 +188,7 @@ class GameTest extends TestCase
         $this->expire($room);
         $this->expire($room);
         $recap = $this->engine->access($room->code, 'secret-0')['recap'];
-        $this->assertSame('self-curse-v1', $recap['rules_version']);
+        $this->assertSame('vigilante-v1', $recap['rules_version']);
         $actions = array_column($recap['rounds'][0]['night']['actions'], null, 'player_id');
         $this->assertTrue($actions[$r['warden']]['prevented_curse']);
         $this->assertTrue($actions[$r['lamplighter']]['visited']);
@@ -705,7 +706,7 @@ class GameTest extends TestCase
             $p = $room->fresh()->state['players'][$id];
             $this->assertSame($p['role'], $view['me']['role']);
             foreach ($view['players'] as $public) {
-                $this->assertSame(['id', 'name', 'alive', 'ready', 'character', 'oath', 'discussion_ready'], array_keys($public));
+                $this->assertSame(['id', 'name', 'alive', 'ready', 'character', 'elimination_reason', 'oath', 'discussion_ready'], array_keys($public));
             }
             $this->assertStringNotContainsString('identity', json_encode($view));
             $this->assertArrayNotHasKey('actions', $view);
@@ -1808,6 +1809,77 @@ class GameTest extends TestCase
         $this->assertNull($solved['me']['curse']);
         $this->act($room, $identities[$id], 'vote', ['target' => $roles['acolyte']]);
         $this->assertSame($roles['acolyte'], $room->fresh()->state['actions'][$id]['target']);
+    }
+
+    public function test_real_misdirection_records_its_caster_without_exposing_them_during_the_match(): void
+    {
+        [$room, $identities] = $this->match();
+        $roles = $this->roles($room);
+        $this->expire($room);
+        $state = $room->fresh()->state;
+        $state['tokens'] = 4;
+        $state['threshold'] = 6;
+        $room->update(['state' => $state]);
+        $this->act($room, $identities[$roles['acolyte']], 'night', ['target' => $roles['oracle'], 'curse_type' => 'misdirection']);
+        $this->expire($room);
+        $curse = $room->fresh()->state['players'][$roles['oracle']]['curse'];
+        $this->assertSame($roles['acolyte'], $curse['source_player_id']);
+        $public = $this->engine->access($room->code, $identities[$roles['oracle']]);
+        $this->assertArrayNotHasKey('source_player_id', $public['me']['curse']);
+        $this->assertNull($public['recap']);
+        $this->expire($room);
+        $this->act($room, $identities[$roles['oracle']], 'vote', ['target' => $roles['acolyte']]);
+        $action = $room->fresh()->state['actions'][$roles['oracle']];
+        $this->assertSame($roles['acolyte'], $action['misdirection_source_id']);
+        $this->assertNotSame($action['chosen_target'], $action['target']);
+        $this->expire($room);
+        $ballot = collect($room->fresh()->state['rounds'][1]['vote']['ballots'])->firstWhere('player_id', $roles['oracle']);
+        $this->assertSame($roles['acolyte'], $ballot['misdirection_source_id']);
+        $result = (new SeasonalAchievements)->evaluate($room->fresh()->state, $roles['acolyte'], []);
+        $this->assertNotContains('seasonal_cultist', $result['completed']);
+    }
+
+    public function test_redirected_vigilante_shot_credits_the_cultist_seasonal_reward(): void
+    {
+        [$room, $identities] = $this->match();
+        $roles = $this->roles($room);
+        $vigilante = $roles['oracle'];
+        $this->expire($room);
+        $state = $room->fresh()->state;
+        $state['tokens'] = 67;
+        $state['threshold'] = 100;
+        $state['players'][$vigilante]['role'] = 'vigilante';
+        $room->update(['state' => $state]);
+        $this->act($room, $identities[$roles['acolyte']], 'night', ['target' => $vigilante, 'curse_type' => 'misdirection']);
+        $this->expire($room);
+        $this->expire($room);
+        $this->expire($room);
+        $this->act($room, $identities[$vigilante], 'night', ['target' => $roles['acolyte'], 'use_ability' => true]);
+        $this->expire($room);
+        $state = $room->fresh()->state;
+        $action = collect($state['rounds'][2]['night']['actions'])->firstWhere('player_id', $vigilante);
+        $this->assertTrue($action['shot_fired']);
+        $this->assertSame($roles['acolyte'], $action['misdirection_source_id']);
+        $this->assertNotSame($action['chosen_target_id'], $action['target_id']);
+        $this->assertFalse($state['players'][$action['target_id']]['alive']);
+        $result = (new SeasonalAchievements)->evaluate($state, $roles['acolyte'], []);
+        $this->assertContains('seasonal_cultist', $result['completed']);
+    }
+
+    public function test_warden_does_not_get_save_credit_when_sanctuary_already_blocks_the_curse(): void
+    {
+        [$room, $identities] = $this->match();
+        $roles = $this->roles($room);
+        $this->expire($room);
+        $state = $room->fresh()->state;
+        $state['chaos_event'] = 'sanctuary';
+        $room->update(['state' => $state]);
+        $this->act($room, $identities[$roles['warden']], 'night', ['target' => $roles['oracle']]);
+        $this->act($room, $identities[$roles['acolyte']], 'night', ['target' => $roles['oracle']]);
+        $this->expire($room);
+        $action = collect($room->fresh()->state['rounds'][1]['night']['actions'])->firstWhere('player_id', $roles['warden']);
+        $this->assertFalse($action['prevented_curse']);
+        $this->assertNull($room->fresh()->state['players'][$roles['oracle']]['curse']);
     }
 
     public function test_legacy_misdirection_cannot_be_cleared_with_an_empty_answer(): void

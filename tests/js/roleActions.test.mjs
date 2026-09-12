@@ -289,6 +289,53 @@ await test('illusion abilities require opting in and retain living targets; day 
     );
 });
 
+await test('Vigilante opts into one shot against another living player and receives the guilt outcome', () => {
+    const vigilante = {
+        ...state,
+        me: {
+            id: 'me',
+            role: 'vigilante',
+            alignment: 'town',
+            ability_used: false,
+        },
+    };
+    assert.deepEqual(eligibleTargets(vigilante), []);
+    assert.deepEqual(
+        eligibleTargets(vigilante, true).map((p) => p.id),
+        ['previous', 'neighbor'],
+    );
+    assert.equal(nightActionLabel(vigilante, true, 'neighbor'), 'Confirm shot');
+    assert.equal(
+        nightActionLabel(vigilante, false, null),
+        'Keep watch tonight',
+    );
+    assert.deepEqual(
+        eligibleTargets(
+            { ...vigilante, me: { ...vigilante.me, ability_used: true } },
+            true,
+        ),
+        [],
+    );
+    assert.match(
+        privateResultText({
+            kind: 'shot',
+            day: 1,
+            target: 'Mara',
+            guilty: true,
+        }),
+        /not a cultist.*Guilt/,
+    );
+    assert.match(
+        privateResultText({
+            kind: 'shot',
+            day: 1,
+            target: 'Mara',
+            guilty: false,
+        }),
+        /Mara, a cultist/,
+    );
+});
+
 await test('Tracker and Herbalist controls choose only their legal action targets', () => {
     const tracker = { ...state, me: { id: 'me', role: 'tracker' } };
     assert.deepEqual(

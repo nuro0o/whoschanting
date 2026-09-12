@@ -32,6 +32,10 @@ function actionDescription(action: RecapNightAction) {
     if (!action.submitted) return 'Missed the night deadline. No action taken.';
     if (action.disrupted)
         return `Night action disrupted. No ability or chant took effect.${action.used_ability ? ' The once-per-match ability was spent.' : ''}`;
+    if (action.role === 'vigilante')
+        return action.shot_fired
+            ? `Shot ${name(action.target_id)}.${action.guilty ? ' The target was not a cultist, triggering guilt and departure if the Vigilante survived the night.' : ' The target was a cultist.'}`
+            : 'Kept watch and saved any remaining shot.';
     if (action.role === 'tracker')
         return `Tracked ${name(action.target_id)}. ${action.tracked_target_id ? `Seen targeting ${name(action.tracked_target_id)}.` : 'No outgoing visit was visible.'}`;
     if (action.role === 'herbalist')

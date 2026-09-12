@@ -51,6 +51,12 @@ class AccountProgression
             }
             $unlocked = $account && (isset($unlock['achievement'])
                 ? isset($achievements[$unlock['achievement']]) : $level >= $unlock['level']);
+            if ($unlock['seasonal'] ?? false) {
+                $roleName = config('progression.seasonal_achievements.'.$unlock['achievement'].'.role_name');
+
+                return [...$character, 'name' => $unlocked ? $character['name'] : '?', 'unlocked' => $unlocked,
+                    'requirement' => $roleName, 'seasonal' => true, 'hidden' => ! $unlocked, 'role_name' => $roleName];
+            }
             $requirement = isset($unlock['achievement'])
                 ? 'Earn '.config('progression.achievements.'.$unlock['achievement'].'.name').' — '.($unlock['description'] ?? config('progression.achievements.'.$unlock['achievement'].'.description'))
                 : 'Reach level '.$unlock['level'].' ('.number_format((int) (config('progression.level_step') * $unlock['level'] * ($unlock['level'] - 1) / 2)).' lifetime XP)';
@@ -181,6 +187,8 @@ class AccountProgression
             $seasonRecord->xp += $xp;
             $seasonRecord->matches++;
             $seasonRecord->wins += (int) $won;
+            $seasonal = (new SeasonalAchievements)->evaluate($state, $seatId, $seasonRecord->achievement_progress ?? []);
+            $seasonRecord->achievement_progress = $seasonal['progress'];
             $seasonRecord->save();
             $earned = $profile->achievements;
             $new = [];
@@ -190,6 +198,12 @@ class AccountProgression
                     'season_matches' => $seasonRecord->matches, default => $profile->{$definition['stat']},
                 };
                 if (! isset($earned[$key]) && $current >= $definition['target']) {
+                    $earned[$key] = $finishedAt->toISOString();
+                    $new[] = $key;
+                }
+            }
+            foreach ($seasonal['completed'] as $key) {
+                if (! isset($earned[$key])) {
                     $earned[$key] = $finishedAt->toISOString();
                     $new[] = $key;
                 }
@@ -242,6 +256,8 @@ class AccountProgression
                 'level' => $level, 'level_xp' => $profile['xp'] - (int) (config('progression.level_step') * $level * ($level - 1) / 2),
                 'next_level_xp' => config('progression.level_step') * $level, 'equipped' => $equipped],
             'characters' => $characters,
+            'seasonal_achievements' => ['season_id' => $season['id'], 'ends_at' => $season['ends_at'],
+                'achievements' => $this->seasonalAchievements($profile['achievements'])],
             ...(config('character_creator.enabled') ? ['creator' => $this->creator->catalog($level)] : []),
             'season' => [...$season, 'xp' => $xp, 'matches' => $current->matches ?? 0, 'wins' => $current->wins ?? 0,
                 'tier' => ['id' => $tier['id'], 'name' => $tier['name']], 'next_tier_xp' => $next, 'tiers' => $tiers,
@@ -251,6 +267,23 @@ class AccountProgression
             'achievements' => $achievements, 'cosmetics' => $this->catalog($level, $profile['achievements'], $bestXp),
             'recent_rewards' => MatchReward::where('user_id', $userId)->latest('id')->limit(10)->pluck('data')->all(),
         ];
+    }
+
+    /** Deliberately omit objectives, counters and targets, including after unlocking.
+     * @param  array<string, string>  $earned
+     * @return list<array<string, mixed>>
+     */
+    private function seasonalAchievements(array $earned): array
+    {
+        $characters = collect(config()->array('game.characters'))->keyBy('id');
+        $result = [];
+        foreach (config('progression.seasonal_achievements') as $id => $definition) {
+            $result[] = ['id' => $id, 'name' => '?', 'role' => $definition['role'], 'role_name' => $definition['role_name'],
+                'earned_at' => $earned[$id] ?? null,
+                'character' => isset($earned[$id]) ? $characters->get($definition['character']) : null];
+        }
+
+        return $result;
     }
 
     /** @return array<string, mixed> */

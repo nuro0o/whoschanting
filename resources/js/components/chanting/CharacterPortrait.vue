@@ -2,7 +2,11 @@
 import { computed } from 'vue';
 import CreatedCharacter from './CreatedCharacter.vue';
 import type { CreatorRecipe } from '@/lib/creator';
-import { characterIds, defaultCharacters } from '@/lib/chanting';
+import {
+    characterIds,
+    defaultCharacters,
+    seasonalCharacters,
+} from '@/lib/chanting';
 import { cosmeticAccents, cosmeticBackgrounds } from '@/lib/progression';
 const props = defineProps<{
     character: string;
@@ -20,12 +24,16 @@ const portraitImages: Record<string, string> = {
     cartographer: '/assets/chanting/unlocks/cartographer.png',
     maskmaker: '/assets/chanting/unlocks/maskmaker.png',
     drowned_regent: '/assets/chanting/unlocks/drowned_regent.png',
+    seasonal_warden: '/assets/chanting/unlocks/seasonal_warden.png',
+    seasonal_cultist: '/assets/chanting/unlocks/seasonal_cultist.png',
+    seasonal_oathkeeper: '/assets/chanting/unlocks/seasonal_oathkeeper.png',
 };
 const portraitImage = computed(() => portraitImages[props.character]);
 const label = computed(() =>
     props.character === 'custom'
         ? 'Your created villager'
-        : defaultCharacters[index.value].name,
+        : (seasonalCharacters[props.character]?.name ??
+          defaultCharacters[index.value].name),
 );
 const tileIndex = computed(() => index.value % 8);
 const backdrop = computed(() =>

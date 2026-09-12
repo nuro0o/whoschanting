@@ -1,7 +1,12 @@
 ﻿<script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { Check, Flame, LockKeyhole, RotateCcw } from '@lucide/vue';
-import { roles, type Player, type RoomState } from '@/lib/chanting';
+import {
+    eliminationLabel,
+    roles,
+    type Player,
+    type RoomState,
+} from '@/lib/chanting';
 import CharacterPortrait from './CharacterPortrait.vue';
 import RitualTableScene from './RitualTableScene.vue';
 import { ritualSceneState } from '@/lib/ritualSceneState';
@@ -129,8 +134,8 @@ function selectable(player: Player) {
 function seatLabel(player: Player) {
     const identity = `${player.name}${player.id === props.meId ? ', you' : ''}`;
     if (props.phase === 'finished' && player.role)
-        return `${identity}, ${roles[player.role]?.name ?? player.role}${player.alive ? '' : ', banished'}`;
-    return `${identity}${!player.alive ? ', banished' : ''}${selectable(player) ? ', select as target' : ''}`;
+        return `${identity}, ${roles[player.role]?.name ?? player.role}${player.alive ? '' : `, ${eliminationLabel(player.elimination_reason)}`}`;
+    return `${identity}${!player.alive ? `, ${eliminationLabel(player.elimination_reason)}` : ''}${selectable(player) ? ', select as target' : ''}`;
 }
 const caption = computed(() =>
     props.canSelect
@@ -304,9 +309,9 @@ onBeforeUnmount(() => {
                     :class="{ 'is-cult': player.alignment === 'cult' }"
                     >{{ roles[player.role]?.name ?? player.role }}</span
                 >
-                <span v-else-if="!player.alive" class="seat-banished"
-                    >Banished</span
-                >
+                <span v-else-if="!player.alive" class="seat-banished">{{
+                    eliminationLabel(player.elimination_reason)
+                }}</span>
                 <span
                     v-else-if="
                         (phase === 'discussion' && player.discussion_ready) ||
@@ -391,7 +396,7 @@ onBeforeUnmount(() => {
                             phase === 'finished' && player.role
                                 ? (roles[player.role]?.name ?? player.role)
                                 : !player.alive
-                                  ? 'Banished'
+                                  ? eliminationLabel(player.elimination_reason)
                                   : player.id === meId
                                     ? 'You'
                                     : selectedTarget === player.id && canSelect
@@ -425,7 +430,7 @@ onBeforeUnmount(() => {
                         player.id === meId
                             ? 'You'
                             : !player.alive
-                              ? 'Banished'
+                              ? eliminationLabel(player.elimination_reason)
                               : ''
                     }}</small>
                 </component>

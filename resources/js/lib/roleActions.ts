@@ -16,6 +16,10 @@ export function discussionActionTypes(
 }
 
 export function privateResultText(result: PrivateNightResult): string {
+    if (result.kind === 'shot')
+        return result.guilty
+            ? `You shot ${result.target}, who was not a cultist. Guilt has driven you from the village.`
+            : `You shot ${result.target}, a cultist. Your shot is spent.`;
     if (result.kind === 'tracking')
         return result.visited_target
             ? `${result.target} was seen targeting ${result.visited_target}.`
@@ -53,6 +57,7 @@ export function privateResultText(result: PrivateNightResult): string {
 
 export function hasLimitedAbility(role: string | null): boolean {
     return [
+        'vigilante',
         'oracle',
         'medium',
         'dreamweaver',
@@ -104,6 +109,7 @@ export function nightActionLabel(
         return 'Chant and curse yourself';
     if (useAbility && state.me.role === 'oracle')
         return 'Confirm investigation';
+    if (useAbility && state.me.role === 'vigilante') return 'Confirm shot';
     if (useAbility && state.me.role === 'herbalist')
         return 'Protect the village';
     if (state.me.role === 'tracker') return 'Confirm tracking';

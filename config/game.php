@@ -1,7 +1,7 @@
 <?php
 
 return [
-    'rules_version' => 'self-curse-v1',
+    'rules_version' => 'vigilante-v1',
     'min_players' => (int) env('GAME_MIN_PLAYERS', 3),
     'max_players' => (int) env('GAME_MAX_PLAYERS', 10),
     'cultists_by_player_count' => [3 => 1, 4 => 1, 5 => 2, 6 => 2, 7 => 3, 8 => 3, 9 => 4, 10 => 4],
@@ -12,6 +12,7 @@ return [
     'hard_town_roles_min_players' => ['tracker' => 5, 'exorcist' => 7, 'herbalist' => 8, 'oathkeeper' => 10],
     'hard_cult_roles_min_players' => ['counterfeiter' => 5, 'phantasm' => 7, 'dreamweaver' => 9],
     'role_alignments' => [
+        'vigilante' => 'town',
         'oracle' => 'town', 'townsperson' => 'town', 'warden' => 'town', 'lamplighter' => 'town', 'medium' => 'town', 'bellkeeper' => 'town', 'exorcist' => 'town', 'oathkeeper' => 'town', 'tracker' => 'town', 'herbalist' => 'town',
         'veilweaver' => 'cult', 'acolyte' => 'cult', 'dreamweaver' => 'cult', 'phantasm' => 'cult', 'counterfeiter' => 'cult',
     ],
@@ -40,6 +41,9 @@ return [
         ['id' => 'cartographer', 'name' => 'The Cartographer'],
         ['id' => 'maskmaker', 'name' => 'The Maskmaker'],
         ['id' => 'drowned_regent', 'name' => 'The Drowned Regent'],
+        ['id' => 'seasonal_warden', 'name' => 'The Knight'],
+        ['id' => 'seasonal_cultist', 'name' => 'The Dark Elf'],
+        ['id' => 'seasonal_oathkeeper', 'name' => 'The Paladin'],
     ],
     'seconds' => ['reveal' => 25, 'night' => 45, 'discussion' => 90, 'voting' => 45],
     'paranoia_discussion_seconds' => ['early' => 90, 'middle' => 70, 'late' => 50],

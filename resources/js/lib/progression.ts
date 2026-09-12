@@ -36,6 +36,18 @@ export interface Cosmetic {
     unlocked: boolean;
 }
 export interface ProgressionData {
+    seasonal_achievements?: {
+        season_id: string;
+        ends_at: string;
+        achievements: {
+            id: string;
+            name: string;
+            role: string;
+            role_name: string;
+            earned_at: string | null;
+            character: { id: string; name: string } | null;
+        }[];
+    };
     creator?: CreatorCatalog;
     characters?: Character[];
     profile: {

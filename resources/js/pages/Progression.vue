@@ -11,6 +11,7 @@ import {
 } from '@lucide/vue';
 import { computed, reactive, ref } from 'vue';
 import CharacterPortrait from '@/components/chanting/CharacterPortrait.vue';
+import SealedCharacter from '@/components/chanting/SealedCharacter.vue';
 import CreatorMirror from '@/components/chanting/CreatorMirror.vue';
 import {
     creatorLockedOptions,
@@ -39,8 +40,29 @@ const originalCharacters = computed(() =>
     ),
 );
 const earnedCharacters = computed(() =>
-    characters.value.filter((item) => characterIds.indexOf(item.id) >= 16),
+    characters.value.filter(
+        (item) => characterIds.indexOf(item.id) >= 16 && !item.seasonal,
+    ),
 );
+const seasonalCharacters = computed(() =>
+    characters.value.filter((item) => item.seasonal),
+);
+const wardrobeCharacterGroups = computed(() => [
+    {
+        id: 'earned',
+        name: 'Earned in the village',
+        description:
+            'New faces, earned through play. Every character is cosmetic.',
+        characters: earnedCharacters.value,
+    },
+    {
+        id: 'seasonal',
+        name: 'Seasonal characters',
+        description:
+            'A secret for each class. Unlocked characters are yours to keep and wear with any role.',
+        characters: seasonalCharacters.value,
+    },
+]);
 const availableCharacters = computed(
     () => characters.value.filter((item) => item.unlocked !== false).length,
 );
@@ -102,8 +124,12 @@ const titleName = computed(
         data.value.cosmetics.titles.find((item) => item.id === draft.title)
             ?.name ?? 'Newcomer',
 );
+const allAchievements = computed(() => [
+    ...data.value.achievements,
+    ...(data.value.seasonal_achievements?.achievements ?? []),
+]);
 const earned = computed(
-    () => data.value.achievements.filter((item) => item.earned_at).length,
+    () => allAchievements.value.filter((item) => item.earned_at).length,
 );
 const groups = [
     { field: 'accent', catalog: 'accents', name: 'Accent color' },
@@ -288,9 +314,7 @@ function moveTab(event: KeyboardEvent, index: number) {
                         <div>
                             <dd>
                                 {{ earned
-                                }}<small>
-                                    / {{ data.achievements.length }}</small
-                                >
+                                }}<small> / {{ allAchievements.length }}</small>
                             </dd>
                             <dt>Achievements</dt>
                         </div>
@@ -338,7 +362,7 @@ function moveTab(event: KeyboardEvent, index: number) {
             >
                 {{ item.name
                 }}<span v-if="item.id === 'achievements'"
-                    >{{ earned }}/{{ data.achievements.length }}</span
+                    >{{ earned }}/{{ allAchievements.length }}</span
                 >
             </button>
         </nav>
@@ -549,19 +573,21 @@ function moveTab(event: KeyboardEvent, index: number) {
                                 }}</small></span
                             ><ArrowRight :size="17" aria-hidden="true" />
                         </button>
-                        <template v-if="earnedCharacters.length">
+                        <template
+                            v-for="characterGroup in wardrobeCharacterGroups"
+                            :key="characterGroup.id"
+                        >
                             <h3 class="wardrobe-unlock-heading">
-                                Earned in the village
+                                {{ characterGroup.name }}
                             </h3>
                             <p class="wardrobe-help">
-                                New faces, earned through play. Every character
-                                is cosmetic.
+                                {{ characterGroup.description }}
                             </p>
                             <div
                                 class="wardrobe-characters wardrobe-characters--earned"
                             >
                                 <label
-                                    v-for="character in earnedCharacters"
+                                    v-for="character in characterGroup.characters"
                                     :key="character.id"
                                     class="wardrobe-character"
                                     :class="{
@@ -577,11 +603,20 @@ function moveTab(event: KeyboardEvent, index: number) {
                                         name="character"
                                         :value="character.id"
                                         :disabled="character.unlocked === false"
-                                        :aria-label="character.name"
+                                        :aria-label="
+                                            character.hidden
+                                                ? `? · ${character.role_name}`
+                                                : character.name
+                                        "
                                         :aria-describedby="`wardrobe-${character.id}-requirement`"
                                         @change="saved = false"
                                     />
+                                    <SealedCharacter
+                                        v-if="character.hidden"
+                                        class="character-portrait"
+                                    />
                                     <CharacterPortrait
+                                        v-else
                                         :character="character.id"
                                         :accent="draft.accent"
                                         :background="draft.background"
@@ -763,6 +798,60 @@ function moveTab(event: KeyboardEvent, index: number) {
                     them through completed, eligible matches.
                 </p>
             </div>
+            <section
+                v-if="data.seasonal_achievements"
+                class="seasonal-collection"
+                aria-labelledby="seasonal-achievements-title"
+            >
+                <header class="seasonal-heading">
+                    <div>
+                        <p class="account-kicker">The season's secrets</p>
+                        <h3 id="seasonal-achievements-title">
+                            Seasonal achievements
+                        </h3>
+                    </div>
+                    <p class="seasonal-dates">
+                        {{ recordDate(data.season.starts_at) }} —
+                        {{ recordDate(data.seasonal_achievements.ends_at) }}
+                        <span>UTC</span>
+                    </p>
+                </header>
+                <p class="seasonal-description">
+                    Three hidden achievements. Your class is your only clue.
+                    Characters you unlock are yours to keep; unfinished progress
+                    resets with the season.
+                </p>
+                <ul class="seasonal-secrets">
+                    <li
+                        v-for="secret in data.seasonal_achievements
+                            .achievements"
+                        :key="secret.id"
+                        :class="{ 'is-revealed': secret.earned_at }"
+                    >
+                        <CharacterPortrait
+                            v-if="secret.earned_at && secret.character"
+                            :character="secret.character.id"
+                            decorative
+                            class="seasonal-portrait"
+                        />
+                        <SealedCharacter v-else class="seasonal-portrait" />
+                        <div class="seasonal-secret-copy">
+                            <p class="seasonal-class">{{ secret.role_name }}</p>
+                            <h4 v-if="secret.earned_at && secret.character">
+                                {{ secret.character.name }}
+                            </h4>
+                            <span v-else class="sr-only">?</span>
+                            <p v-if="secret.earned_at" class="seasonal-earned">
+                                <Check :size="12" aria-hidden="true" /> Earned
+                                {{ recordDate(secret.earned_at) }}
+                            </p>
+                        </div>
+                    </li>
+                </ul>
+            </section>
+            <h3 v-if="data.seasonal_achievements" class="lifetime-heading">
+                Lifetime achievements
+            </h3>
             <ul class="achievement-ledger">
                 <li
                     v-for="achievement in data.achievements"
@@ -1952,6 +2041,123 @@ progress::-moz-progress-bar {
     }
     .wardrobe-mode button svg {
         display: none;
+    }
+}
+</style>
+<style scoped>
+.seasonal-collection {
+    margin: 28px 0 36px;
+    padding: 26px;
+    border: 1px solid #ad94624d;
+    border-top: 3px solid var(--account-brass);
+    background: linear-gradient(120deg, #ac915708, transparent 65%), #182d2b;
+}
+.seasonal-heading {
+    display: flex;
+    justify-content: space-between;
+    align-items: end;
+    gap: 20px;
+}
+.seasonal-heading h3 {
+    font-size: 28px;
+    margin-top: 6px;
+}
+.seasonal-dates {
+    color: #d3c7a8;
+    font-size: 11px;
+    white-space: nowrap;
+}
+.seasonal-dates span {
+    color: var(--account-muted);
+}
+.seasonal-description {
+    color: var(--account-muted);
+    font-size: 12px;
+    line-height: 1.8;
+    max-width: 660px;
+    margin: 14px 0 24px;
+}
+.seasonal-secrets {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    list-style: none;
+    padding: 0;
+    gap: 20px;
+}
+.seasonal-secrets li {
+    min-width: 0;
+}
+.seasonal-secrets .seasonal-portrait {
+    display: grid;
+    width: 100%;
+    height: auto;
+    aspect-ratio: 1;
+    border-radius: 2px;
+    font-size: 36px;
+}
+.seasonal-secret-copy {
+    padding: 15px 0 0;
+}
+.seasonal-class {
+    font-size: 12px;
+    color: #d3c7a8;
+    letter-spacing: 0.06em;
+}
+.seasonal-secret-copy h4 {
+    margin-top: 7px;
+    font-size: 23px;
+}
+.seasonal-earned {
+    color: var(--account-green);
+    font-size: 10px;
+    margin-top: 8px;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+.lifetime-heading {
+    font-size: 24px;
+    margin-bottom: 8px;
+}
+@media (max-width: 650px) {
+    .seasonal-collection {
+        padding: 20px 16px;
+    }
+    .seasonal-heading {
+        display: block;
+    }
+    .seasonal-heading h3 {
+        font-size: 25px;
+    }
+    .seasonal-dates {
+        margin-top: 12px;
+        font-size: 10px;
+        white-space: normal;
+    }
+    .seasonal-secrets {
+        grid-template-columns: 1fr;
+        gap: 16px;
+    }
+    .seasonal-secrets li {
+        display: grid;
+        grid-template-columns: 96px minmax(0, 1fr);
+        gap: 16px;
+        align-items: center;
+        border-top: 1px solid #ad946233;
+        padding-top: 16px;
+    }
+    .seasonal-secrets li:first-child {
+        border: 0;
+        padding-top: 0;
+    }
+    .seasonal-secrets .seasonal-portrait {
+        font-size: 23px;
+    }
+    .seasonal-secret-copy {
+        padding: 0;
+    }
+    .seasonal-secret-copy h4 {
+        font-size: 20px;
     }
 }
 </style>

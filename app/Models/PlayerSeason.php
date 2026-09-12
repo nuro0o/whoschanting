@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Model;
  * @property int $matches
  * @property int $wins
  * @property string $season_id
+ * @property array<string, int>|null $achievement_progress
  */
 class PlayerSeason extends Model
 {
@@ -17,6 +18,6 @@ class PlayerSeason extends Model
     /** @return array<string, string> */
     protected function casts(): array
     {
-        return ['xp' => 'integer', 'matches' => 'integer', 'wins' => 'integer'];
+        return ['xp' => 'integer', 'matches' => 'integer', 'wins' => 'integer', 'achievement_progress' => 'array'];
     }
 }

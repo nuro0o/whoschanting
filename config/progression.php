@@ -10,6 +10,14 @@ return [
         'cartographer' => ['level' => 3],
         'maskmaker' => ['achievement' => 'many_faces', 'description' => 'Complete qualifying matches as 5 different roles.'],
         'drowned_regent' => ['achievement' => 'veteran', 'description' => 'Participate in 25 qualifying completed matches.'],
+        'seasonal_warden' => ['achievement' => 'seasonal_warden', 'seasonal' => true],
+        'seasonal_cultist' => ['achievement' => 'seasonal_cultist', 'seasonal' => true],
+        'seasonal_oathkeeper' => ['achievement' => 'seasonal_oathkeeper', 'seasonal' => true],
+    ],
+    'seasonal_achievements' => [
+        'seasonal_warden' => ['role' => 'warden', 'role_name' => 'Warden', 'character' => 'seasonal_warden'],
+        'seasonal_cultist' => ['role' => 'cultist', 'role_name' => 'Cultist', 'character' => 'seasonal_cultist'],
+        'seasonal_oathkeeper' => ['role' => 'oathkeeper', 'role_name' => 'Oathkeeper', 'character' => 'seasonal_oathkeeper'],
     ],
     'season_tiers' => [
         ['id' => 'unranked', 'name' => 'New arrival', 'xp' => 0],

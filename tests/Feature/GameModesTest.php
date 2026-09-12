@@ -328,6 +328,160 @@ class GameModesTest extends TestCase
         $this->reject(fn () => $this->act($room, $ids[0], 'oath', ['target' => $ids[1]]));
     }
 
+    public function test_vigilante_shoots_a_cultist_at_dawn_and_cannot_fire_again(): void
+    {
+        $room = $this->gathering(['mode' => 'custom', 'roles' => ['vigilante' => 1, 'townsperson' => 2, 'acolyte' => 2]]);
+        $vigilante = $this->roles['vigilante'][0];
+        $target = $this->roles['acolyte'][0];
+        $this->withSession(['chanting.identity' => $this->identities[$vigilante]])
+            ->postJson('/rooms/'.$room->code.'/actions', ['type' => 'night', 'phase_id' => $room->state['phase_id'], 'target' => $target, 'use_ability' => true])
+            ->assertOk()->assertJsonPath('me.ability_used', true)->assertJsonPath('me.alive', true);
+        $this->assertTrue($room->fresh()->state['players'][$target]['alive']);
+        $this->act($room, $target, 'night');
+        $this->expire($room);
+        $this->assertSame('discussion', $room->state['phase']);
+        $this->assertFalse($room->state['players'][$target]['alive']);
+        $this->assertTrue($room->state['players'][$vigilante]['alive']);
+        $this->assertSame(1, $room->state['tokens']);
+        $this->assertFalse($room->state['players'][$vigilante]['results'][0]['guilty']);
+        $actions = array_column($room->state['rounds'][1]['night']['actions'], null, 'player_id');
+        $this->assertTrue($actions[$vigilante]['shot_fired']);
+        $this->assertTrue($actions[$target]['contributed']);
+        $view = $this->engine->access($room->code, $this->identities[$this->roles['townsperson'][0]]);
+        $public = array_column($view['players'], null, 'id');
+        $this->assertSame('shot', $public[$target]['elimination_reason']);
+        $this->assertArrayNotHasKey('role', $public[$vigilante]);
+        $this->assertArrayNotHasKey('results', $public[$vigilante]);
+        $this->expire($room);
+        $this->reject(fn () => $this->act($room, $target, 'vote', ['target' => $vigilante]));
+        $this->expire($room);
+        $this->reject(fn () => $this->act($room, $vigilante, 'night', ['target' => $this->roles['acolyte'][1], 'use_ability' => true]));
+        $this->act($room, $vigilante, 'night');
+    }
+
+    public function test_vigilante_guilt_uses_true_alignment_despite_forgery_and_protection(): void
+    {
+        $room = $this->gathering(['mode' => 'custom', 'roles' => ['vigilante' => 1, 'oracle' => 1, 'warden' => 1, 'townsperson' => 1, 'counterfeiter' => 1]]);
+        $vigilante = $this->roles['vigilante'][0];
+        $target = $this->roles['townsperson'][0];
+        $this->act($room, $this->roles['warden'][0], 'night', ['target' => $target]);
+        $this->act($room, $this->roles['counterfeiter'][0], 'night', ['target' => $target, 'use_ability' => true, 'forged_alignment' => 'cult']);
+        $this->act($room, $this->roles['oracle'][0], 'night', ['target' => $target]);
+        $this->act($room, $vigilante, 'night', ['target' => $target, 'use_ability' => true]);
+        $this->expire($room);
+        $this->assertSame('cult', $room->state['players'][$this->roles['oracle'][0]]['results'][0]['alignment']);
+        $this->assertFalse($room->state['players'][$target]['alive']);
+        $this->assertFalse($room->state['players'][$vigilante]['alive']);
+        $this->assertSame('guilt', $room->state['players'][$vigilante]['elimination_reason']);
+        $this->assertTrue($room->state['players'][$vigilante]['results'][0]['guilty']);
+        $this->assertNull($room->state['players'][$vigilante]['curse']);
+        $this->assertStringContainsString('left the village with guilt', implode(' ', $room->state['log']));
+        $this->assertSame('guilt', $this->engine->access($room->code, $this->identities[$vigilante])['me']['elimination_reason']);
+        $this->reject(fn () => $this->act($room, $vigilante, 'discussion_ready'));
+        $this->expire($room);
+        $this->reject(fn () => $this->act($room, $vigilante, 'vote'));
+    }
+
+    public function test_vigilante_can_save_the_shot_and_invalid_targets_do_not_spend_it(): void
+    {
+        $room = $this->gathering(['mode' => 'custom', 'roles' => ['vigilante' => 1, 'townsperson' => 3, 'acolyte' => 1]]);
+        $vigilante = $this->roles['vigilante'][0];
+        $dead = $this->roles['townsperson'][0];
+        $s = $room->state;
+        $s['players'][$dead]['alive'] = false;
+        $room->update(['state' => $s]);
+        foreach ([null, $vigilante, $dead, 'unknown'] as $target) {
+            $this->reject(fn () => $this->act($room, $vigilante, 'night', ['target' => $target, 'use_ability' => true]));
+        }
+        $this->reject(fn () => $this->act($room, $vigilante, 'night', ['target' => $this->roles['acolyte'][0]]));
+        $view = $this->act($room, $vigilante, 'night');
+        $this->assertFalse($view['me']['ability_used']);
+        $this->expire($room);
+        $this->assertTrue($room->state['players'][$vigilante]['alive']);
+        $this->assertTrue($room->state['players'][$this->roles['acolyte'][0]]['alive']);
+        $this->expire($room);
+        $this->expire($room);
+        $this->assertTrue($this->act($room, $vigilante, 'night', ['target' => $this->roles['acolyte'][0], 'use_ability' => true])['me']['ability_used']);
+    }
+
+    public function test_disruption_stops_the_vigilante_shot_without_causing_guilt(): void
+    {
+        $room = $this->gathering(['mode' => 'custom', 'roles' => ['vigilante' => 1, 'townsperson' => 3, 'dreamweaver' => 1]]);
+        $vigilante = $this->roles['vigilante'][0];
+        $this->act($room, $vigilante, 'night', ['target' => $this->roles['townsperson'][0], 'use_ability' => true]);
+        $this->act($room, $this->roles['dreamweaver'][0], 'night', ['target' => $vigilante, 'use_ability' => true]);
+        $this->expire($room);
+        $this->assertCount(5, array_filter($room->state['players'], fn (array $p): bool => $p['alive']));
+        $this->assertTrue($room->state['players'][$vigilante]['ability_used']);
+        $this->assertSame('disrupted', $room->state['players'][$vigilante]['results'][0]['kind']);
+        $actions = array_column($room->state['rounds'][1]['night']['actions'], null, 'player_id');
+        $this->assertFalse($actions[$vigilante]['shot_fired']);
+        $this->assertFalse($actions[$vigilante]['guilty']);
+    }
+
+    public function test_shooting_the_last_cultist_wins_even_when_the_ritual_fills_and_rematch_resets(): void
+    {
+        $room = $this->gathering(['mode' => 'custom', 'roles' => ['vigilante' => 1, 'townsperson' => 3, 'acolyte' => 1]]);
+        $vigilante = $this->roles['vigilante'][0];
+        $cult = $this->roles['acolyte'][0];
+        $s = $room->state;
+        $s['tokens'] = $s['threshold'] - 1;
+        $room->update(['state' => $s]);
+        $this->act($room, $cult, 'night');
+        $this->act($room, $vigilante, 'night', ['target' => $cult, 'use_ability' => true]);
+        $this->expire($room);
+        $this->assertSame('finished', $room->state['phase']);
+        $this->assertSame('town', $room->state['winner']);
+        $this->assertSame($room->state['threshold'], $room->state['tokens']);
+        $view = $this->engine->access($room->code, $this->identities[$vigilante]);
+        $actions = array_column($view['recap']['rounds'][0]['night']['actions'], null, 'player_id');
+        $this->assertTrue($actions[$vigilante]['shot_fired']);
+        $this->act($room, $room->state['host_id'], 'rematch');
+        foreach ($room->fresh()->state['players'] as $player) {
+            $this->assertTrue($player['alive']);
+            $this->assertArrayNotHasKey('ability_used', $player);
+            $this->assertArrayNotHasKey('elimination_reason', $player);
+        }
+    }
+
+    public function test_misdirected_shot_uses_the_actual_target_for_guilt_and_cult_victory(): void
+    {
+        $room = $this->gathering(['mode' => 'custom', 'roles' => ['vigilante' => 1, 'townsperson' => 3, 'acolyte' => 1]]);
+        $vigilante = $this->roles['vigilante'][0];
+        $cult = $this->roles['acolyte'][0];
+        [$target, $deadA, $deadB] = $this->roles['townsperson'];
+        $s = $room->state;
+        $s['players'][$deadA]['alive'] = false;
+        $s['players'][$deadB]['alive'] = false;
+        $s['players'][$vigilante]['curse'] = ['type' => 'misdirection', 'source_player_id' => $cult];
+        $room->update(['state' => $s]);
+        $this->act($room, $vigilante, 'night', ['target' => $cult, 'use_ability' => true]);
+        $this->expire($room);
+        $this->assertFalse($room->state['players'][$vigilante]['alive']);
+        $this->assertFalse($room->state['players'][$target]['alive']);
+        $this->assertTrue($room->state['players'][$cult]['alive']);
+        $this->assertSame('cult', $room->state['winner']);
+        $actions = array_column($room->state['rounds'][1]['night']['actions'], null, 'player_id');
+        $this->assertSame($cult, $actions[$vigilante]['chosen_target_id']);
+        $this->assertSame($target, $actions[$vigilante]['target_id']);
+        $this->assertTrue($actions[$vigilante]['guilty']);
+    }
+
+    public function test_duplicate_vigilantes_fire_simultaneously_even_when_shot(): void
+    {
+        $room = $this->gathering(['mode' => 'custom', 'roles' => ['vigilante' => 2, 'townsperson' => 2, 'acolyte' => 1]]);
+        [$first, $second] = $this->roles['vigilante'];
+        $cult = $this->roles['acolyte'][0];
+        $this->act($room, $second, 'night', ['target' => $cult, 'use_ability' => true]);
+        $this->act($room, $first, 'night', ['target' => $second, 'use_ability' => true]);
+        $this->expire($room);
+        $this->assertSame('guilt', $room->state['players'][$first]['elimination_reason']);
+        $this->assertSame('shot', $room->state['players'][$second]['elimination_reason']);
+        $this->assertSame('shot', $room->state['players'][$cult]['elimination_reason']);
+        $this->assertSame('town', $room->state['winner']);
+        $this->assertCount(5, $room->state['rounds'][1]['night']['actions']);
+    }
+
     public function test_tracker_sees_submitted_visit_even_if_disrupted_but_not_private_ability(): void
     {
         $room = $this->gathering(['mode' => 'custom', 'roles' => ['tracker' => 1, 'oracle' => 1, 'townsperson' => 1, 'dreamweaver' => 1, 'acolyte' => 1]]);

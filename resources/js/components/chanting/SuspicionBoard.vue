@@ -7,7 +7,7 @@ const unsavedBoards = new Map<string, SuspicionBoardData>();
 import { computed, onMounted, ref, watch } from 'vue';
 import { Link, LockKeyhole, X } from '@lucide/vue';
 import CharacterPortrait from './CharacterPortrait.vue';
-import { roles, type RoomState } from '@/lib/chanting';
+import { eliminationLabel, roles, type RoomState } from '@/lib/chanting';
 import { journalResultLabel } from '@/lib/personalJournal';
 import { privateResultText } from '@/lib/roleActions';
 import {
@@ -216,7 +216,13 @@ onMounted(() => {
                         <strong>{{ player.name }}</strong>
                         <span class="board-seat"
                             >Seat {{ seatNumber(player.id) }} ·
-                            {{ player.alive ? 'Alive' : 'Banished' }}</span
+                            {{
+                                player.alive
+                                    ? 'Alive'
+                                    : eliminationLabel(
+                                          player.elimination_reason,
+                                      )
+                            }}</span
                         >
                         <span
                             class="board-mark"
@@ -258,7 +264,9 @@ onMounted(() => {
                         {{
                             selectedPlayer.alive
                                 ? 'Still at the table'
-                                : 'Banished from the table'
+                                : eliminationLabel(
+                                      selectedPlayer.elimination_reason,
+                                  )
                         }}
                     </p>
                 </header>

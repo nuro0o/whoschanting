@@ -44,7 +44,7 @@ class CharacterCreatorTest extends TestCase
         $this->postJson('/account/customization', $look)->assertOk()->assertJsonPath('progression.profile.equipped.creator', $look['creator']);
         $this->flushSession();
         $this->actingAs($user)->get('/dashboard')->assertInertia(fn (Assert $page) => $page
-            ->where('preferredCharacter', 'custom')->where('characters.20.creator', $look['creator']));
+            ->where('preferredCharacter', 'custom')->where('characters.23.creator', $look['creator']));
         $code = $this->postJson('/rooms', ['name' => 'Mirror guest'])->assertCreated()->json('code');
         $state = $this->getJson('/rooms/'.$code.'/state')->assertOk()
             ->assertJsonPath('me.character', 'custom')->assertJsonPath('players.0.customization.creator', $look['creator'])->json();

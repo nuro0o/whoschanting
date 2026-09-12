@@ -6,6 +6,7 @@ export interface ModeSetup {
 }
 
 export const townRoleIds = [
+    'vigilante',
     'townsperson',
     'oracle',
     'warden',

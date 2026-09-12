@@ -481,6 +481,7 @@ const requiresTarget = computed(
         (['lamplighter', 'tracker'].includes(state.value.me.role ?? '') ||
             (useAbility.value &&
                 [
+                    'vigilante',
                     'oracle',
                     'medium',
                     'dreamweaver',
@@ -498,6 +499,7 @@ const canChooseNightTarget = computed(
         (useAbility.value &&
             !state.value?.me.ability_used &&
             [
+                'vigilante',
                 'oracle',
                 'medium',
                 'dreamweaver',
@@ -1337,6 +1339,16 @@ onBeforeUnmount(() => {
                                         v-if="limitedAbility"
                                         class="small-help"
                                     >
+                                        <p
+                                            v-if="
+                                                state.me.role === 'vigilante' &&
+                                                !state.me.ability_used
+                                            "
+                                        >
+                                            You have one shot. If your target is
+                                            not a cultist, you will also leave
+                                            the village with guilt.
+                                        </p>
                                         <p v-if="state.me.ability_used">
                                             Your once-per-match ability is
                                             spent. You can still
@@ -1668,8 +1680,14 @@ onBeforeUnmount(() => {
                 v-if="!state.me.alive && state.phase !== 'finished'"
                 class="spectator-banner"
             >
-                You’ve been banished. Watch the story unfold—your seat is saved
-                for the next match.
+                {{
+                    state.me.elimination_reason === 'guilt'
+                        ? 'You left the village with guilt after shooting someone who was not a cultist.'
+                        : state.me.elimination_reason === 'shot'
+                          ? 'You were shot by a vigilante.'
+                          : 'You’ve been banished.'
+                }}
+                Watch the story unfold—your seat is saved for the next match.
             </p>
             <div class="game-tools">
                 <button
