@@ -5,10 +5,15 @@ import CharacterPortrait from './CharacterPortrait.vue';
 import SealedCharacter from './SealedCharacter.vue';
 import { characterIds, type Character } from '@/lib/chanting';
 import { characterCollections } from '@/lib/characterCollections';
-const props = defineProps<{ characters: Character[]; disabled?: boolean }>();
+const props = defineProps<{
+    characters: Character[];
+    disabled?: boolean;
+    searchable?: boolean;
+}>();
 const selected = defineModel<string>({ default: '' });
 const groupName = useId();
 const collection = ref('all');
+const search = ref('');
 const groups = computed(() =>
     characterCollections(props.characters, characterIds),
 );
@@ -20,10 +25,31 @@ const categories = computed(() =>
     ),
 );
 const visibleGroups = computed(() =>
-    groups.value.filter(
-        (group) =>
-            group.characters.length &&
-            (collection.value === 'all' || group.id === collection.value),
+    groups.value
+        .map((group) => ({
+            ...group,
+            characters: group.characters.filter((character) => {
+                const name = character.hidden
+                    ? (character.role_name ?? 'Sealed character')
+                    : character.name;
+                return (
+                    !props.searchable ||
+                    name
+                        .toLocaleLowerCase()
+                        .includes(search.value.trim().toLocaleLowerCase())
+                );
+            }),
+        }))
+        .filter(
+            (group) =>
+                group.characters.length &&
+                (collection.value === 'all' || group.id === collection.value),
+        ),
+);
+const resultCount = computed(() =>
+    visibleGroups.value.reduce(
+        (total, group) => total + group.characters.length,
+        0,
     ),
 );
 </script>
@@ -46,8 +72,26 @@ const visibleGroups = computed(() =>
                 </option>
             </select>
         </div>
+        <div v-if="searchable" class="character-search">
+            <label :for="`${groupName}-search`">Find a character</label>
+            <input
+                :id="`${groupName}-search`"
+                v-model="search"
+                type="search"
+                placeholder="Search characters…"
+                autocomplete="off"
+            />
+            <p role="status">
+                {{ resultCount }}
+                {{ resultCount === 1 ? 'character' : 'characters' }}
+            </p>
+        </div>
         <p v-if="!visibleGroups.length" role="status">
-            No characters in this collection yet.
+            {{
+                search.trim()
+                    ? 'No characters match. Try another name or collection.'
+                    : 'No characters in this collection yet.'
+            }}
         </p>
         <template v-for="group in visibleGroups" :key="group.id">
             <h3 v-if="collection === 'all'" class="character-unlock-heading">
@@ -95,7 +139,9 @@ const visibleGroups = computed(() =>
                         decorative
                     />
                     <span class="character-choice-name">{{
-                        character.name.replace('The ', '')
+                        character.hidden
+                            ? `? · ${character.role_name ?? 'Sealed character'}`
+                            : character.name.replace('The ', '')
                     }}</span>
                     <small
                         v-if="group.earned"
@@ -119,6 +165,24 @@ const visibleGroups = computed(() =>
     </fieldset>
 </template>
 <style scoped>
+.character-search {
+    display: grid;
+    gap: 7px;
+    margin-bottom: 14px;
+}
+.character-search label {
+    color: var(--cream);
+    font-size: 12px;
+}
+.character-search input {
+    width: 100%;
+    min-height: 42px;
+    padding: 9px 12px;
+    font-size: 12px;
+}
+.character-search p {
+    margin: 0;
+}
 .character-collection-filter {
     display: flex;
     flex-wrap: wrap;
