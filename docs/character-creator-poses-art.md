@@ -4,7 +4,17 @@ Version 1 recipes now add `body_type` (`type1`, `type2`) and `pose` (`front`, `t
 
 `creatorPoseArt.ts` records measured source crops and neck/eye/chin anchors. `creatorLayout.ts` places all parts on the same 400×500 artboard using uniform scale. The renderer layers the rear collar, head, and front collar separately, and hair behind the head plus its foreground fringe, to preserve face visibility and believable garment joins. Source clips exclude adjacent sprite fragments where generated atlas gutters overlap. Skin, hair and clothing are desaturated before tinting; bare skin is never tinted as clothing. Defiant hands are gloved.
 
-The defiant watchcap has a 17-degree placement adjustment around the scalp anchor so its lower rim clears every face's brows; this rotates its separate painted pose sprite uniformly without stretching. The SVG is solely a raster viewport and clipping system, not substitute character illustration. Both mirror and table portraits use the same recipe and native aspect ratios.
+`creatorRig.ts` records skull/temple, jaw, ear and painted front-collar landmarks for all 24 heads and 24 garments. Hair and hats use a similarity transform from their headband attachment pair to the selected skull: translation, one scale and rotation, with no stretching. The former fixed watchcap angle and fixed accessory artboard boxes have been removed. The SVG is solely a raster viewport and clipping system, not substitute character illustration. Both mirror and table portraits use the same recipe and native aspect ratios.
+
+## Fitting and occlusion
+
+Heads keep their crown-to-chin scale when changing outfits. The painted neck base overlaps behind the actual front lip of the selected garment, whose source rim is a quadratic curve. The face clip combines a measured jaw contour with the neck entering that rim; it removes the source sprite's flared neck corners without cutting through the chin. Avoid placing a shared rectangular collar opening over every garment.
+
+Hair and loose hoods have rear and front passes. Their overlap follows the selected head's actual raster alpha silhouette, rather than a common rectangular face cutout. The hood is worn back around the crown so its painted inner folds remain behind the face; the lower cloth drapes in front of the shoulders, with a dark backing confined to the hood interior. Enclosed hats suppress hair above their fitted lower headband and compress the exposed side hair into curved temple exits. Antler pendants likewise hang behind the temples, with the brow band in front. Spectacles follow the selected eye/bridge anchor; earrings follow the visible ear lobe; brooches follow the garment.
+
+For new artwork, measure source attachment points before changing placement. The headband pairs represent the skull contact plane (including the implied scalp under hair), not the sprite bounding box or the full outer brim. Keep source crops free of neighboring sprite fragments. Validate at mirror size and in compact portraits: every face/outfit combination, every head with every hat, and both short and long hair. Inspect neck/jaw and hat/temple closeups at 1:1; a passing aspect-ratio test or a small contact sheet does not establish a good fit.
+
+The JS regression suite reconstructs the SVG transform independently to verify that headband, eye and ear attachment points meet their targets, that each neck enters its painted collar, and that clothing cannot rescale a head. The existing RGBA PNG assets are unchanged by this fitting repair.
 
 ## Angled hair (three-quarter)
 

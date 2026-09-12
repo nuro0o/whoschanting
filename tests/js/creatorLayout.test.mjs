@@ -4,6 +4,7 @@ import test from 'node:test';
 import { defaultCreator } from '../../resources/js/lib/creator.ts';
 import {
     creatorAtlases,
+    creatorFitting,
     creatorLayers,
     creatorPoseAccessories,
 } from '../../resources/js/lib/creatorLayout.ts';
@@ -11,6 +12,27 @@ import {
     creatorHeadArt,
     creatorOutfitArt,
 } from '../../resources/js/lib/creatorPoseArt.ts';
+import { collarAttachments } from '../../resources/js/lib/creatorRig.ts';
+
+// Reconstruct the SVG crop/viewport/rotation mapping that the component renders,
+// independently of the fitter. This catches correct metadata wired to a wrong
+// transform origin, missing rotation, or stale fixed accessory placement.
+function renderedPoint(layer, source) {
+    const { crop, destination } = layer;
+    const x = ((source[0] - crop.x) * destination.width) / crop.width;
+    const y = ((source[1] - crop.y) * destination.height) / crop.height;
+    const rotation = layer.transform?.match(
+        /^rotate\(([^ ]+) ([^ ]+) ([^)]+)\)$/,
+    );
+    if (!rotation) return [destination.x + x, destination.y + y];
+    const angle = (Number(rotation[1]) * Math.PI) / 180;
+    nearly(Number(rotation[2]), destination.x, 'SVG rotation origin x');
+    nearly(Number(rotation[3]), destination.y, 'SVG rotation origin y');
+    return [
+        destination.x + x * Math.cos(angle) - y * Math.sin(angle),
+        destination.y + x * Math.sin(angle) + y * Math.cos(angle),
+    ];
+}
 
 const variants = ['type1', 'type2'].flatMap((body_type) =>
     ['front', 'three_quarter', 'defiant'].map((pose) => ({ body_type, pose })),
@@ -173,5 +195,93 @@ await test('every painted head has valid facial and neck landmarks and every gar
                 key,
             );
         }
+    }
+});
+
+await test('rendered headbands and facial accessories meet the selected face attachments for all 24 heads', () => {
+    const placements = new Set();
+    for (const variant of variants)
+        for (const face of ['harbor', 'weathered', 'keen', 'round']) {
+            for (const field of ['hair', 'hat', 'detail']) {
+                const options = {
+                    ...creatorAtlases[field].parts,
+                    ...creatorPoseAccessories[variant.pose]?.[field]?.parts,
+                };
+                for (const value of Object.keys(options)) {
+                    const rig = creatorFitting({
+                        ...defaultCreator,
+                        ...variant,
+                        face,
+                        hat: 'none',
+                        [field]: value,
+                    });
+                    const layer = rig.layers.find(
+                        (item) => item.field === field,
+                    );
+                    assert.ok(
+                        layer?.attachment,
+                        `${variant.body_type}/${variant.pose}/${face}/${value}`,
+                    );
+                    layer.attachment.source.forEach((source, i) => {
+                        const rendered = renderedPoint(layer, source);
+                        const target = layer.attachment.target[i];
+                        nearly(rendered[0], target[0], `${value} attachment x`);
+                        nearly(rendered[1], target[1], `${value} attachment y`);
+                    });
+                    if (field === 'hat' && value === 'watchcap')
+                        placements.add(JSON.stringify(layer.destination));
+                }
+            }
+        }
+    assert.equal(
+        placements.size,
+        24,
+        'Each skull must drive its own fit, including body type',
+    );
+});
+
+await test('each head enters the actual painted collar seam without changing its proportions for an outfit', () => {
+    for (const recipe of recipes) {
+        const rig = creatorFitting(recipe),
+            key = `${recipe.body_type}/${recipe.pose}`;
+        const outfit = rig.layers.find((layer) => layer.field === 'outfit');
+        const head = rig.layers.find((layer) => layer.field === 'face');
+        const source = collarAttachments[key][recipe.outfit].rim;
+        const rim = source.map((p) => renderedPoint(outfit, p));
+        rim.forEach((p, i) => {
+            nearly(p[0], rig.anchors.rim[i][0], 'rendered collar x');
+            nearly(p[1], rig.anchors.rim[i][1], 'rendered collar y');
+            assert.ok(
+                rig.faceClip.includes(rig.anchors.rim[i].join(' ')),
+                'face clip must meet this painted rim',
+            );
+        });
+        const frontY = (rim[0][1] + 2 * rim[1][1] + rim[2][1]) / 4;
+        const neck = renderedPoint(
+            head,
+            creatorHeadArt[key].parts[recipe.face].neck,
+        );
+        assert.ok(
+            neck[1] > frontY && neck[1] < frontY + 12,
+            'neck base must overlap behind the collar lip',
+        );
+        assert.ok(
+            rig.anchors.chin[1] < Math.min(rim[0][1], rim[2][1]),
+            'the collar must stay below the jaw',
+        );
+        const reference = creatorFitting({
+            ...recipe,
+            outfit: 'mariner',
+        }).headLayer;
+        nearly(
+            head.destination.width,
+            reference.destination.width,
+            'outfit must not resize head',
+        );
+        nearly(
+            head.destination.height,
+            reference.destination.height,
+            'outfit must not stretch head',
+        );
     }
 });

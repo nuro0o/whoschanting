@@ -2,7 +2,7 @@
 import { computed, useId } from 'vue';
 import { defaultCreator, type CreatorRecipe } from '@/lib/creator';
 import {
-    creatorLayers,
+    creatorFitting,
     creatorViews,
     type CreatorView,
 } from '@/lib/creatorLayout';
@@ -12,13 +12,6 @@ const props = withDefaults(
 );
 const appearance = computed(() => ({ ...defaultCreator, ...props.recipe }));
 const identity = useId();
-const neckClip = computed(() =>
-    appearance.value.pose === 'defiant'
-        ? 'M0 0H400V232H255L232 250V270H169V250L139 232H0Z'
-        : appearance.value.pose === 'three_quarter'
-          ? 'M0 0H400V232H270L232 250V270H169V250L151 232H0Z'
-          : 'M0 0H400V208H246Q237 229 231 250V270H169V250Q163 229 154 208H0Z',
-);
 const colorFilters: Record<string, Record<string, string>> = {
     face: {
         porcelain:
@@ -41,7 +34,8 @@ const colorFilters: Record<string, Record<string, string>> = {
     },
 };
 
-const layers = computed(() => creatorLayers(appearance.value));
+const fitting = computed(() => creatorFitting(appearance.value));
+const layers = computed(() => fitting.value.layers);
 const paintedLayers = computed(() => {
     const outfit = layers.value.find((layer) => layer.field === 'outfit')!;
     const face = layers.value.find((layer) => layer.field === 'face')!;
@@ -49,21 +43,31 @@ const paintedLayers = computed(() => {
     const hood = layers.value.find(
         (layer) => layer.field === 'hat' && layer.value === 'hood',
     );
+    const antlers = layers.value.find(
+        (layer) => layer.field === 'hat' && layer.value === 'antlers',
+    );
     return [
         { ...outfit, pass: 'back' },
         ...(hair ? [{ ...hair, pass: 'hair-back' }] : []),
         ...(hood ? [{ ...hood, pass: 'hood-back' }] : []),
+        ...(antlers ? [{ ...antlers, pass: 'antlers-back' }] : []),
+
         { ...face, pass: 'head' },
         { ...outfit, pass: 'collar' },
         ...(hair ? [{ ...hair, pass: 'hair-front' }] : []),
         ...(hood ? [{ ...hood, pass: 'hood-front' }] : []),
+
         ...layers.value
             .filter(
                 (layer) =>
                     (layer.field === 'hat' && layer.value !== 'hood') ||
                     layer.field === 'detail',
             )
-            .map((layer) => ({ ...layer, pass: layer.field })),
+            .map((layer) => ({
+                ...layer,
+                sourceClip: layer.frontClip ?? layer.sourceClip,
+                pass: layer.field,
+            })),
     ];
 });
 const viewBox = computed(() => {
@@ -92,52 +96,82 @@ function filter(field: string) {
         >
             <defs>
                 <clipPath :id="`${identity}-neck`">
-                    <path :d="neckClip" />
+                    <path :d="fitting.faceClip" />
+                </clipPath>
+                <clipPath :id="`${identity}-collar`">
+                    <path :d="fitting.collarClip" />
+                </clipPath>
+                <clipPath :id="`${identity}-features`">
+                    <path :d="fitting.faceProtection" />
+                </clipPath>
+                <clipPath
+                    v-if="fitting.hairClip"
+                    :id="`${identity}-hat-enclosure`"
+                >
+                    <path :d="fitting.hairClip" />
                 </clipPath>
                 <mask
-                    :id="`${identity}-collar`"
+                    v-for="coverage in ['hair', 'hood']"
+                    :key="coverage"
+                    :id="`${identity}-${coverage}-silhouette`"
                     maskUnits="userSpaceOnUse"
                     x="0"
                     y="0"
                     width="400"
                     height="650"
+                    style="mask-type: luminance"
                 >
                     <rect width="400" height="650" fill="white" />
-                    <path d="M169 0H231V248Q200 270 169 248Z" fill="black" />
-                </mask>
-                <mask
-                    :id="`${identity}-hair`"
-                    maskUnits="userSpaceOnUse"
-                    x="0"
-                    y="0"
-                    width="400"
-                    height="650"
-                >
-                    <rect width="400" height="650" fill="white" />
-                    <rect
-                        x="119"
-                        y="132"
-                        width="162"
-                        height="127"
-                        rx="8"
-                        fill="black"
-                    />
+                    <g
+                        :clip-path="
+                            coverage === 'hair'
+                                ? `url(#${identity}-features)`
+                                : undefined
+                        "
+                    >
+                        <svg
+                            v-bind="fitting.headLayer.destination"
+                            :viewBox="`${fitting.headLayer.crop.x} ${fitting.headLayer.crop.y} ${fitting.headLayer.crop.width} ${fitting.headLayer.crop.height}`"
+                            preserveAspectRatio="xMidYMid meet"
+                            overflow="hidden"
+                        >
+                            <image
+                                :href="`/assets/chanting/creator/${fitting.headLayer.file}.png`"
+                                :width="fitting.headLayer.atlas.width"
+                                :height="fitting.headLayer.atlas.height"
+                                style="filter: brightness(0)"
+                            />
+                        </svg>
+                    </g>
                 </mask>
             </defs>
+            <svg
+                v-if="fitting.hoodLining"
+                v-bind="fitting.hoodLining.destination"
+                :viewBox="`${fitting.hoodLining.crop.x} ${fitting.hoodLining.crop.y} ${fitting.hoodLining.crop.width} ${fitting.hoodLining.crop.height}`"
+                :transform="fitting.hoodLining.transform"
+                preserveAspectRatio="xMidYMid meet"
+                overflow="hidden"
+            >
+                <path :d="fitting.hoodLining.interior" fill="#161c12" />
+            </svg>
             <g
                 v-for="layer in paintedLayers"
                 :key="layer.pass"
                 :clip-path="
                     layer.field === 'face'
                         ? `url(#${identity}-neck)`
-                        : undefined
+                        : layer.pass === 'collar'
+                          ? `url(#${identity}-collar)`
+                          : layer.field === 'hair' && fitting.hairClip
+                            ? `url(#${identity}-hat-enclosure)`
+                            : undefined
                 "
                 :mask="
-                    layer.pass === 'collar'
-                        ? `url(#${identity}-collar)`
-                        : layer.pass === 'hair-front' ||
-                            layer.pass === 'hood-front'
-                          ? `url(#${identity}-hair)`
+                    layer.pass === 'hair-front'
+                        ? `url(#${identity}-hair-silhouette)`
+                        : layer.pass === 'hood-front'
+                          ? `url(#${identity}-hood-silhouette)`
                           : undefined
                 "
             >
@@ -149,13 +183,7 @@ function filter(field: string) {
                     preserveAspectRatio="xMidYMid meet"
                     overflow="hidden"
                     :style="{ filter: filter(layer.field) }"
-                    :transform="
-                        layer.rotation
-                            ? `rotate(${layer.rotation} 200 100)`
-                            : layer.mirrored
-                              ? `translate(400 0) scale(-1 1)`
-                              : undefined
-                    "
+                    :transform="layer.transform"
                 >
                     <defs v-if="layer.sourceClip">
                         <clipPath :id="`${identity}-${layer.pass}-crop`">
