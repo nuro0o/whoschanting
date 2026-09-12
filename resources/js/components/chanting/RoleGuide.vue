@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t } from '@/i18n';
 import { useId } from 'vue';
 import { roles } from '@/lib/chanting';
 
@@ -14,8 +15,8 @@ const headingId = useId();
 const allegiances = [
     {
         id: 'town',
-        name: 'Town',
-        purpose: 'Uncover the cult.',
+        name: t('roleGuide.town.name'),
+        purpose: t('roleGuide.town.purpose'),
         roles: [
             'vigilante',
             'townsperson',
@@ -32,8 +33,8 @@ const allegiances = [
     },
     {
         id: 'cult',
-        name: 'Cult',
-        purpose: 'Keep the ritual alive.',
+        name: t('roleGuide.cult.name'),
+        purpose: t('roleGuide.cult.purpose'),
         roles: [
             'veilweaver',
             'acolyte',
@@ -52,26 +53,20 @@ const allegiances = [
         :aria-labelledby="headingId"
     >
         <header class="role-guide__header">
-            <p class="eyebrow">SECRET ROLES. VERY DIFFERENT INTENTIONS.</p>
+            <p class="eyebrow">{{ t('roleGuide.eyebrow') }}</p>
             <component
                 :is="compact ? 'h3' : 'h2'"
                 :id="headingId"
                 class="role-guide__title"
             >
-                {{ compact ? 'Know the roles.' : 'A face is just a face.' }}
-                <em v-if="!compact">A role is a secret.</em>
+                {{
+                    compact
+                        ? t('roleGuide.compact_title')
+                        : t('roleGuide.title')
+                }}
+                <em v-if="!compact">{{ t('roleGuide.title_emphasis') }}</em>
             </component>
-            <p class="role-guide__intro">
-                Your character is cosmetic. Your secret role decides your side
-                and abilities. These are the possible roles, not a reveal of who
-                has them. Classic preserves the familiar lineup; its Illusions
-                variant adds haunting and forged readings. Hard introduces
-                Tracker and Herbalist alongside more deceptive roles. Chaos
-                draws a fresh cast with possible duplicates. Paranoia keeps the
-                dealt role counts secret and lets anyone make a public oath.
-                Custom uses the host’s exact role counts. Check the room’s Modes
-                settings for your gathering.
-            </p>
+            <p class="role-guide__intro">{{ t('roleGuide.intro') }}</p>
         </header>
         <div class="role-guide__sides">
             <section
@@ -113,8 +108,11 @@ const allegiances = [
                                 v-if="minimumPlayers?.[roleId]"
                                 class="role-guide__subtitle"
                             >
-                                In this preset with
-                                {{ minimumPlayers[roleId] }}+ players
+                                {{
+                                    t('roleGuide.minimum_players', {
+                                        value: minimumPlayers[roleId],
+                                    })
+                                }}
                             </p>
                             <p class="role-guide__description">
                                 {{ roles[roleId].description }}

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t } from '@/i18n';
 import { LockKeyhole } from '@lucide/vue';
 import { computed, ref, useId } from 'vue';
 import CharacterPortrait from './CharacterPortrait.vue';
@@ -30,7 +31,7 @@ const visibleGroups = computed(() =>
             ...group,
             characters: group.characters.filter((character) => {
                 const name = character.hidden
-                    ? (character.role_name ?? 'Sealed character')
+                    ? (character.role_name ?? t('characterPicker.sealed'))
                     : character.name;
                 return (
                     !props.searchable ||
@@ -55,14 +56,16 @@ const resultCount = computed(() =>
 </script>
 <template>
     <fieldset class="character-picker" :disabled="disabled">
-        <legend>Your face in the village</legend>
-        <p>
-            All looks, no clues. Your character never reveals your secret role.
-        </p>
+        <legend>{{ t('characterPicker.legend') }}</legend>
+        <p>{{ t('characterPicker.description') }}</p>
         <div class="character-collection-filter">
-            <label :for="`${groupName}-collection`">Collection</label>
+            <label :for="`${groupName}-collection`">{{
+                t('characterPicker.collection.label')
+            }}</label>
             <select :id="`${groupName}-collection`" v-model="collection">
-                <option value="all">All</option>
+                <option value="all">
+                    {{ t('characterPicker.collection.all') }}
+                </option>
                 <option
                     v-for="category in categories"
                     :key="category.id"
@@ -73,24 +76,33 @@ const resultCount = computed(() =>
             </select>
         </div>
         <div v-if="searchable" class="character-search">
-            <label :for="`${groupName}-search`">Find a character</label>
+            <label :for="`${groupName}-search`">{{
+                t('characterPicker.search.label')
+            }}</label>
             <input
                 :id="`${groupName}-search`"
                 v-model="search"
                 type="search"
-                placeholder="Search characters…"
+                :placeholder="t('characterPicker.search.placeholder')"
                 autocomplete="off"
             />
             <p role="status">
-                {{ resultCount }}
-                {{ resultCount === 1 ? 'character' : 'characters' }}
+                {{
+                    resultCount === 1
+                        ? t('characterPicker.search.singular', {
+                              count: resultCount,
+                          })
+                        : t('characterPicker.search.plural', {
+                              count: resultCount,
+                          })
+                }}
             </p>
         </div>
         <p v-if="!visibleGroups.length" role="status">
             {{
                 search.trim()
-                    ? 'No characters match. Try another name or collection.'
-                    : 'No characters in this collection yet.'
+                    ? t('characterPicker.search.no_matches')
+                    : t('characterPicker.collection.empty')
             }}
         </p>
         <template v-for="group in visibleGroups" :key="group.id">
@@ -118,7 +130,11 @@ const resultCount = computed(() =>
                         :value="character.id"
                         :aria-label="
                             character.hidden
-                                ? `? · ${character.role_name}`
+                                ? t('characterPicker.hidden', {
+                                      role:
+                                          character.role_name ??
+                                          t('characterPicker.sealed'),
+                                  })
                                 : character.name
                         "
                         :disabled="character.unlocked === false"
@@ -140,7 +156,11 @@ const resultCount = computed(() =>
                     />
                     <span class="character-choice-name">{{
                         character.hidden
-                            ? `? · ${character.role_name ?? 'Sealed character'}`
+                            ? t('characterPicker.hidden', {
+                                  role:
+                                      character.role_name ??
+                                      t('characterPicker.sealed'),
+                              })
                             : character.name.replace('The ', '')
                     }}</span>
                     <small
@@ -155,8 +175,10 @@ const resultCount = computed(() =>
                         />
                         {{
                             character.unlocked === false
-                                ? `Locked · ${character.requirement}`
-                                : 'Unlocked'
+                                ? t('characterPicker.locked', {
+                                      requirement: character.requirement ?? '',
+                                  })
+                                : t('characterPicker.unlocked')
                         }}
                     </small>
                 </label>

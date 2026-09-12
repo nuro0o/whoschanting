@@ -20,11 +20,11 @@ class RoomBrowser
             ->simplePaginate(24, ['code', 'state'], 'page', $page);
         $summaries = [];
         foreach ($rooms as $room) {
-            $state = $room->state;
+            $state = $this->profanity->roomText($room->state);
             $setup = $this->modes->setup($state);
             $summaries[] = [
                 'code' => $room->code,
-                'host_name' => $this->profanity->mask($state['players'][$state['host_id']]['name']),
+                'host_name' => $state['players'][$state['host_id']]['name'],
                 'player_count' => count($state['players']),
                 'capacity' => $setup['mode'] === 'custom' ? array_sum($setup['roles']) : config('game.max_players'),
                 'pin_required' => isset($state['pin_hash']),

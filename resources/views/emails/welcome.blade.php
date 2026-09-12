@@ -23,7 +23,7 @@
             <td width="34" valign="top" style="padding:20px 10px 0 0;font-family:Georgia,'Times New Roman',serif;font-size:24px;line-height:28px;color:#bdcd9c;">02</td>
             <td style="padding:20px 0 0;">
                 <p style="margin:0 0 5px;font-size:15px;line-height:23px;font-weight:bold;color:#eee9d5;">Gather the usual suspects.</p>
-                <p style="margin:0;font-size:14px;line-height:23px;color:#d4ddd2;">Create a room and share its code with your friends. You’ll need 3–10 players in total.</p>
+                <p style="margin:0;font-size:14px;line-height:23px;color:#d4ddd2;">Create a room and share its code with your friends. You’ll need {{ config('game.min_players') }}–{{ config('game.max_players') }} players in total.</p>
             </td>
         </tr>
         <tr>

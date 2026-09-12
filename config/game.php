@@ -1,10 +1,17 @@
 <?php
 
 return [
-    'rules_version' => 'last-words-v1',
+    'presence' => [
+        'timeout_seconds' => 45,
+        'navigation_grace_seconds' => 5,
+        'missed_phases' => 2,
+        'prompt_seconds' => 15,
+        'abandoned_seconds' => 300,
+    ],
+    'rules_version' => 'large-gatherings-v1',
     'min_players' => (int) env('GAME_MIN_PLAYERS', 3),
-    'max_players' => (int) env('GAME_MAX_PLAYERS', 10),
-    'cultists_by_player_count' => [3 => 1, 4 => 1, 5 => 2, 6 => 2, 7 => 3, 8 => 3, 9 => 4, 10 => 4],
+    'max_players' => (int) env('GAME_MAX_PLAYERS', 15),
+    'cultists_by_player_count' => [3 => 1, 4 => 1, 5 => 2, 6 => 2, 7 => 3, 8 => 3, 9 => 4, 10 => 4, 11 => 4, 12 => 4, 13 => 5, 14 => 5, 15 => 5],
     'town_roles_min_players' => ['warden' => 5, 'lamplighter' => 7, 'medium' => 8, 'bellkeeper' => 10],
     'cult_roles_min_players' => ['dreamweaver' => 7],
     'illusion_town_roles_min_players' => ['exorcist' => 5, 'lamplighter' => 7, 'oathkeeper' => 8, 'bellkeeper' => 10],
@@ -17,7 +24,8 @@ return [
         'veilweaver' => 'cult', 'acolyte' => 'cult', 'dreamweaver' => 'cult', 'phantasm' => 'cult', 'counterfeiter' => 'cult',
     ],
     'tokens_per_player' => 1.2,
-    'ritual_goals_by_player_count' => [3 => 2, 4 => 3],
+    // Large gatherings need four full-team scoring nights before the final vote.
+    'ritual_goals_by_player_count' => [3 => 2, 4 => 3, 11 => 16, 12 => 16, 13 => 20, 14 => 20, 15 => 20],
     'small_gathering_max_players' => 4,
     'small_gathering_mission' => ['id' => 'solitary', 'name' => 'A voice below', 'description' => 'Chant each night to advance the ritual by one step. Being investigated does not stop your chant.'],
     'characters' => [
@@ -46,6 +54,8 @@ return [
         ['id' => 'seasonal_oathkeeper', 'name' => 'The Paladin'],
     ],
     'seconds' => ['reveal' => 25, 'night' => 45, 'discussion' => 90, 'last_words' => 30, 'voting' => 45],
+    'discussion_base_players' => 10,
+    'discussion_extra_seconds_per_player' => 10,
     'paranoia_discussion_seconds' => ['early' => 90, 'middle' => 70, 'late' => 50],
     'missions' => [
         'concord' => ['id' => 'concord', 'name' => 'A chorus in the deep', 'description' => 'Every living cultist must chant tonight. If all do, each chant advances the ritual by one step. A lone survivor can chant alone.'],

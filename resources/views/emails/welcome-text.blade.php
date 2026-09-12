@@ -8,7 +8,7 @@ Your email is verified, and the village has saved you a seat. It’s a lovely pl
 Pick any character when you join a room. Your look is purely cosmetic and says nothing about your secret role.
 
 2. Gather the usual suspects.
-Create a room and share its code with your friends. You’ll need 3–10 players in total.
+Create a room and share its code with your friends. You’ll need {{ config('game.min_players') }}–{{ config('game.max_players') }} players in total.
 
 3. Let the suspicion begin.
 Act at night, discuss what happened, then vote. Keep your private role secret and read the room.

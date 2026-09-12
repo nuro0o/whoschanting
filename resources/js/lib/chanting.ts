@@ -1,3 +1,4 @@
+import { t } from '../i18n/index.ts';
 import type { CreatorRecipe } from './creator';
 import type { ChaosEvent, ModeSetup } from './gameModes';
 import type { MatchReward, PublicCustomization } from './progression';
@@ -31,16 +32,10 @@ export async function roomRequest<T>(url: string, body?: object): Promise<T> {
         },
         ...(body ? { body: JSON.stringify(body) } : {}),
     }).catch(() => {
-        throw new RoomError(
-            'The village took too long to respond. Check your connection and try again.',
-            0,
-        );
+        throw new RoomError(t('roomErrors.timeout'), 0);
     });
     const data = await response.json().catch(() => {
-        throw new RoomError(
-            'The village sent an incomplete response. Please try again.',
-            response.status,
-        );
+        throw new RoomError(t('roomErrors.incomplete'), response.status);
     });
     if (!response.ok) {
         const validation = data.errors
@@ -48,11 +43,9 @@ export async function roomRequest<T>(url: string, body?: object): Promise<T> {
             : null;
         throw new RoomError(
             response.status === 419
-                ? 'Your session expired. Refresh this page and try again.'
+                ? t('roomErrors.session')
                 : String(
-                      validation ||
-                          data.message ||
-                          'The village could not be reached. Please try again.',
+                      validation || data.message || t('roomErrors.unreachable'),
                   ),
             response.status,
         );
@@ -69,6 +62,9 @@ export function eliminationLabel(reason?: 'shot' | 'guilt' | null): string {
 }
 
 export interface Player {
+    connected?: boolean;
+    afk?: boolean;
+    in_room?: boolean;
     elimination_reason?: 'shot' | 'guilt' | null;
     customization?: PublicCustomization | null;
     oath?: { day: number; target_id: string } | null;
@@ -279,6 +275,8 @@ export interface RoomState {
     recap: MatchRecapData | null;
     players: Player[];
     me: {
+        afk?: boolean;
+        afk_prompt_deadline?: string | null;
         prediction?: Prediction | null;
         feedback?: MatchFeedbackResponse | null;
         elimination_reason?: 'shot' | 'guilt' | null;
@@ -400,115 +398,99 @@ export const roles: Record<
     { name: string; subtitle: string; description: string; symbol: string }
 > = {
     vigilante: {
-        name: 'The Vigilante',
-        subtitle: 'Town · one shot, one heavy conscience',
+        name: t('roles.vigilante.name'),
+        subtitle: t('roles.vigilante.subtitle'),
         symbol: '⌖',
-        description:
-            'Once per match at night, shoot another living player. They are eliminated at dawn. If their true allegiance is not Cult, you also leave the village with guilt and become a spectator. Night actions still resolve before the shot. Curse protection does not stop it; disruption does, but spends your shot. Keep watch to save it.',
+        description: t('roles.vigilante.description'),
     },
     tracker: {
-        name: 'The Tracker',
-        subtitle: 'Town · follower of midnight footsteps',
+        name: t('roles.tracker.name'),
+        subtitle: t('roles.tracker.subtitle'),
         symbol: '⌭',
-        description:
-            'Each night, follow another living player. At dawn, privately learn the name of the player they targeted, or that no visit was visible. Submitted attempts count even if disrupted. Phantasm concealment and the Eclipse hide tracks. You learn no role or ability.',
+        description: t('roles.tracker.description'),
     },
     herbalist: {
-        name: 'The Herbalist',
-        subtitle: 'Town · keeper of protective remedies',
+        name: t('roles.herbalist.name'),
+        subtitle: t('roles.herbalist.subtitle'),
         symbol: '⌭',
-        description:
-            'Once per match at night, protect every living player against all new curses. No target is needed. This does not remove existing curses or stop haunting, forgery or disruption. The ability is spent even on a quiet night or if disrupted. Keep watch to save it.',
+        description: t('roles.herbalist.description'),
     },
     phantasm: {
-        name: 'The Phantasm',
-        subtitle: 'Cult · architect of false visions',
+        name: t('roles.phantasm.name'),
+        subtitle: t('roles.phantasm.subtitle'),
         symbol: '◌',
-        description:
-            'Once per match, haunt another living player instead of chanting. Their outgoing visits are hidden from the Lamplighter and Tracker tonight, and false faces, shadows and distant chanting follow them through discussion. These visions reveal no allegiance. Names, actions and your own role stay truthful. The haunting fades before voting; disruption stops it. Otherwise, chant without a target.',
+        description: t('roles.phantasm.description'),
     },
     counterfeiter: {
-        name: 'The Counterfeiter',
-        subtitle: 'Cult · author of false evidence',
+        name: t('roles.counterfeiter.name'),
+        subtitle: t('roles.counterfeiter.subtitle'),
         symbol: '✎',
-        description:
-            'Once per match, forgo chanting to choose another living player and how they appear to the Oracle tonight: town or cult. This overrides a veil, but cannot alter the Medium or anyone’s true role. It is spent even if nobody investigates the target or you are disrupted. Otherwise, chant without a target.',
+        description: t('roles.counterfeiter.description'),
     },
     exorcist: {
-        name: 'The Exorcist',
-        subtitle: 'Town · clearer of troubled minds',
+        name: t('roles.exorcist.name'),
+        subtitle: t('roles.exorcist.subtitle'),
         symbol: '✣',
-        description:
-            'Once per match during discussion, cleanse another living player of their active curse and Phantasm haunting. The ability is spent even if they had neither. It does not rewrite earlier Oracle readings or protect against future afflictions. Break your own blocking curse before acting. Keep watch at night.',
+        description: t('roles.exorcist.description'),
     },
     oathkeeper: {
-        name: 'The Oathkeeper',
-        subtitle: 'Town · bound by a public promise',
+        name: t('roles.oathkeeper.name'),
+        subtitle: t('roles.oathkeeper.subtitle'),
         symbol: '⚖',
-        description:
-            'Each discussion, publicly promise to vote for another living player. The oath cannot be changed. If your actual ballot matches, you gain protection against all new curses next night. Abstaining, missing the vote or a redirected ballot breaks it. Protection does not stop haunting, forgery or disruption. Keep watch at night.',
+        description: t('roles.oathkeeper.description'),
     },
     veilweaver: {
-        name: 'The Veilweaver',
-        subtitle: 'Cult · master of misdirection',
-        description:
-            'Chant for the ritual. You may veil any living player, including yourself: their alignment appears reversed to the Oracle tonight, and your chosen curse takes hold at dawn. Cursing yourself has the same effects and must be dealt with normally. Soul Bind traps the victim behind rings and towers; Mind Mist clouds their thoughts with lost lanterns. At ritual level 3, Misdirection can redirect their next target unless they untangle its rings first.',
+        name: t('roles.veilweaver.name'),
+        subtitle: t('roles.veilweaver.subtitle'),
+        description: t('roles.veilweaver.description'),
         symbol: '◈',
     },
     acolyte: {
-        name: 'The Acolyte',
-        subtitle: 'Cult · keeper of the ritual',
-        description:
-            'Chant each night to complete your shared mission. You may curse any living player, including yourself, at dawn with Soul Bind or Mind Mist. Cursing yourself has the same effects and must be dealt with normally. Their seals grow harder as the ritual strengthens. At ritual level 3, Misdirection can redirect their next target unless they untangle its rings first.',
+        name: t('roles.acolyte.name'),
+        subtitle: t('roles.acolyte.subtitle'),
+        description: t('roles.acolyte.description'),
         symbol: '✧',
     },
     oracle: {
-        name: 'The Oracle',
-        subtitle: 'Town · seeker of secrets',
-        description:
-            'Once per match, investigate another living player at night to learn their apparent alignment. Keep watch to save your investigation for later. Submitting it spends the ability even if disrupted. Beware: the Veilweaver can reverse a reading, and the Counterfeiter can forge one when that role is in play.',
+        name: t('roles.oracle.name'),
+        subtitle: t('roles.oracle.subtitle'),
+        description: t('roles.oracle.description'),
         symbol: '☾',
     },
     townsperson: {
-        name: 'The Townsperson',
-        subtitle: 'Town · a watchful neighbor',
-        description:
-            'Keep watch at night. Read the room by day, compare stories, and vote to banish every cultist. A full ritual leaves one final discussion and vote to stop the summoning.',
+        name: t('roles.townsperson.name'),
+        subtitle: t('roles.townsperson.subtitle'),
+        description: t('roles.townsperson.description'),
         symbol: '✦',
     },
     warden: {
-        name: 'The Warden',
-        subtitle: 'Town · guardian against curses',
-        description:
-            'Protect another living player from all new curses tonight, or skip protection. You cannot protect the same player on consecutive nights. Protection does not stop veils, investigations, or ritual progress, and does not remove an existing curse.',
+        name: t('roles.warden.name'),
+        subtitle: t('roles.warden.subtitle'),
+        description: t('roles.warden.description'),
         symbol: '◇',
     },
     lamplighter: {
-        name: 'The Lamplighter',
-        subtitle: 'Town · watcher of midnight visitors',
-        description:
-            'Watch another living player tonight. At dawn, privately learn whether anyone else was seen targeting them. Your own watch does not count. You learn no visitor names, roles, or abilities; even a blocked curse counts as a visit. The Phantasm can conceal a visitor when that role is in play.',
+        name: t('roles.lamplighter.name'),
+        subtitle: t('roles.lamplighter.subtitle'),
+        description: t('roles.lamplighter.description'),
         symbol: '☼',
     },
     medium: {
-        name: 'The Medium',
-        subtitle: 'Town · listener beyond the veil',
-        description:
-            'Once per match, contact a banished player at night to privately learn their true alignment at dawn. Veils cannot change this result. You may keep watch instead and save your ability. A disrupted attempt still spends it.',
+        name: t('roles.medium.name'),
+        subtitle: t('roles.medium.subtitle'),
+        description: t('roles.medium.description'),
         symbol: '☽',
     },
     dreamweaver: {
-        name: 'The Dreamweaver',
-        subtitle: 'Cult · trespasser in dreams',
-        description:
-            'Chant without a target, or once per match give up chanting to disrupt another living player’s night action. Disruptions resolve first: the target’s other ability or chant fails, and they privately learn their submitted action was disrupted. Warden protection does not stop it. Choosing disruption also breaks a mission that requires every cultist to chant.',
+        name: t('roles.dreamweaver.name'),
+        subtitle: t('roles.dreamweaver.subtitle'),
+        description: t('roles.dreamweaver.description'),
         symbol: '≋',
     },
     bellkeeper: {
-        name: 'The Bellkeeper',
-        subtitle: 'Town · the last warning',
-        description:
-            'Once per match, ring the bell at night to prevent one ritual step earned that night. It never removes existing progress. Ringing when no steps are earned still spends your ability, as does a disrupted attempt. Keep watch to save it for later.',
+        name: t('roles.bellkeeper.name'),
+        subtitle: t('roles.bellkeeper.subtitle'),
+        description: t('roles.bellkeeper.description'),
         symbol: '♧',
     },
 };

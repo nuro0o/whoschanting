@@ -1,0 +1,16 @@
+{
+    "legend": "Your face in the village",
+    "description": "All looks, no clues. Your character never reveals your secret role.",
+    "collection.label": "Collection",
+    "collection.all": "All",
+    "search.label": "Find a character",
+    "search.placeholder": "Search characters…",
+    "search.singular": "{count} character",
+    "search.plural": "{count} characters",
+    "search.no_matches": "No characters match. Try another name or collection.",
+    "collection.empty": "No characters in this collection yet.",
+    "sealed": "Sealed character",
+    "unlocked": "Unlocked",
+    "hidden": "? · {role}",
+    "locked": "Locked · {requirement}"
+}

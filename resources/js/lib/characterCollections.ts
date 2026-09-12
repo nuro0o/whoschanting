@@ -1,3 +1,4 @@
+import { t } from '../i18n/index.ts';
 import type { Character } from './chanting';
 
 export interface CharacterCollection {
@@ -14,18 +15,28 @@ export function characterCollections(
     const collections: CharacterCollection[] = [
         {
             id: 'custom',
-            name: 'Made in the looking glass',
+            name: t('characterCollections.custom'),
             earned: false,
             characters: [],
         },
-        { id: 'classics', name: 'Classics', earned: false, characters: [] },
-        { id: 'levelup', name: 'Level Up', earned: true, characters: [] },
+        {
+            id: 'classics',
+            name: t('characterCollections.classics'),
+            earned: false,
+            characters: [],
+        },
+        {
+            id: 'levelup',
+            name: t('characterCollections.levelup'),
+            earned: true,
+            characters: [],
+        },
     ];
 
     for (const character of characters) {
         const legacyIndex = legacyIds.indexOf(character.id);
         let id: string;
-        let name = 'More characters';
+        let name = t('characterCollections.other');
         let earned = false;
         if (character.id === 'custom' || character.collection === 'custom') {
             id = 'custom';
@@ -38,7 +49,7 @@ export function characterCollections(
             name =
                 character.season_name ||
                 character.season_id ||
-                'Seasonal characters';
+                t('characterCollections.seasonal');
             earned = true;
         } else if (
             character.collection === 'classics' ||

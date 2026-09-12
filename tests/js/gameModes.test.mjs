@@ -26,7 +26,7 @@ await test('custom setup rejects missing factions, invalid counts and excess sea
         { oracle: 3 },
         { acolyte: 3 },
         { oracle: 1, acolyte: 1 },
-        { oracle: 10, acolyte: 1 },
+        { oracle: 15, acolyte: 1 },
         { oracle: 2.5, acolyte: 1 },
         { oracle: Number.NaN, acolyte: 1 },
         { oracle: 0, acolyte: 3 },
@@ -61,6 +61,17 @@ await test('mode names preserve classic legacy rooms and distinguish chaos varia
         }),
         'Chaos · Maelstrom',
     );
+});
+
+await test('custom rosters accept fifteen seats and respect a lower server limit', () => {
+    const setup = {
+        ...defaultModeSetup(),
+        mode: 'custom',
+        roles: { oracle: 1, townsperson: 9, acolyte: 5 },
+    };
+    assert.equal(customModeError(setup), null);
+    assert.ok(customModeError(setup, 3, 10));
+    assert.ok(customModeError({ ...setup, roles: { ...setup.roles, oracle: 2 } }));
 });
 
 await test('preset submissions discard inactive custom errors without mutating the saved draft', () => {

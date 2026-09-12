@@ -64,6 +64,7 @@ class TableExperience
             $target = $a['target'] ?? null;
             $this->ensure(is_string($target) && $target !== $id && isset($s['players'][$target]), 'Choose another player at the table.');
             if ($type === 'transfer_host') {
+                $this->ensure(($s['players'][$target]['connected'] ?? true) && ($s['players'][$target]['in_room'] ?? true) && ! ($s['players'][$target]['afk'] ?? false), 'Choose a player who is present to host.');
                 $s['host_id'] = $target;
                 $s['log'][] = $s['players'][$target]['name'].' is now the host.';
             } else {

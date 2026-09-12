@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t } from '@/i18n';
 import { computed, useId } from 'vue';
 import { roles } from '@/lib/chanting';
 import {
@@ -17,7 +18,7 @@ const props = withDefaults(
         minPlayers?: number;
         maxPlayers?: number;
     }>(),
-    { minPlayers: 3, maxPlayers: 10 },
+    { minPlayers: 3, maxPlayers: 15 },
 );
 const emit = defineEmits<{ 'update:modelValue': [value: ModeSetup] }>();
 const id = useId();
@@ -28,38 +29,38 @@ const error = computed(() =>
 const choices = [
     {
         id: 'classic',
-        title: 'Classic',
-        detail: 'The familiar village.',
+        title: t('modeSelector.classic.name'),
+        detail: t('modeSelector.classic.hint'),
         mark: '01',
     },
     {
         id: 'hard',
-        title: 'Hard',
-        detail: 'More secrets to untangle.',
+        title: t('modeSelector.hard.name'),
+        detail: t('modeSelector.hard.hint'),
         mark: '02',
     },
     {
         id: 'chaos',
-        title: 'Chaos',
-        detail: 'Expect the unexpected.',
+        title: t('modeSelector.chaos.name'),
+        detail: t('modeSelector.chaos.hint'),
         mark: '03',
     },
     {
         id: 'paranoia',
-        title: 'Paranoia',
-        detail: 'Fewer certainties. Less time.',
+        title: t('modeSelector.paranoia.name'),
+        detail: t('modeSelector.paranoia.hint'),
         mark: '04',
     },
     {
         id: 'custom',
-        title: 'Custom',
-        detail: 'Your cast. Your rules.',
+        title: t('modeSelector.custom.name'),
+        detail: t('modeSelector.custom.hint'),
         mark: '05',
     },
 ] as const;
 const sides = [
-    { name: 'Town', ids: townRoleIds },
-    { name: 'Cult', ids: cultRoleIds },
+    { id: 'town', name: t('modeSelector.town'), ids: townRoleIds },
+    { id: 'cult', name: t('modeSelector.cult'), ids: cultRoleIds },
 ];
 function update(change: Partial<ModeSetup>) {
     if (change.mode === 'custom' && !Object.keys(props.modelValue.roles).length)
@@ -91,7 +92,7 @@ function invalidCount(role: string): boolean {
 
 <template>
     <fieldset class="mode-selector" :disabled="disabled">
-        <legend>Choose how the village plays</legend>
+        <legend>{{ t('modeSelector.legend') }}</legend>
         <div class="mode-choices">
             <label
                 v-for="choice in choices"
@@ -118,12 +119,13 @@ function invalidCount(role: string): boolean {
         </div>
         <div class="mode-detail" aria-live="polite">
             <template v-if="modelValue.mode === 'classic'">
-                <p class="mode-kicker">A familiar kind of suspicion</p>
-                <p>
-                    The current rules and familiar role mix, scaling with your
-                    village.
+                <p class="mode-kicker">
+                    {{ t('modeSelector.classic.eyebrow') }}
                 </p>
-                <label :for="`${id}-classic`">Classic variant</label>
+                <p>{{ t('modeSelector.classic.description') }}</p>
+                <label :for="`${id}-classic`">{{
+                    t('modeSelector.classic.variant_label')
+                }}</label>
                 <select
                     :id="`${id}-classic`"
                     :value="modelValue.classic_variant"
@@ -135,36 +137,35 @@ function invalidCount(role: string): boolean {
                         })
                     "
                 >
-                    <option value="classic">Classic · original roles</option>
-                    <option value="illusions">Illusions · 5+ players</option>
+                    <option value="classic">
+                        {{ t('modeSelector.classic.original_option') }}
+                    </option>
+                    <option value="illusions">
+                        {{ t('modeSelector.classic.illusions_option') }}
+                    </option>
                 </select>
                 <p class="mode-footnote">
                     {{
                         modelValue.classic_variant === 'illusions'
-                            ? 'Phantasm, Counterfeiter and Exorcist join the cast. Oathkeeper arrives at 8 players.'
-                            : 'Oracle and Veilweaver lead the village. Larger gatherings add Warden, Lamplighter, Medium, Dreamweaver and Bellkeeper.'
+                            ? t('modeSelector.classic.illusions_description')
+                            : t('modeSelector.classic.original_description')
                     }}
                 </p>
             </template>
             <template v-else-if="modelValue.mode === 'hard'">
-                <p class="mode-kicker">
-                    Follow the evidence. Doubt the evidence.
-                </p>
-                <p>
-                    For 5+ players. Tracker follows someone’s night target;
-                    Counterfeiter can forge an Oracle reading.
-                </p>
+                <p class="mode-kicker">{{ t('modeSelector.hard.eyebrow') }}</p>
+                <p>{{ t('modeSelector.hard.description') }}</p>
                 <p class="mode-footnote">
-                    At 7: Exorcist and Phantasm. At 8: Herbalist protects the
-                    village once. At 9: Dreamweaver. At 10: Oathkeeper. Oracle
-                    and Veilweaver remain.
+                    {{ t('modeSelector.hard.details') }}
                 </p>
             </template>
             <template v-else-if="modelValue.mode === 'chaos'">
                 <p class="mode-kicker chaos-text">
-                    The tide writes its own rules
+                    {{ t('modeSelector.chaos.eyebrow') }}
                 </p>
-                <label :for="`${id}-chaos`">Chaos variant</label>
+                <label :for="`${id}-chaos`">{{
+                    t('modeSelector.chaos.variant_label')
+                }}</label>
                 <select
                     :id="`${id}-chaos`"
                     :value="modelValue.chaos_variant"
@@ -176,72 +177,70 @@ function invalidCount(role: string): boolean {
                     "
                 >
                     <option value="wildcards">
-                        Wildcards · a scrambled cast
+                        {{ t('modeSelector.chaos.wildcards_option') }}
                     </option>
                     <option value="maelstrom">
-                        Maelstrom · a changing night
+                        {{ t('modeSelector.chaos.maelstrom_option') }}
                     </option>
                 </select>
-                <p>
-                    For 5+ players. Random roles, possible duplicates, and the
-                    usual Town/Cult split. The cast is drawn when the match
-                    starts.
-                </p>
+                <p>{{ t('modeSelector.chaos.description') }}</p>
                 <p
                     v-if="modelValue.chaos_variant === 'maelstrom'"
                     class="mode-footnote"
                 >
-                    Each night announces a new rule: reversed Oracle readings,
-                    village-wide curse protection, or invisible visits. Everyone
-                    sees which rule is in effect.
+                    {{ t('modeSelector.chaos.maelstrom_description') }}
                 </p>
                 <p v-else class="mode-footnote">
-                    Any role can appear. Multiple Oracles, rival forgeries, a
-                    chorus of bells: nobody knows what the village will draw.
+                    {{ t('modeSelector.chaos.wildcards_description') }}
                 </p>
             </template>
             <template v-else-if="modelValue.mode === 'paranoia'">
-                <p class="mode-kicker">Every claim is a gamble</p>
-                <p>
-                    For 5+ players. Any role can appear, including duplicates.
-                    The Town/Cult split is known, but the dealt role counts stay
-                    secret until the match ends. No role is guaranteed.
+                <p class="mode-kicker">
+                    {{ t('modeSelector.paranoia.eyebrow') }}
                 </p>
-                <p>
-                    Everyone can publicly promise a vote. Only an Oathkeeper who
-                    keeps that promise earns protection from new curses. Making
-                    an oath never proves your role.
-                </p>
+                <p>{{ t('modeSelector.paranoia.description') }}</p>
+                <p>{{ t('modeSelector.paranoia.oaths') }}</p>
                 <p class="mode-footnote">
-                    Discussion gets shorter at one-third and two-thirds ritual
-                    progress. Each dawn announces your time to talk; voting time
-                    stays the same.
+                    {{ t('modeSelector.paranoia.timers') }}
                 </p>
             </template>
             <template v-else>
-                <p class="mode-kicker">Write the village’s cast</p>
-                <p>
-                    Enable roles, then choose how many. Every newly enabled role
-                    starts at 1. Your exact cast must match the players at the
-                    table when you start.
+                <p class="mode-kicker">
+                    {{ t('modeSelector.custom.eyebrow') }}
                 </p>
+                <p>{{ t('modeSelector.custom.description') }}</p>
                 <div class="mode-totals" role="status">
-                    <strong>{{ totals.total }} / {{ maxPlayers }} seats</strong
-                    ><span>{{ totals.town }} Town</span
-                    ><span>{{ totals.cult }} Cult</span>
+                    <strong>{{
+                        t('modeSelector.custom.seats', {
+                            total: totals.total,
+                            maxPlayers: maxPlayers,
+                        })
+                    }}</strong
+                    ><span>{{
+                        t('modeSelector.custom.town_count', {
+                            town: totals.town,
+                        })
+                    }}</span
+                    ><span>{{
+                        t('modeSelector.custom.cult_count', {
+                            cult: totals.cult,
+                        })
+                    }}</span>
                 </div>
                 <section
                     v-for="side in sides"
-                    :key="side.name"
+                    :key="side.id"
                     class="role-ledger"
-                    :aria-label="`${side.name} role counts`"
+                    :aria-label="
+                        t('modeSelector.custom.side_label', { side: side.name })
+                    "
                 >
                     <div class="role-ledger-heading">
                         {{ side.name }}
                         <span>{{
-                            side.name === 'Town'
-                                ? 'Keep the village standing'
-                                : 'Bring the ritual to life'
+                            side.id === 'town'
+                                ? t('modeSelector.custom.town_purpose')
+                                : t('modeSelector.custom.cult_purpose')
                         }}</span>
                     </div>
                     <div
@@ -276,7 +275,11 @@ function invalidCount(role: string): boolean {
                         <input
                             v-if="modelValue.roles[role] !== undefined"
                             type="number"
-                            :aria-label="`${roles[role]?.name} count`"
+                            :aria-label="
+                                t('modeSelector.custom.count_label', {
+                                    role: roles[role]?.name,
+                                })
+                            "
                             :aria-invalid="invalidCount(role)"
                             :aria-describedby="
                                 invalidCount(role)
@@ -295,15 +298,23 @@ function invalidCount(role: string): boolean {
                             :id="`${id}-${role}-count-error`"
                             class="role-count-error"
                         >
-                            Enter a whole count from 1 to {{ maxPlayers }} for
-                            {{ roles[role]?.name.replace(/^The /, '') }}.
+                            {{
+                                t('modeSelector.custom.invalid_count', {
+                                    maxPlayers: maxPlayers,
+                                    value: roles[role]?.name.replace(
+                                        /^The /,
+                                        '',
+                                    ),
+                                })
+                            }}
                         </p>
                     </div>
                 </section>
                 <p v-if="error" class="form-error" role="status">{{ error }}</p>
                 <p v-else class="mode-footnote">
-                    Ready for {{ totals.total }} players. No extra roles will be
-                    added. You can invite everyone after creating the room.
+                    {{
+                        t('modeSelector.custom.ready', { total: totals.total })
+                    }}
                 </p>
             </template>
         </div>

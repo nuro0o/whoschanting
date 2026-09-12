@@ -22,6 +22,7 @@ export interface MatchReward {
     match_id: string;
     season_id: string;
     xp: number;
+    coins?: number;
     won: boolean;
     earned_at: string;
     achievements: string[];
@@ -35,7 +36,33 @@ export interface Cosmetic {
     requirement: string;
     unlocked: boolean;
 }
+export interface StoreItem {
+    id: string;
+    category: 'titles' | 'accents' | 'backgrounds';
+    cosmetic_id: string;
+    name: string;
+    description: string;
+    price: number;
+    owned: boolean;
+    affordable: boolean;
+}
+export interface StoreData {
+    currency: 'Crowns';
+    balance: number;
+    lifetime_earned: number;
+    rewards: { match: number; win: number };
+    items: StoreItem[];
+    recent_transactions: {
+        id: number;
+        kind: 'match_reward' | 'purchase';
+        amount: number;
+        balance_after: number;
+        item_id: string | null;
+        created_at: string;
+    }[];
+}
 export interface ProgressionData {
+    store: StoreData;
     seasonal_achievements?: {
         season_id: string;
         ends_at: string;
@@ -104,12 +131,16 @@ export const cosmeticAccents: Record<string, string> = {
     moon: '#b7b6d0',
     ember: '#c77d61',
     gold: '#d2b46c',
+    amethyst: '#a48bcc',
+    patina: '#6faeaa',
 };
 export const cosmeticBackgrounds: Record<string, string> = {
     plain: '#263831',
     harbor: 'linear-gradient(145deg, #c0cebf, #526f73 52%, #213c42)',
     dusk: 'linear-gradient(145deg, #aa859b, #55516b 52%, #252b40)',
     candlelight: 'linear-gradient(145deg, #edd29a, #ac7947 52%, #593a2b)',
+    moonlit: 'linear-gradient(145deg, #c9d8e5, #637e9c 52%, #243750)',
+    wildwood: 'linear-gradient(145deg, #c1b485, #627c54 52%, #203d32)',
 };
 export function progressPercent(current: number, target: number): number {
     return Math.max(

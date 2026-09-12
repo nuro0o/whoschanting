@@ -3,6 +3,7 @@
 namespace Tests\Unit;
 
 use App\Game\ProfanityFilter;
+use App\Game\VillageNames;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
@@ -42,5 +43,37 @@ class ProfanityFilterTest extends TestCase
         $this->assertSame('***** ********* badword shit', (new ProfanityFilter)->mask('curse bad(word) badword shit'));
         config(['moderation.words' => []]);
         $this->assertSame('curse', (new ProfanityFilter)->mask('curse'));
+    }
+
+    public function test_toxic_names_including_compounds_and_obfuscation_are_replaced(): void
+    {
+        $filter = new ProfanityFilter;
+        $pool = (new VillageNames)->all();
+        foreach (['shithead', 'SHITHEAD', 'sh1thead', 's.h.i.t.h.e.a.d', 'shiiithead', "sh\u{200B}ithead", 'ｓｈｉｔｈｅａｄ', 'xxshithead99', 'CaptainFuckface', 'dipshit', 'b!tch', 'cunt'] as $name) {
+            $this->assertTrue($filter->containsInName($name), $name);
+            $this->assertContains($filter->playerName($name), $pool, $name);
+        }
+        foreach (['Scunthorpe', 'Assistant', 'Classy', 'Cassie', 'Dick', 'Cocktail', 'Captain', 'Café'] as $name) {
+            $this->assertSame($name, $filter->playerName(' '.$name.' '));
+        }
+    }
+
+    public function test_village_name_pool_is_large_unique_safe_and_fits_the_name_limit(): void
+    {
+        $filter = new ProfanityFilter;
+        $names = (new VillageNames)->all();
+        $this->assertCount(4096, array_unique($names));
+        foreach ($names as $name) {
+            $this->assertLessThanOrEqual(24, mb_strlen($name));
+            $this->assertFalse($filter->containsInName($name), $name);
+        }
+    }
+
+    public function test_replacement_excludes_taken_names_case_insensitively(): void
+    {
+        $names = (new VillageNames)->all();
+        $remaining = array_pop($names);
+        $taken = array_map(mb_strtolower(...), $names);
+        $this->assertSame($remaining, (new ProfanityFilter)->playerName('shithead', $taken));
     }
 }

@@ -31,6 +31,7 @@ const props = defineProps<{
     phase: RoomState['phase'];
     display?: RitualTableDisplay;
     meId: string;
+    hostId?: string;
     submitted: boolean;
     actionSerial: number;
     ritualTokens: number;
@@ -143,7 +144,7 @@ function seatLabel(player: Player) {
     const ready =
         (props.phase === 'lobby' && player.ready) ||
         (props.phase === 'discussion' && player.discussion_ready);
-    const identity = `${player.name}${player.id === props.meId ? ', you' : ''}${ready && player.alive ? ', ready' : ''}`;
+    const identity = `${player.name}${player.id === props.meId ? ', you' : ''}${player.id === props.hostId ? ', host' : ''}${player.afk ? ', AFK' : player.connected === false ? ', away' : ''}${ready && player.alive ? ', ready' : ''}`;
     if (props.phase === 'finished' && player.role)
         return `${identity}, ${roles[player.role]?.name ?? player.role}${player.alive ? '' : `, ${eliminationLabel(player.elimination_reason)}`}`;
     return `${identity}${!player.alive ? `, ${eliminationLabel(player.elimination_reason)}` : ''}${selectable(player) ? ', select as target' : ''}`;
@@ -190,6 +191,7 @@ onBeforeUnmount(() => {
         class="table-panel table-panel-immersive"
         :class="{
             'has-actions': !!$slots.briefing || !!$slots.actions,
+            'large-gathering': players.length > 10,
         }"
         :data-phase="phase"
         :data-winner="winner"
@@ -319,11 +321,32 @@ onBeforeUnmount(() => {
                     ><Check :size="13"
                 /></span>
                 <span class="seat-name" :title="player.name"
-                    >{{ player.name
-                    }}<small v-if="player.id === meId">You</small></span
+                    ><span class="seat-player-name">{{ player.name }}</span
+                    ><small v-if="player.id === meId || player.id === hostId">{{
+                        player.id === meId
+                            ? player.id === hostId
+                                ? 'You · Host'
+                                : 'You'
+                            : 'Host'
+                    }}</small></span
                 >
                 <span
-                    v-if="phase === 'finished' && player.role"
+                    v-if="
+                        player.in_room === false ||
+                        player.afk ||
+                        player.connected === false
+                    "
+                    class="seat-banished"
+                    >{{
+                        player.in_room === false
+                            ? 'Left'
+                            : player.afk
+                              ? 'AFK'
+                              : 'Away'
+                    }}</span
+                >
+                <span
+                    v-else-if="phase === 'finished' && player.role"
                     class="seat-final-role"
                     :class="{ 'is-cult': player.alignment === 'cult' }"
                     >{{ roles[player.role]?.name ?? player.role }}</span
@@ -420,7 +443,11 @@ onBeforeUnmount(() => {
                         decorative
                     />
                     <span
-                        ><strong :title="player.name">{{ player.name }}</strong
+                        ><strong :title="player.name"
+                            >{{ player.name
+                            }}{{
+                                player.id === hostId ? ' · Host' : ''
+                            }}</strong
                         ><small
                             ><component
                                 :is="
@@ -639,75 +666,89 @@ onBeforeUnmount(() => {
     }
     .table-compact-roster {
         display: block;
-        flex-shrink: 0;
-        border-top: 1px solid #afb48b30;
-        padding: 8px 10px;
     }
-    .table-compact-roster > p {
-        margin: 0 0 6px;
-        font-size: 12px;
-        letter-spacing: 1px;
-        color: #d8d7b9;
+}
+.large-gathering .table-compact-roster {
+    display: block;
+}
+.large-gathering .card-table .table-seat,
+.large-gathering .table-seating-list {
+    display: none;
+}
+@media (min-width: 901px) {
+    .large-gathering .table-compact-roster > div {
+        grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
     }
-    .table-compact-roster > p > span {
-        float: right;
-        letter-spacing: 0;
-        color: #aabcaa;
-    }
-    .table-compact-roster > div {
-        display: grid;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 4px;
-        max-height: 184px;
-        overflow-y: auto;
-        overscroll-behavior: contain;
-    }
-    .table-compact-roster > div > * {
-        display: flex;
-        align-items: center;
-        gap: 6px;
-        min-width: 0;
-        padding: 8px;
-        min-height: 56px;
-        border: 1px solid #52614b;
-        background: #182a2a;
-        color: #e1dfc2;
-        text-align: left;
-        font: inherit;
-    }
-    .table-compact-roster :deep(.character-portrait) {
-        width: 32px;
-        flex: 0 0 32px;
-    }
-    .table-compact-roster > div > * > span {
-        display: block;
-        min-width: 0;
-    }
-    .table-compact-roster strong {
-        display: block;
-        overflow: hidden;
-        white-space: nowrap;
-        text-overflow: ellipsis;
-        font-size: 12px;
-        font-weight: 500;
-    }
-    .table-compact-roster small {
-        display: block;
-        color: #aabcaa;
-        font-size: 12px;
-    }
-    .table-compact-roster button {
-        cursor: pointer;
-    }
-    .table-compact-roster button:hover,
-    .table-compact-roster button[aria-pressed='true'] {
-        background: #364e3b;
-        border-color: #b7c78b;
-    }
-    .table-compact-roster :focus-visible {
-        outline: 2px solid #dec784;
-        outline-offset: -2px;
-    }
+}
+.table-compact-roster {
+    flex-shrink: 0;
+    border-top: 1px solid #afb48b30;
+    padding: 8px 10px;
+}
+.table-compact-roster > p {
+    margin: 0 0 6px;
+    font-size: 12px;
+    letter-spacing: 1px;
+    color: #d8d7b9;
+}
+.table-compact-roster > p > span {
+    float: right;
+    letter-spacing: 0;
+    color: #aabcaa;
+}
+.table-compact-roster > div {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 4px;
+    max-height: 184px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+.table-compact-roster > div > * {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    padding: 8px;
+    min-height: 56px;
+    border: 1px solid #52614b;
+    background: #182a2a;
+    color: #e1dfc2;
+    text-align: left;
+    font: inherit;
+}
+.table-compact-roster :deep(.character-portrait) {
+    width: 32px;
+    flex: 0 0 32px;
+}
+.table-compact-roster > div > * > span {
+    display: block;
+    min-width: 0;
+}
+.table-compact-roster strong {
+    display: block;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    font-size: 12px;
+    font-weight: 500;
+}
+.table-compact-roster small {
+    display: block;
+    color: #aabcaa;
+    font-size: 12px;
+}
+.table-compact-roster button {
+    cursor: pointer;
+}
+.table-compact-roster button:hover,
+.table-compact-roster button[aria-pressed='true'] {
+    background: #364e3b;
+    border-color: #b7c78b;
+}
+.table-compact-roster :focus-visible {
+    outline: 2px solid #dec784;
+    outline-offset: -2px;
 }
 .table-reset {
     display: inline-flex;
@@ -1004,6 +1045,8 @@ onBeforeUnmount(() => {
     border-radius: 4px;
 }
 .table-panel-immersive .seat-name {
+    display: flex;
+    flex-direction: column;
     font-size: 14px;
     max-width: 112px;
     line-height: 1.35;
@@ -1015,7 +1058,14 @@ onBeforeUnmount(() => {
     max-width: 94px;
 }
 .table-panel-immersive .seat-name small {
+    display: block;
+    margin-left: 0;
     font-size: 11px;
+}
+.seat-player-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 .table-panel-immersive .seat-banished,
 .table-panel-immersive .seat-ready {

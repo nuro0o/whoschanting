@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t } from '@/i18n';
 import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import { Check, X } from '@lucide/vue';
 import {
@@ -107,7 +108,7 @@ onBeforeUnmount(stopPositioning);
                     </div>
                     <DialogClose
                         class="entry-editor-close"
-                        aria-label="Close editor"
+                        :aria-label="t('entryEditorPanel.close')"
                     >
                         <X :size="20" aria-hidden="true" />
                     </DialogClose>
@@ -119,7 +120,7 @@ onBeforeUnmount(stopPositioning);
                     </p>
                     <DialogClose class="button primary"
                         ><Check :size="16" aria-hidden="true" />
-                        Done</DialogClose
+                        {{ t('entryEditorPanel.done') }}</DialogClose
                     >
                 </footer>
             </DialogContent>

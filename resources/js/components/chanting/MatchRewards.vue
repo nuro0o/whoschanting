@@ -23,6 +23,7 @@ const page = usePage();
             <p class="eyebrow">YOUR ACCOUNT REWARD</p>
             <h3 id="match-rewards-title">
                 +{{ reward.xp }} XP
+                <span v-if="reward.coins">· +{{ reward.coins }} Crowns</span>
                 <span v-if="reward.level_after > reward.level_before"
                     >· Level {{ reward.level_after }} reached</span
                 >
@@ -66,6 +67,12 @@ const page = usePage();
             </div>
             <Link href="/progression"
                 >View your progression <ArrowRight :size="14"
+            /></Link>
+            <Link
+                v-if="reward.coins"
+                href="/settings/profile#store"
+                class="reward-store-link"
+                >Spend Crowns in the store <ArrowRight :size="14"
             /></Link>
         </div>
         <div v-else-if="linked">
@@ -135,6 +142,9 @@ const page = usePage();
 }
 .match-rewards > div {
     min-width: 0;
+}
+.match-rewards .reward-store-link {
+    margin-left: 18px;
 }
 .character-rewards {
     margin-top: 18px;

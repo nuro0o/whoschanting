@@ -27,4 +27,11 @@ class ProgressionController extends Controller
 
         return response()->json(['progression' => $result]);
     }
+
+    public function purchase(Request $request, AccountProgression $progression): JsonResponse
+    {
+        $input = $request->validate(['item_id' => ['required', 'string', 'max:80']]);
+
+        return response()->json(['progression' => $progression->purchase($request->user()->id, $input['item_id'])]);
+    }
 }

@@ -42,7 +42,7 @@ class GameModesTest extends TestCase
             $this->engine->join($room->code, 'guest-'.$i, 'Player '.$i);
         }
         foreach ($room->fresh()->state['players'] as $id => $player) {
-            $this->identities[$id] = 'guest-'.substr($player['name'], -1);
+            $this->identities[$id] = 'guest-'.substr($player['name'], strlen('Player '));
             $this->act($room, $id, 'ready');
         }
         if ($start) {
@@ -86,7 +86,7 @@ class GameModesTest extends TestCase
 
     public function test_hard_rosters_expand_by_room_size_and_classic_preserves_its_lineup(): void
     {
-        foreach (range(5, 10) as $count) {
+        foreach (range(5, 15) as $count) {
             $hard = $this->modes->roster($this->modes->normalize(['mode' => 'hard']), $count);
             $classic = $this->modes->roster($this->modes->normalize(), $count);
             $this->assertCount($count, $hard);
@@ -96,6 +96,61 @@ class GameModesTest extends TestCase
             $this->assertNotContains('tracker', $classic);
             $this->assertSame(config('game.cultists_by_player_count.'.$count), count(array_filter($hard, fn (string $role): bool => config('game.role_alignments')[$role] === 'cult')));
         }
+    }
+
+    public static function largeGatheringModes(): array
+    {
+        return [
+            'classic' => [['mode' => 'classic']],
+            'illusions' => [['mode' => 'classic', 'classic_variant' => 'illusions']],
+            'hard' => [['mode' => 'hard']],
+            'wildcards' => [['mode' => 'chaos']],
+            'maelstrom' => [['mode' => 'chaos', 'chaos_variant' => 'maelstrom']],
+            'paranoia' => [['mode' => 'paranoia']],
+            'custom' => [['mode' => 'custom', 'roles' => ['oracle' => 1, 'townsperson' => 9, 'acolyte' => 5]]],
+        ];
+    }
+
+    #[DataProvider('largeGatheringModes')]
+    public function test_every_mode_starts_fifteen_players_and_snapshots_large_group_timing(array $setup): void
+    {
+        $room = $this->gathering($setup, 15, false);
+        $preview = $this->engine->access($room->code, 'guest-0');
+        $this->assertNull($preview['mode_preview']['error']);
+        $this->assertSame(140, $preview['rules']['seconds']['discussion']);
+        $this->reject(fn () => $this->engine->join($room->code, 'overflow', 'Extra'));
+        $this->act($room, $room->state['host_id'], 'start');
+        $room->refresh();
+        $this->assertCount(15, $room->state['players']);
+        $this->assertSame(5, count(array_filter($room->state['players'], fn (array $p): bool => $p['alignment'] === 'cult')));
+        $this->assertSame(20, $room->state['threshold']);
+        config(['game.seconds.discussion' => 5, 'game.discussion_extra_seconds_per_player' => 0]);
+        $this->expire($room); // reveal -> night
+        $this->expire($room); // night -> discussion
+        $view = $this->engine->access($room->code, 'guest-0');
+        $this->assertSame('discussion', $view['phase']);
+        $this->assertEquals(140, now()->diffInSeconds($room->deadline));
+        $this->assertSame(140, $view['rules']['seconds']['discussion']);
+    }
+
+    public static function largeParanoiaProgress(): array
+    {
+        return ['early' => [0, 140], 'middle' => [7, 120], 'late' => [14, 100]];
+    }
+
+    #[DataProvider('largeParanoiaProgress')]
+    public function test_large_paranoia_keeps_its_tier_bonus_after_configuration_changes(int $tokens, int $seconds): void
+    {
+        $room = $this->gathering(['mode' => 'paranoia'], 15);
+        $s = $room->state;
+        $s['tokens'] = $tokens;
+        $room->update(['state' => $s]);
+        config(['game.discussion_extra_seconds_per_player' => 0, 'game.paranoia_discussion_seconds' => ['early' => 5, 'middle' => 4, 'late' => 3]]);
+        $this->expire($room);
+        $view = $this->engine->access($room->code, 'guest-0');
+        $this->assertEquals($seconds, now()->diffInSeconds($room->deadline));
+        $this->assertSame($seconds, $view['rules']['seconds']['discussion']);
+        $this->assertSame(['early' => 140, 'middle' => 120, 'late' => 100], $view['mode_preview']['discussion_seconds']);
     }
 
     public function test_http_creation_persists_selected_modes_and_custom_counts(): void
@@ -161,7 +216,7 @@ class GameModesTest extends TestCase
             'unknown variant' => [['mode' => 'chaos', 'chaos_variant' => 'made-up']],
             'no town' => [['mode' => 'custom', 'roles' => ['acolyte' => 3]]],
             'no cult' => [['mode' => 'custom', 'roles' => ['oracle' => 3]]],
-            'too many' => [['mode' => 'custom', 'roles' => ['oracle' => 10, 'acolyte' => 1]]],
+            'too many' => [['mode' => 'custom', 'roles' => ['oracle' => 15, 'acolyte' => 1]]],
             'too few' => [['mode' => 'custom', 'roles' => ['oracle' => 1, 'acolyte' => 1]]],
             'unknown role' => [['mode' => 'custom', 'roles' => ['oracle' => 2, 'fake' => 1]]],
             'fraction' => [['mode' => 'custom', 'roles' => ['oracle' => 2.5, 'acolyte' => 1]]],
@@ -196,7 +251,7 @@ class GameModesTest extends TestCase
         // A restricted pool demonstrates duplicates and the absence of a guaranteed Oracle.
         config(['game.role_alignments' => ['oathkeeper' => 'town', 'acolyte' => 'cult']]);
         $setup = $this->modes->normalize(['mode' => 'paranoia']);
-        foreach (range(5, 10) as $count) {
+        foreach (range(5, 15) as $count) {
             $cult = config('game.cultists_by_player_count.'.$count);
             $this->assertEquals(['oathkeeper' => $count - $cult, 'acolyte' => $cult], array_count_values($this->modes->roster($setup, $count)));
             $preview = $this->modes->preview($setup, $count);

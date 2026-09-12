@@ -3,6 +3,7 @@ import { Head, Link, usePage } from '@inertiajs/vue3';
 import {
     ArrowRight,
     Check,
+    Crown,
     LockKeyhole,
     Shield,
     Sparkles,
@@ -343,6 +344,20 @@ function moveTab(event: KeyboardEvent, index: number) {
                 </div>
             </div>
         </section>
+        <Link href="/settings/profile#store" class="reputation-store-link">
+            <Crown :size="22" :stroke-width="1.3" aria-hidden="true" />
+            <span
+                ><strong
+                    >{{ data.store.balance.toLocaleString() }} Crowns</strong
+                >
+                <span
+                    >Earned at the table. Yours to spend on cosmetics.</span
+                ></span
+            >
+            <span class="account-text-link"
+                >Visit your store <ArrowRight :size="16"
+            /></span>
+        </Link>
         <nav
             class="reputation-tabs"
             role="tablist"
@@ -982,7 +997,11 @@ function moveTab(event: KeyboardEvent, index: number) {
                                 {{ reward.season_id }}</small
                             >
                         </div>
-                        <span>+{{ reward.xp }} XP</span>
+                        <span
+                            >+{{ reward.xp }} XP<small v-if="reward.coins">
+                                +{{ reward.coins }} Crowns</small
+                            ></span
+                        >
                     </li>
                 </ul>
             </div>
@@ -1005,6 +1024,44 @@ function moveTab(event: KeyboardEvent, index: number) {
 </template>
 
 <style scoped>
+.reputation-store-link {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    padding: 19px 23px;
+    border: 1px solid var(--account-line);
+    background: var(--account-deep);
+    margin: 22px 0;
+}
+.reputation-store-link > svg {
+    color: var(--account-brass);
+}
+.reputation-store-link > span:first-of-type {
+    flex: 1;
+}
+.reputation-store-link strong {
+    display: block;
+    font:
+        400 22px 'Fraunces',
+        Georgia,
+        serif;
+}
+.reputation-store-link strong + span {
+    display: block;
+    font-size: 11px;
+    color: var(--account-muted);
+    margin-top: 4px;
+}
+@media (max-width: 550px) {
+    .reputation-store-link {
+        flex-wrap: wrap;
+        padding: 17px;
+    }
+    .reputation-store-link > .account-text-link {
+        flex-basis: 100%;
+        margin-left: 38px;
+    }
+}
 .reputation-overview {
     display: grid;
     grid-template-columns: 320px minmax(0, 1fr);

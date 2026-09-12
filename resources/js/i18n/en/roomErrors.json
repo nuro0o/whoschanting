@@ -1,0 +1,6 @@
+{
+    "timeout": "The village took too long to respond. Check your connection and try again.",
+    "incomplete": "The village sent an incomplete response. Please try again.",
+    "session": "Your session expired. Refresh this page and try again.",
+    "unreachable": "The village could not be reached. Please try again."
+}

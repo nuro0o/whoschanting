@@ -1,0 +1,12 @@
+{
+    "names.classic": "Classic",
+    "names.hard": "Hard",
+    "names.custom": "Custom",
+    "names.paranoia": "Paranoia",
+    "names.illusions": "Classic · Illusions",
+    "names.maelstrom": "Chaos · Maelstrom",
+    "names.wildcards": "Chaos · Wildcards",
+    "errors.role_count": "Each enabled role needs a whole count from 1 to {max}.",
+    "errors.factions": "Include at least one Town role and one Cult role.",
+    "errors.total": "Choose {min}–{max} roles in total. You currently have {total}."
+}

@@ -1,0 +1,20 @@
+{
+    "eyebrow": "A FAMILIAR FACE. AN UNFAMILIAR ALIBI.",
+    "title": "Meet your",
+    "title_emphasis": "neighbors.",
+    "collection.count": "20+ characters",
+    "collection.description": "with plenty more faces to unlock.",
+    "carousel_label": "carousel",
+    "label": "Featured neighbors",
+    "slide_label": "slide",
+    "previous": "Previous character",
+    "choose": "Choose a character",
+    "next": "Next character",
+    "position.character": "{name}. Character",
+    "position.of": "of",
+    "note.sign_in": "Pick a face you love when you sign in. Guests get a surprise.",
+    "note.roles": "Every character can have any role. Trust nobody’s wardrobe.",
+    "slide_position": "{index} of {total}: {name}",
+    "show": "Show {name}",
+    "show_position": "Show {name}, {index} of {total}"
+}

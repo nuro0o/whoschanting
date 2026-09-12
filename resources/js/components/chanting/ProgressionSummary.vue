@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Link } from '@inertiajs/vue3';
-import { ArrowUpRight } from '@lucide/vue';
+import { ArrowUpRight, Crown } from '@lucide/vue';
 import { progressPercent, type ProgressionData } from '@/lib/progression';
 defineProps<{ progression: ProgressionData }>();
 </script>
@@ -31,6 +31,11 @@ defineProps<{ progression: ProgressionData }>();
         </div>
         <Link href="/progression" class="account-text-link"
             >Progression & wardrobe <ArrowUpRight :size="16"
+        /></Link>
+        <Link href="/settings/profile#store" class="account-text-link"
+            ><Crown :size="16" aria-hidden="true" />
+            {{ progression.store.balance.toLocaleString() }} Crowns · Store
+            <ArrowUpRight :size="16"
         /></Link>
     </section>
 </template>

@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Events\RoomUpdated;
 use App\Game\MatchEngine;
+use App\Game\VillageNames;
 use App\Models\GameMatch;
 use App\Models\GameRoom;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -32,25 +33,47 @@ class ModerationTest extends TestCase
         return $this->engine->access($room->code, $identity, ['type' => $type, 'phase_id' => $room->fresh()->state['phase_id'], ...$extra]);
     }
 
-    public function test_http_creation_and_chat_store_and_return_only_masked_text(): void
+    public function test_http_creation_replaces_toxic_names_and_chat_stays_masked(): void
     {
-        $code = $this->postJson('/rooms', ['name' => 'Shit captain'])->assertCreated()->json('code');
-        $this->postJson('/rooms/'.$code.'/actions', ['type' => 'chat', 'phase_id' => 1, 'body' => 'That is sh1t!'])
-            ->assertOk()->assertJsonPath('me.name', '**** captain')->assertJsonPath('messages.0.body', 'That is ****!');
+        $code = $this->postJson('/rooms', ['name' => 'shithead', 'visibility' => 'public'])->assertCreated()->json('code');
         $state = GameRoom::where('code', $code)->firstOrFail()->state;
-        $this->assertSame('**** captain', $state['players'][$state['host_id']]['name']);
-        $this->assertSame('**** captain', $state['messages'][0]['name']);
+        $name = $state['players'][$state['host_id']]['name'];
+        $this->assertContains($name, (new VillageNames)->all());
+        $this->postJson('/rooms/'.$code.'/actions', ['type' => 'chat', 'phase_id' => 1, 'body' => 'That is sh1t!'])
+            ->assertOk()->assertJsonPath('me.name', $name)->assertJsonPath('messages.0.body', 'That is ****!');
+        $state = GameRoom::where('code', $code)->firstOrFail()->state;
+        $this->assertSame($name, $state['players'][$state['host_id']]['name']);
+        $this->assertSame($name, $state['messages'][0]['name']);
         $this->assertSame('That is ****!', $state['messages'][0]['body']);
         $this->getJson('/rooms/'.$code.'/state')->assertOk()->assertJsonPath('messages.0.body', 'That is ****!');
+        $this->getJson('/rooms/public')->assertOk()->assertJsonPath('rooms.0.host_name', $name);
     }
 
     public function test_join_checks_uniqueness_using_the_name_players_will_see(): void
     {
         $room = $this->engine->create('host', 'Captain');
         $this->engine->join($room->code, 'guest', 'Shit sailor');
-        $this->assertSame('**** sailor', $this->engine->access($room->code, 'guest')['me']['name']);
+        $name = $this->engine->access($room->code, 'guest')['me']['name'];
+        $this->assertContains($name, (new VillageNames)->all());
+        $this->engine->join($room->code, 'other', 'Shit sailor');
+        $otherName = $this->engine->access($room->code, 'other')['me']['name'];
+        $this->assertContains($otherName, (new VillageNames)->all());
+        $this->assertNotSame($name, $otherName);
+        $this->engine->join($room->code, 'guest', 'Fuck sailor');
+        $this->assertSame($name, $this->engine->access($room->code, 'guest')['me']['name']);
         $this->expectException(ValidationException::class);
-        $this->engine->join($room->code, 'other', 'Fuck sailor');
+        $this->engine->join($room->code, 'duplicate', mb_strtolower($name));
+    }
+
+    public function test_http_join_replaces_an_obfuscated_compound_name(): void
+    {
+        $room = $this->engine->create('host', 'Captain');
+        $this->withSession(['chanting.identity' => 'guest'])->postJson('/rooms/join', [
+            'code' => $room->code, 'name' => 'xxSh1thead99',
+        ])->assertOk();
+        $name = $this->getJson('/rooms/'.$room->code.'/state')->assertOk()->json('me.name');
+        $this->assertContains($name, (new VillageNames)->all());
+        $this->assertSame($name, $this->engine->access($room->code, 'guest')['me']['name']);
     }
 
     public function test_statements_defenses_and_feedback_stay_masked_in_views_and_archives(): void
@@ -99,7 +122,8 @@ class ModerationTest extends TestCase
         $this->assertSame('finished', $view['phase']);
         $this->assertSame('**** luck.', $view['me']['feedback']['body']);
         $recap = GameMatch::findOrFail($s['match_id'])->recap;
-        $this->assertSame('**** captain', $recap['players'][0]['name']);
+        $this->assertSame($s['players'][$host]['name'], $recap['players'][0]['name']);
+        $this->assertContains($recap['players'][0]['name'], (new VillageNames)->all());
         $this->assertSame('This is ********.', $recap['claims'][0]['body']);
         $this->assertSame('A **** story.', $recap['responses'][0]['body']);
         $this->assertSame('That is ******* wrong.', $recap['rounds'][0]['last_words']['defenses'][0]['body']);
@@ -120,15 +144,20 @@ class ModerationTest extends TestCase
         $s['actions'][$host] = ['type' => 'vote', 'target' => $host];
         $room->update(['state' => $s]);
         $view = $this->engine->access($room->code, 'host');
-        $this->assertSame('**** captain', $view['me']['name']);
+        $name = $view['me']['name'];
+        $this->assertContains($name, (new VillageNames)->all());
+        $this->assertSame($name, $room->fresh()->state['players'][$host]['name']);
+        $this->assertSame($name, $this->engine->access($room->code, 'host')['me']['name']);
+        $this->assertSame($name, $view['messages'][0]['name']);
+        $this->assertSame($name, $view['me']['results'][0]['target']);
         $this->assertSame('****!', $view['messages'][0]['body']);
         $this->assertSame('**** sailor', $view['me']['results'][0]['visited_target']);
-        $this->assertSame('Your choice turned toward **** captain.', $view['me']['curse_notice']);
-        $this->assertSame('**** captain is now the host.', $view['log'][1]);
+        $this->assertSame('Your choice turned toward '.$name.'.', $view['me']['curse_notice']);
+        $this->assertSame($name.' is now the host.', $view['log'][1]);
         $this->act($room, 'host', 'chat', ['body' => 'Hello']);
         $saved = $room->fresh()->state;
         $this->assertSame($s['players'][$host]['identity'], $saved['players'][$host]['identity']);
         $this->assertSame($s['actions'], $saved['actions']);
-        $this->assertSame('**** captain', $saved['players'][$host]['name']);
+        $this->assertSame($name, $saved['players'][$host]['name']);
     }
 }

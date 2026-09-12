@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t } from '@/i18n';
 import { onBeforeUnmount, onMounted, ref } from 'vue';
 
 const canvas = ref<HTMLElement>();
@@ -59,7 +60,7 @@ onBeforeUnmount(() => {
     <div class="village-scene">
         <img
             src="/assets/chanting/village.png"
-            alt="A crooked coastal village glows with candlelight beneath a moonlit sea, while mysterious tentacles rise through the green mist."
+            :alt="t('villageScene.description')"
             width="1536"
             height="1024"
             fetchpriority="high"

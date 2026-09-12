@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Events\RoomUpdated;
 use App\Game\MatchEngine;
+use App\Game\VillageNames;
 use App\Models\GameRoom;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -82,16 +83,18 @@ class RoomBrowserTest extends TestCase
         $this->getJson('/rooms/public')->assertJsonPath('rooms.0.pin_required', false)->assertJsonCount(1, 'rooms');
     }
 
-    public function test_directory_only_returns_allowlisted_summary_and_masks_existing_host_names(): void
+    public function test_directory_only_returns_allowlisted_summary_and_replaces_existing_toxic_host_names(): void
     {
         $room = $this->engine->create('secret-identity', 'Host', pin: '0123', visibility: 'public');
         $s = $room->state;
         $s['players'][$s['host_id']]['name'] = 'Shit captain';
         $s['messages'][] = ['body' => 'Private conversation'];
         $room->update(['state' => $s]);
+        $name = $this->engine->access($room->code, 'secret-identity')['me']['name'];
+        $this->assertContains($name, (new VillageNames)->all());
         $this->getJson('/rooms/public')->assertOk()->assertExactJson([
             'rooms' => [[
-                'code' => $room->code, 'host_name' => '**** captain', 'player_count' => 1,
+                'code' => $room->code, 'host_name' => $name, 'player_count' => 1,
                 'capacity' => config('game.max_players'), 'pin_required' => true,
                 'mode_setup' => $s['mode_setup'],
             ]],

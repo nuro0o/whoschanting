@@ -11,7 +11,13 @@ const target = ref('');
 const confirm = ref<'transfer_host' | 'remove_player' | null>(null);
 const failure = ref('');
 const others = computed(() =>
-    props.state.players.filter((player) => player.id !== props.state.me.id),
+    props.state.players.filter(
+        (player) =>
+            player.id !== props.state.me.id &&
+            player.in_room !== false &&
+            player.connected !== false &&
+            !player.afk,
+    ),
 );
 const selected = computed(() =>
     others.value.find((player) => player.id === target.value),

@@ -4,12 +4,16 @@ import { ArrowRight, Check, Mail, Waves } from '@lucide/vue';
 import { computed } from 'vue';
 import ProfileController from '@/actions/App/Http/Controllers/Settings/ProfileController';
 import RegistrySection from '@/components/account/RegistrySection.vue';
+import ProfileStore from '@/components/account/ProfileStore.vue';
 import DeleteUser from '@/components/DeleteUser.vue';
 import InputError from '@/components/InputError.vue';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { send } from '@/routes/verification';
+import type { ProgressionData } from '@/lib/progression';
+
+defineProps<{ progression: ProgressionData | null }>();
 
 const page = usePage();
 const user = computed(() => page.props.auth.user);
@@ -74,6 +78,8 @@ const membershipDate = computed(() => {
                 </figcaption>
             </figure>
         </header>
+
+        <ProfileStore :progression="progression" />
 
         <RegistrySection
             number="I"

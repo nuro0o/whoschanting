@@ -64,10 +64,14 @@ class ProgressionTest extends TestCase
         DB::rollBack();
         $this->assertDatabaseCount('match_rewards', 0);
         $this->assertDatabaseCount('player_profiles', 0);
+        $this->assertDatabaseCount('coin_transactions', 0);
 
         $first = $this->award($match, $state);
         $this->assertSame($first, $this->award($match, $state));
         $this->assertSame(140, $first['seat']['xp']);
+        $this->assertSame(35, $first['seat']['coins']);
+        $this->assertDatabaseHas('player_profiles', ['user_id' => $user->id, 'coins' => 35, 'coins_earned' => 35]);
+        $this->assertDatabaseCount('coin_transactions', 1);
         $this->assertEqualsCanonicalizing(['first_watch', 'town_victory', 'kept_oath'], $first['seat']['achievements']);
         $this->assertDatabaseHas('player_profiles', ['user_id' => $user->id, 'xp' => 140, 'matches' => 1, 'wins' => 1]);
         $this->assertDatabaseCount('match_rewards', 1);
@@ -82,6 +86,8 @@ class ProgressionTest extends TestCase
         $this->assertSame(30, $view['profile']['level_xp']);
         $this->assertSame(500, $view['profile']['next_level_xp']);
         $this->assertSame(280, $view['season']['xp']);
+        $this->assertSame(70, $view['store']['balance']);
+        $this->assertDatabaseCount('coin_transactions', 2);
         $this->assertCount(2, $view['recent_rewards']);
         $this->assertIsArray($view['recent_rewards'][0]);
     }
@@ -117,6 +123,7 @@ class ProgressionTest extends TestCase
         $state['rounds'][] = ['night' => ['actions' => [['player_id' => 'seat', 'submitted' => false]]]];
         $reward = $this->award($match, $state)['seat'];
         $this->assertSame(80, $reward['xp']); // Loss, with one missed action: no win or attendance bonus.
+        $this->assertSame(25, $reward['coins']);
         $this->assertFalse($reward['won']);
     }
 
@@ -247,6 +254,7 @@ class ProgressionTest extends TestCase
         foreach ($users as $i => $user) {
             $view = $engine->access($room->code, 'p'.$i, accountId: $user->id);
             $this->assertSame($view['me']['alignment'] === 'town' ? 140 : 100, $view['me']['match_reward']['xp']);
+            $this->assertSame($view['me']['alignment'] === 'town' ? 35 : 25, $view['me']['match_reward']['coins']);
             $this->assertArrayNotHasKey('match_rewards', $view);
             $this->assertArrayNotHasKey('user_id', $view['players'][0]);
         }

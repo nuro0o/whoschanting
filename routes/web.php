@@ -18,6 +18,7 @@ Route::middleware([PrivateGameResponse::class, EnsureVerifiedAccount::class])->g
     Route::get('/rooms/{code}', [GameController::class, 'show'])->name('game');
     Route::get('/rooms/{code}/state', [GameController::class, 'state'])->middleware('throttle:game-state')->block();
     Route::post('/rooms/{code}/actions', [GameController::class, 'action'])->middleware('throttle:game-action')->block();
+    Route::post('/rooms/{code}/presence', [GameController::class, 'presence'])->middleware('throttle:game-action')->block();
     Route::post('/rooms/{code}/broadcast-auth', [GameController::class, 'broadcastAuth'])->middleware('throttle:game-action')->block();
 });
 
@@ -25,6 +26,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('dashboard', [GameController::class, 'dashboard'])->middleware(PrivateGameResponse::class)->name('dashboard');
     Route::get('progression', [ProgressionController::class, 'show'])->middleware(PrivateGameResponse::class)->name('progression');
     Route::post('account/customization', [ProgressionController::class, 'customize'])->middleware([PrivateGameResponse::class, 'throttle:30,1'])->block()->name('account.customization');
+    Route::post('account/store/purchase', [ProgressionController::class, 'purchase'])->middleware([PrivateGameResponse::class, 'throttle:30,1'])->block()->name('account.store.purchase');
 });
 
 require __DIR__.'/settings.php';

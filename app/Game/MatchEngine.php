@@ -13,7 +13,7 @@ use Illuminate\Validation\ValidationException;
 
 class MatchEngine
 {
-    public function __construct(private CurseEngine $curses, private GameModes $modes = new GameModes, private AccountProgression $progression = new AccountProgression, private TableExperience $table = new TableExperience, private ProfanityFilter $profanity = new ProfanityFilter) {}
+    public function __construct(private CurseEngine $curses, private GameModes $modes = new GameModes, private AccountProgression $progression = new AccountProgression, private TableExperience $table = new TableExperience, private ProfanityFilter $profanity = new ProfanityFilter, private RoomLifecycle $lifecycle = new RoomLifecycle) {}
 
     /** @return array<string, mixed> */
     public function rules(): array
@@ -37,7 +37,7 @@ class MatchEngine
     {
         $this->ensure(in_array($visibility, ['private', 'public'], true), 'Choose a public or private room.');
         $setup = $this->modes->normalize($setup);
-        $name = $this->profanity->mask(trim($name));
+        $name = $this->profanity->playerName($name);
         $pinHash = LobbyPin::hash($pin);
 
         return DB::transaction(function () use ($identity, $name, $character, $setup, $accountId, $pinHash, $visibility): GameRoom {
@@ -77,13 +77,13 @@ class MatchEngine
 
     public function join(string $code, string $identity, string $name, ?string $character = null, ?int $accountId = null, #[\SensitiveParameter] ?string $pin = null): GameRoom
     {
-        $name = $this->profanity->mask(trim($name));
-
         return DB::transaction(function () use ($code, $identity, $name, $character, $accountId, $pin): GameRoom {
             $room = GameRoom::where('code', $code)->lockForUpdate()->firstOrFail();
             $s = $this->profanity->roomText($room->state);
+            abort_if($s['phase'] === 'closed', 410, $s['closed_reason'] ?? 'This room has closed.');
             $existing = $this->playerId($s, $identity, $accountId);
             if ($existing !== null) {
+                $this->ensure(($s['players'][$existing]['in_room'] ?? true), 'Your seat ended with the match. Wait for a new gathering to join.');
                 if ($accountId !== null && $s['phase'] === 'lobby') {
                     $this->ensure(User::whereKey($accountId)->whereNotNull('email_verified_at')->exists(), 'Verify your account before joining.');
                     if ($character !== null) {
@@ -101,6 +101,10 @@ class MatchEngine
                     $this->save($room, $s);
                 }
 
+                if ($s !== $room->state) {
+                    $this->save($room, $s);
+                }
+
                 return $room;
             }
             $this->ensure($s['phase'] === 'lobby', 'This match has already begun.');
@@ -108,6 +112,7 @@ class MatchEngine
             $setup = $this->modes->setup($s);
             $capacity = $setup['mode'] === 'custom' ? array_sum($setup['roles']) : config('game.max_players');
             $this->ensure(count($s['players']) < $capacity, 'This room is full for its selected role setup.');
+            $name = $this->profanity->playerName($name, array_column($s['players'], 'name'));
             foreach ($s['players'] as $player) {
                 $this->ensure(mb_strtolower($player['name']) !== mb_strtolower($name), 'That name is already at the table.');
             }
@@ -147,23 +152,53 @@ class MatchEngine
         $result = DB::transaction(function () use ($code, $identity, $action, $accountId): array {
             $room = GameRoom::where('code', $code)->lockForUpdate()->firstOrFail();
             $s = $this->profanity->roomText($room->state);
+            abort_if($s['phase'] === 'closed', 410, $s['closed_reason'] ?? 'This room has closed.');
             $id = $this->playerId($s, $identity, $accountId);
             abort_if($id === null, 403, 'Join this room to take a seat.');
+            $before = $room->state;
+            if (isset($action['client_id']) && ($s['players'][$id]['in_room'] ?? true)) {
+                $this->lifecycle->connect($s, $id, $action['client_id']);
+            }
+            $this->lifecycle->maintain($room, $s);
             if ($room->deadline?->isPast()) {
                 $this->advance($room, $s);
+            } else {
+                $this->advanceIfComplete($room, $s);
+            }
+            $this->lifecycle->maintain($room, $s);
+            if ($s !== $before) {
                 $this->save($room, $s);
+            }
+            if ($s['phase'] === 'closed') {
+                return ['closed' => $s['closed_reason']];
+            }
+            if (! isset($s['players'][$id]) || ! ($s['players'][$id]['in_room'] ?? true)) {
+                return ['absent' => true];
             }
             // Commit expired phases even when an arriving action is stale.
             if ($action !== null && $action['phase_id'] !== $s['phase_id']) {
                 return ['stale' => true];
             }
             if ($action !== null) {
+                if (in_array($action['type'], ['ready', 'night', 'vote', 'chat', 'discussion_ready', 'solve_curse', 'exorcise', 'oath', 'claim', 'discussion_response', 'accuse', 'defend', 'extend_discussion'], true)) {
+                    $this->lifecycle->activity($s, $id);
+                }
                 $this->act($room, $s, $id, $action);
+                $this->lifecycle->maintain($room, $s);
                 $this->save($room, $s);
+            }
+
+            if ($s['phase'] === 'closed') {
+                return ['closed' => $s['closed_reason']];
+            }
+            if (! isset($s['players'][$id]) || ! ($s['players'][$id]['in_room'] ?? true)) {
+                return ['absent' => true];
             }
 
             return $this->view($room, $s, $id);
         });
+        abort_if(isset($result['closed']), 410, $result['closed'] ?? 'This room has closed.');
+        abort_if(isset($result['absent']), 403, 'Your seat has left this room.');
         if (isset($result['stale'])) {
             $this->ensure(false, 'The phase changed. Refresh your view and choose again.');
         }
@@ -175,12 +210,65 @@ class MatchEngine
     {
         DB::transaction(function () use ($roomId): void {
             $room = GameRoom::whereKey($roomId)->lockForUpdate()->first();
-            if ($room === null || ! $room->deadline?->isPast()) {
+            if ($room === null) {
                 return;
             }
             $s = $this->profanity->roomText($room->state);
-            $this->advance($room, $s);
-            $this->save($room, $s);
+            $before = $s;
+            $this->lifecycle->maintain($room, $s);
+            if ($room->deadline?->isPast()) {
+                $this->advance($room, $s);
+            } else {
+                $this->advanceIfComplete($room, $s);
+            }
+            $this->lifecycle->maintain($room, $s);
+            if ($s !== $before) {
+                $this->save($room, $s);
+            } else {
+                $this->lifecycle->schedule($room, $s);
+                $room->save();
+            }
+        });
+    }
+
+    /** @return array{ok: bool, closed: bool} */
+    public function presence(string $code, string $identity, string $client, string $type = 'ping', ?int $accountId = null): array
+    {
+        return DB::transaction(function () use ($code, $identity, $client, $type, $accountId): array {
+            $room = GameRoom::where('code', $code)->lockForUpdate()->firstOrFail();
+            $s = $room->state;
+            abort_if($s['phase'] === 'closed', 410, $s['closed_reason'] ?? 'This room has closed.');
+            $id = $this->playerId($s, $identity, $accountId);
+            abort_if($id === null || ! ($s['players'][$id]['in_room'] ?? true), 403, 'Join this room to take a seat.');
+            $wasConnected = $s['players'][$id]['connected'] ?? true;
+            if ($type === 'end_room') {
+                $this->ensure($s['host_id'] === $id, 'Only the host can end the room.');
+                $this->lifecycle->close($room, $s, 'The host ended the room.');
+            } elseif ($type === 'leave') {
+                $this->lifecycle->leave($s, $id);
+            } elseif ($type === 'disconnect') {
+                $this->lifecycle->disconnect($s, $id, $client);
+            } else {
+                $this->ensure(in_array($type, ['ping', 'here'], true), 'Unknown presence action.');
+                $this->lifecycle->connect($s, $id, $client);
+                if ($type === 'here') {
+                    $this->lifecycle->activity($s, $id);
+                }
+            }
+            $beforeMaintenance = $s;
+            $this->lifecycle->maintain($room, $s);
+            $this->advanceIfComplete($room, $s);
+            $this->lifecycle->maintain($room, $s);
+            if ($type !== 'ping' || ! $wasConnected || $s !== $beforeMaintenance) {
+                $this->save($room, $s);
+            } else {
+                // Lease renewals do not broadcast and cause every other client to poll.
+                $this->lifecycle->schedule($room, $s);
+                $room->state = $s;
+                $room->save();
+            }
+
+            return ['ok' => true, 'closed' => $s['phase'] === 'closed'];
         });
     }
 
@@ -245,8 +333,9 @@ class MatchEngine
         }
         if ($type === 'rematch') {
             $this->ensure($id === $s['host_id'] && $s['phase'] === 'finished', 'Only the host can start a new gathering after victory.');
+            $s['players'] = array_filter($s['players'], fn (array $player): bool => ($player['in_room'] ?? true));
             foreach ($s['players'] as &$player) {
-                $player = array_replace($player, ['ready' => false, 'alive' => true, 'role' => null, 'alignment' => null, 'results' => [], 'curse' => null, 'curse_notice' => null]);
+                $player = array_replace($player, ['ready' => false, 'alive' => true, 'role' => null, 'alignment' => null, 'results' => [], 'curse' => null, 'curse_notice' => null, 'missed_phases' => 0, 'afk' => false, 'afk_prompt_deadline' => null]);
                 unset($player['last_protection'], $player['ability_used'], $player['haunting'], $player['oath'], $player['oath_protection_day'], $player['elimination_reason']);
             }
             unset($player);
@@ -284,7 +373,7 @@ class MatchEngine
                 ? config('game.small_gathering_mission') : $missions[array_rand($missions)];
             $s['match_id'] = (string) Str::uuid();
             $s['match_rules'] = ['version' => config('game.rules_version'), 'player_count' => $count,
-                'seconds' => config('game.seconds'), 'roster' => $s['roster'] ?? 'classic', 'mode_setup' => $setup];
+                'seconds' => $this->modes->phaseSeconds($count), 'roster' => $s['roster'] ?? 'classic', 'mode_setup' => $setup];
             if ($setup['mode'] === 'paranoia') {
                 $s['match_rules']['paranoia_preview'] = $this->modes->preview($setup, $count);
             }
@@ -399,8 +488,21 @@ class MatchEngine
     /** @param array<string, mixed> $s */
     private function advanceIfComplete(GameRoom $room, array &$s): void
     {
-        $alive = array_filter($s['players'], fn (array $p): bool => $p['alive']);
-        if (count($s['actions']) === count($alive)) {
+        if ($s['phase'] === 'last_words') {
+            $accused = $s['rounds'][$s['day']]['last_words']['accused_ids'] ?? [];
+            if ($accused !== [] && array_filter($accused, fn (string $id): bool => $s['players'][$id]['alive'] && ! ($s['players'][$id]['afk'] ?? false)) === []) {
+                $this->advance($room, $s);
+            }
+
+            return;
+        }
+        if (! in_array($s['phase'], ['reveal', 'night', 'discussion', 'voting'], true)) {
+            return;
+        }
+        $active = array_filter($s['players'], fn (array $p): bool => $p['alive'] && ! ($p['afk'] ?? false));
+        // Missing AFK actions stay absent: they neither vote nor spend/activate abilities.
+        // With nobody active, keep the normal timer instead of looping through phases.
+        if ($active !== [] && array_diff_key($active, $s['actions']) === []) {
             $this->advance($room, $s);
         }
     }
@@ -408,6 +510,7 @@ class MatchEngine
     /** @param array<string, mixed> $s */
     private function advance(GameRoom $room, array &$s): void
     {
+        $this->lifecycle->completedPhase($s);
         switch ($s['phase']) {
             case 'reveal':
                 $s['day'] = 1;
@@ -815,6 +918,7 @@ class MatchEngine
     /** @param array<string, mixed> $s */
     private function save(GameRoom $room, array &$s): void
     {
+        $this->lifecycle->schedule($room, $s);
         $s['revision']++;
         $s['log'] = array_slice($s['log'], -100);
         $room->state = $s;
@@ -840,6 +944,9 @@ class MatchEngine
         $allies = [];
         foreach ($s['players'] as $pid => $p) {
             $public = array_intersect_key($p, array_flip(['id', 'name', 'alive', 'ready']));
+            $public['connected'] = $p['connected'] ?? true;
+            $public['afk'] = $p['afk'] ?? false;
+            $public['in_room'] = $p['in_room'] ?? true;
             $public['character'] = $this->character($p);
             $public['elimination_reason'] = $p['elimination_reason'] ?? null;
             if (isset($p['customization'])) {
@@ -872,6 +979,8 @@ class MatchEngine
             'winner' => $s['winner'], 'win_reason' => $s['win_reason'], 'players' => $players,
             'me' => array_replace(array_intersect_key($me, array_flip(['id', 'name', 'alive', 'role', 'alignment', 'results'])), [
                 'character' => $this->character($me),
+                'afk' => $me['afk'] ?? false,
+                'afk_prompt_deadline' => $me['afk_prompt_deadline'] ?? null,
                 'elimination_reason' => $me['elimination_reason'] ?? null,
                 'customization' => $me['customization'] ?? null,
                 'account_progression' => isset($me['user_id']),
@@ -896,6 +1005,7 @@ class MatchEngine
                 $setup['mode'] === 'hard' ? ['town_roles_min_players' => config('game.hard_town_roles_min_players'), 'cult_roles_min_players' => config('game.hard_cult_roles_min_players')] : [],
                 in_array($setup['mode'], ['custom', 'chaos', 'paranoia'], true) ? ['town_roles_min_players' => [], 'cult_roles_min_players' => []] : [],
                 $setup['mode'] === 'paranoia' ? ['min_players' => max(5, config('game.min_players'))] : [],
+                $s['phase'] === 'lobby' ? ['seconds' => $this->modes->phaseSeconds(count($s['players']))] : [],
                 isset($s['match_rules']['seconds']) ? ['seconds' => array_replace($s['match_rules']['seconds'],
                     isset($s['match_rules']['paranoia_preview']) ? ['discussion' => $this->paranoiaDiscussionSeconds($s)] : [])] : []),
         ];

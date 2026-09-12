@@ -40,7 +40,7 @@ class GameTest extends TestCase
         }
         $identities = [];
         foreach ($room->fresh()->state['players'] as $id => $p) {
-            $identity = 'secret-'.substr($p['name'], -1);
+            $identity = 'secret-'.substr($p['name'], strlen('Player '));
             $identities[$id] = $identity;
             $this->act($room, $identity, 'ready');
         }
@@ -89,6 +89,8 @@ class GameTest extends TestCase
             'five players' => [5, 2], 'six players' => [6, 2],
             'seven players' => [7, 3], 'eight players' => [8, 3],
             'nine players' => [9, 4], 'ten players' => [10, 4],
+            'eleven players' => [11, 4], 'twelve players' => [12, 4],
+            'thirteen players' => [13, 5], 'fourteen players' => [14, 5], 'fifteen players' => [15, 5],
         ];
     }
 
@@ -131,6 +133,9 @@ class GameTest extends TestCase
         $this->expire($room);
         $this->assertSame($cultistCount, $room->state['tokens']);
         $this->assertCount($cultistCount, $room->state['awards']);
+        $discussionSeconds = 90 + max(0, $playerCount - 10) * 10;
+        $this->assertEquals($discussionSeconds, now()->diffInSeconds($room->deadline));
+        $this->assertSame($discussionSeconds, $this->engine->access($room->code, 'secret-0')['rules']['seconds']['discussion']);
     }
 
     public static function protectionOrders(): array
@@ -188,7 +193,7 @@ class GameTest extends TestCase
         $this->expire($room);
         $this->expire($room);
         $recap = $this->engine->access($room->code, 'secret-0')['recap'];
-        $this->assertSame('last-words-v1', $recap['rules_version']);
+        $this->assertSame('large-gatherings-v1', $recap['rules_version']);
         $actions = array_column($recap['rounds'][0]['night']['actions'], null, 'player_id');
         $this->assertTrue($actions[$r['warden']]['prevented_curse']);
         $this->assertTrue($actions[$r['lamplighter']]['visited']);
@@ -684,18 +689,18 @@ class GameTest extends TestCase
         $this->assertFalse($view['ritual']['final_vote']);
     }
 
-    public function test_two_players_cannot_start_and_an_eleventh_cannot_join(): void
+    public function test_two_players_cannot_start_and_a_sixteenth_cannot_join(): void
     {
         $room = $this->engine->create('limit-0', 'Neighbor 0');
         $this->engine->join($room->code, 'limit-1', 'Neighbor 1');
         $this->act($room, 'limit-0', 'ready');
         $this->act($room, 'limit-1', 'ready');
         $this->assertRejected(fn () => $this->act($room, 'limit-0', 'start'));
-        for ($i = 2; $i < 10; $i++) {
+        for ($i = 2; $i < 15; $i++) {
             $this->engine->join($room->code, 'limit-'.$i, 'Neighbor '.$i);
         }
-        $this->assertRejected(fn () => $this->engine->join($room->code, 'limit-10', 'Neighbor 10'));
-        $this->assertCount(10, $room->fresh()->state['players']);
+        $this->assertRejected(fn () => $this->engine->join($room->code, 'limit-15', 'Neighbor 15'));
+        $this->assertCount(15, $room->fresh()->state['players']);
     }
 
     public function test_private_views_reveal_only_own_role_and_cult_allies(): void
@@ -706,7 +711,7 @@ class GameTest extends TestCase
             $p = $room->fresh()->state['players'][$id];
             $this->assertSame($p['role'], $view['me']['role']);
             foreach ($view['players'] as $public) {
-                $this->assertSame(['id', 'name', 'alive', 'ready', 'character', 'elimination_reason', 'oath', 'discussion_ready'], array_keys($public));
+                $this->assertSame(['id', 'name', 'alive', 'ready', 'connected', 'afk', 'in_room', 'character', 'elimination_reason', 'oath', 'discussion_ready'], array_keys($public));
             }
             $this->assertStringNotContainsString('identity', json_encode($view));
             $this->assertArrayNotHasKey('actions', $view);
@@ -1255,7 +1260,7 @@ class GameTest extends TestCase
         $this->act($room, 'secret-0', 'discussion_ready');
         $this->expire($room);
         $this->assertSame('voting', $room->state['phase']);
-        $this->assertSame([2, 3, 6, 8, 9, 10, 11, 12], array_column($this->engine->rules()['ritual_goals'], 'steps'));
+        $this->assertSame([2, 3, 6, 8, 9, 10, 11, 12, 16, 16, 20, 20, 20], array_column($this->engine->rules()['ritual_goals'], 'steps'));
     }
 
     #[DataProvider('rosterSizes')]
@@ -1263,7 +1268,7 @@ class GameTest extends TestCase
     {
         [$room, $identities] = $this->match(mission: null, playerCount: $playerCount);
         $s = $room->fresh()->state;
-        $this->assertSame([3 => 2, 4 => 3, 5 => 6, 6 => 8, 7 => 9, 8 => 10, 9 => 11, 10 => 12][$playerCount], $s['threshold']);
+        $this->assertSame([3 => 2, 4 => 3, 5 => 6, 6 => 8, 7 => 9, 8 => 10, 9 => 11, 10 => 12, 11 => 16, 12 => 16, 13 => 20, 14 => 20, 15 => 20][$playerCount], $s['threshold']);
         if ($cultistCount === 1) {
             $this->assertSame('solitary', $s['mission']['id']);
             $this->expire($room);

@@ -28,6 +28,7 @@ import {
     watch,
 } from 'vue';
 import RoomEntry from '@/components/chanting/RoomEntry.vue';
+import RoomSessionControls from '@/components/chanting/RoomSessionControls.vue';
 import ModeSelector from '@/components/chanting/ModeSelector.vue';
 import {
     chaosEvents,
@@ -792,7 +793,12 @@ function reviewAction() {
 }
 
 function accept(next: RoomState) {
-    if (disposed || (state.value && next.revision < state.value.revision))
+    if (
+        disposed ||
+        exiting ||
+        roomClosed.value ||
+        (state.value && next.revision < state.value.revision)
+    )
         return;
     const previous = state.value;
     const sameMatch =
@@ -852,7 +858,15 @@ function accept(next: RoomState) {
     if (!echo) connect(next.id);
 }
 async function refresh() {
-    if (fetching || pending.value || disposed || outsider.value) return;
+    if (
+        fetching ||
+        pending.value ||
+        disposed ||
+        outsider.value ||
+        roomClosed.value ||
+        exiting
+    )
+        return;
     fetching = true;
     try {
         accept(
@@ -861,7 +875,9 @@ async function refresh() {
             ),
         );
     } catch (cause) {
-        if (cause instanceof RoomError && cause.status === 403) {
+        if (cause instanceof RoomError && [404, 410].includes(cause.status)) {
+            closeRoom(cause.message);
+        } else if (cause instanceof RoomError && cause.status === 403) {
             outsider.value = true;
             state.value = undefined;
             echo?.disconnect();
@@ -878,6 +894,84 @@ async function refresh() {
         fetching = false;
         loading.value = false;
     }
+}
+const roomClosed = ref('');
+let clientId = '';
+let heartbeat: ReturnType<typeof setInterval> | undefined;
+let pinging = false;
+let exiting = false;
+let departureSent = false;
+function closeRoom(reason: string) {
+    roomClosed.value = reason;
+    state.value = undefined;
+    outsider.value = false;
+    echo?.disconnect();
+    echo = undefined;
+}
+async function ping() {
+    if (
+        !clientId ||
+        pinging ||
+        exiting ||
+        disposed ||
+        outsider.value ||
+        roomClosed.value
+    )
+        return;
+    pinging = true;
+    try {
+        await roomRequest(`/rooms/${encodeURIComponent(props.code)}/presence`, {
+            type: 'ping',
+            client_id: clientId,
+        });
+    } catch (cause) {
+        if (cause instanceof RoomError && [404, 410].includes(cause.status))
+            closeRoom(cause.message);
+        // State polling handles expired sessions and reconnection feedback.
+    } finally {
+        pinging = false;
+    }
+}
+function notifyDeparture() {
+    if (!state.value || !clientId || departureSent || exiting) return;
+    departureSent = true;
+    void fetch(`/rooms/${encodeURIComponent(props.code)}/presence`, {
+        method: 'POST',
+        credentials: 'same-origin',
+        keepalive: true,
+        headers: {
+            'Content-Type': 'application/json',
+            Accept: 'application/json',
+            'X-CSRF-TOKEN': csrfToken(),
+        },
+        body: JSON.stringify({ type: 'disconnect', client_id: clientId }),
+    }).catch(() => {});
+}
+async function sessionAction(type: 'leave' | 'end_room' | 'here') {
+    if (type !== 'here') exiting = true;
+    try {
+        await roomRequest(`/rooms/${encodeURIComponent(props.code)}/presence`, {
+            type,
+            client_id: clientId,
+        });
+        if (type === 'here') await refresh();
+        else {
+            departureSent = true;
+            router.visit('/rooms');
+        }
+        return true;
+    } catch (cause) {
+        exiting = false;
+        if (cause instanceof RoomError && [404, 410].includes(cause.status)) {
+            closeRoom(cause.message);
+            return true;
+        }
+        return false;
+    }
+}
+function onPageShow() {
+    departureSent = false;
+    void ping().then(refresh);
 }
 function connect(id: number) {
     if (!import.meta.env.VITE_REVERB_APP_KEY || disposed) return;
@@ -957,7 +1051,12 @@ async function act(type: string, extra: object = {}) {
         accept(
             await roomRequest<RoomState>(
                 `/rooms/${encodeURIComponent(props.code)}/actions`,
-                { type, phase_id: state.value.phase_id, ...extra },
+                {
+                    type,
+                    phase_id: state.value.phase_id,
+                    client_id: clientId,
+                    ...extra,
+                },
             ),
         );
         if (type === 'night' || type === 'vote') actionSerial.value++;
@@ -991,7 +1090,7 @@ async function sendChat() {
 function onResume() {
     if (document.visibilityState === 'visible') {
         resumed = true;
-        void refresh();
+        void ping().then(refresh);
         markChatRead();
     }
 }
@@ -1071,6 +1170,10 @@ watch(hasRoom, (available) => {
     }
 });
 onMounted(() => {
+    clientId = crypto.randomUUID();
+    heartbeat = setInterval(() => void ping(), 10_000);
+    window.addEventListener('pagehide', notifyDeparture);
+    window.addEventListener('pageshow', onPageShow);
     inviteUrl.value = `${window.location.origin}/rooms/${encodeURIComponent(props.code)}`;
     fullscreenAvailable.value = !!document.fullscreenEnabled;
     document.addEventListener('fullscreenchange', syncFullscreen);
@@ -1080,7 +1183,7 @@ onMounted(() => {
     } catch {
         /* Optional preference. */
     }
-    void refresh();
+    void ping().then(refresh);
     polling = setInterval(() => {
         void refresh();
     }, 3000);
@@ -1091,6 +1194,10 @@ onMounted(() => {
     window.addEventListener('online', onResume);
 });
 onBeforeUnmount(() => {
+    notifyDeparture();
+    clearInterval(heartbeat);
+    window.removeEventListener('pagehide', notifyDeparture);
+    window.removeEventListener('pageshow', onPageShow);
     if (hasRoom.value) {
         document.body.style.overflow = previousOverflow;
         if (fullscreen.value) void document.exitFullscreen().catch(() => {});
@@ -1183,6 +1290,11 @@ onBeforeUnmount(() => {
             <h1>Through the mist…</h1>
             <p>Finding your place in the village.</p>
         </main>
+        <main v-else-if="roomClosed" class="game-loading">
+            <h1>Room closed</h1>
+            <p role="status">{{ roomClosed }}</p>
+            <a href="/rooms" class="button primary">Find a room</a>
+        </main>
         <main v-else-if="outsider" class="outsider">
             <p class="eyebrow" style="justify-content: center">
                 YOU’VE BEEN INVITED
@@ -1216,6 +1328,7 @@ onBeforeUnmount(() => {
                     :phase="state.phase"
                     :display="tableDisplay"
                     :me-id="state.me.id"
+                    :host-id="state.host_id"
                     :submitted="state.me.submitted"
                     :action-serial="actionSerial"
                     :ritual-tokens="state.ritual.tokens"
@@ -1930,6 +2043,11 @@ onBeforeUnmount(() => {
                 </p>
             </Transition>
             <div class="game-tools">
+                <RoomSessionControls
+                    :state="state"
+                    :now="now + offset"
+                    :submit="sessionAction"
+                />
                 <ReadabilityControl />
                 <button
                     v-if="fullscreenAvailable"
@@ -2205,6 +2323,11 @@ onBeforeUnmount(() => {
                                 The cast is drawn at the start. Roles can
                                 repeat; the Town/Cult split follows your village
                                 size.
+                            </p>
+                            <p v-if="state.mode_setup?.mode !== 'paranoia'">
+                                Discussion lasts
+                                {{ state.rules.seconds.discussion }} seconds per
+                                round.
                             </p>
                             <template
                                 v-if="state.mode_setup?.mode === 'paranoia'"
@@ -2533,7 +2656,10 @@ onBeforeUnmount(() => {
                                         }}<small
                                             >{{
                                                 player.id === state.me.id
-                                                    ? 'You'
+                                                    ? player.id ===
+                                                      state.host_id
+                                                        ? 'You · Host'
+                                                        : 'You'
                                                     : player.id ===
                                                         state.host_id
                                                       ? 'Host'
@@ -2561,7 +2687,21 @@ onBeforeUnmount(() => {
                                             }}</small
                                         ></span
                                     ><span
-                                        v-if="state.phase === 'lobby'"
+                                        v-if="
+                                            player.in_room === false ||
+                                            player.afk ||
+                                            player.connected === false
+                                        "
+                                        class="player-status"
+                                        >{{
+                                            player.in_room === false
+                                                ? 'Left'
+                                                : player.afk
+                                                  ? 'AFK'
+                                                  : 'Away'
+                                        }}</span
+                                    ><span
+                                        v-else-if="state.phase === 'lobby'"
                                         class="player-status"
                                         >{{
                                             player.ready ? 'Ready' : 'Waiting'

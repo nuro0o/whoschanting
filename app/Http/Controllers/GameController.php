@@ -68,6 +68,7 @@ class GameController extends Controller
     {
         $data = $request->validate(['name' => ['required', 'string', 'min:2', 'max:24'], 'visibility' => ['sometimes', 'string', 'in:private,public'], 'pin' => $this->pinRules(), 'character' => $this->characterRules($request), ...$this->modeRules()]);
         $room = $this->engine->create($this->identity($request), $data['name'], $this->selectedCharacter($request, $data), $data['setup'] ?? [], $request->user()?->id, $data['pin'] ?? null, $data['visibility'] ?? 'private');
+        $this->engine->presence($room->code, $this->identity($request), 'pending', accountId: $request->user()?->id);
         $this->rememberCharacter($request, $data);
 
         return response()->json(['code' => $room->code], 201);
@@ -77,6 +78,7 @@ class GameController extends Controller
     {
         $data = $request->validate(['code' => ['required', 'string', 'size:6', 'alpha_num:ascii'], 'name' => ['required', 'string', 'min:2', 'max:24'], 'pin' => $this->pinRules(), 'character' => $this->characterRules($request)]);
         $room = $this->engine->join(strtoupper($data['code']), $this->identity($request), $data['name'], $this->selectedCharacter($request, $data), $request->user()?->id, $data['pin'] ?? null);
+        $this->engine->presence($room->code, $this->identity($request), 'pending', accountId: $request->user()?->id);
         $this->rememberCharacter($request, $data);
 
         return response()->json(['code' => $room->code]);
@@ -87,12 +89,23 @@ class GameController extends Controller
         return response()->json($this->engine->access(strtoupper($code), $this->identity($request), accountId: $request->user()?->id));
     }
 
+    public function presence(Request $request, string $code): JsonResponse
+    {
+        $data = $request->validate([
+            'type' => ['required', 'in:ping,disconnect,leave,here,end_room'],
+            'client_id' => ['required', 'uuid'],
+        ]);
+
+        return response()->json($this->engine->presence(strtoupper($code), $this->identity($request), $data['client_id'], $data['type'], $request->user()?->id));
+    }
+
     public function action(Request $request, string $code): JsonResponse
     {
         $data = $request->validate([
             'type' => ['required', 'string', 'in:ready,start,night,vote,chat,rematch,character,discussion_ready,solve_curse,roster,exorcise,oath,configure_mode,claim,discussion_response,prediction,transfer_host,remove_player,extend_discussion,feedback,accuse,defend,set_pin'],
             'pin' => ['present_if:type,set_pin', ...$this->pinRules()],
             'phase_id' => ['required', 'integer', 'min:1'],
+            'client_id' => ['sometimes', 'uuid'],
             'target' => ['nullable', 'string', 'uuid'],
             'use_ability' => ['sometimes', 'boolean'],
             'roster' => ['sometimes', 'string', 'in:classic,illusions'],

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t } from '@/i18n';
 import { ChevronLeft, ChevronRight } from '@lucide/vue';
 import { computed, ref } from 'vue';
 import CharacterPortrait from './CharacterPortrait.vue';
@@ -81,18 +82,21 @@ function onTouchEnd(event: TouchEvent) {
 <template>
     <section class="neighbors-preview" aria-labelledby="character-title">
         <div class="neighbors-intro">
-            <p class="eyebrow">A FAMILIAR FACE. AN UNFAMILIAR ALIBI.</p>
-            <h2 id="character-title">Meet your <em>neighbors.</em></h2>
+            <p class="eyebrow">{{ t('characterCarousel.eyebrow') }}</p>
+            <h2 id="character-title">
+                {{ t('characterCarousel.title') }}
+                <em>{{ t('characterCarousel.title_emphasis') }}</em>
+            </h2>
             <p class="neighbors-collection">
-                <strong>20+ characters</strong>
-                <span>with plenty more faces to unlock.</span>
+                <strong>{{ t('characterCarousel.collection.count') }}</strong>
+                <span>{{ t('characterCarousel.collection.description') }}</span>
             </p>
         </div>
         <div
             class="neighbors-carousel"
             role="region"
-            aria-roledescription="carousel"
-            aria-label="Featured neighbors"
+            :aria-roledescription="t('characterCarousel.carousel_label')"
+            :aria-label="t('characterCarousel.label')"
             tabindex="0"
             @keydown="onKeydown"
         >
@@ -113,14 +117,24 @@ function onTouchEnd(event: TouchEvent) {
                     }"
                     :style="{ '--offset': offset(index) }"
                     role="group"
-                    aria-roledescription="slide"
-                    :aria-label="`${index + 1} of ${featured.length}: ${character.name}`"
+                    :aria-roledescription="t('characterCarousel.slide_label')"
+                    :aria-label="
+                        t('characterCarousel.slide_position', {
+                            index: index + 1,
+                            total: featured.length,
+                            name: character.name,
+                        })
+                    "
                     :aria-hidden="index !== activeIndex"
                 >
                     <button
                         type="button"
                         class="neighbor-face"
-                        :aria-label="`Show ${character.name}`"
+                        :aria-label="
+                            t('characterCarousel.show', {
+                                name: character.name,
+                            })
+                        "
                         tabindex="-1"
                         @click="activeIndex = index"
                     >
@@ -136,7 +150,7 @@ function onTouchEnd(event: TouchEvent) {
                 <button
                     type="button"
                     class="neighbor-arrow"
-                    aria-label="Previous character"
+                    :aria-label="t('characterCarousel.previous')"
                     @click="move(-1)"
                 >
                     <ChevronLeft :size="19" aria-hidden="true" />
@@ -144,14 +158,20 @@ function onTouchEnd(event: TouchEvent) {
                 <div
                     class="neighbors-dots"
                     role="group"
-                    aria-label="Choose a character"
+                    :aria-label="t('characterCarousel.choose')"
                 >
                     <button
                         v-for="(character, index) in featured"
                         :key="character.id"
                         type="button"
                         class="neighbor-dot"
-                        :aria-label="`Show ${character.name}, ${index + 1} of ${featured.length}`"
+                        :aria-label="
+                            t('characterCarousel.show_position', {
+                                name: character.name,
+                                index: index + 1,
+                                total: featured.length,
+                            })
+                        "
                         :aria-current="
                             index === activeIndex ? 'true' : undefined
                         "
@@ -163,7 +183,7 @@ function onTouchEnd(event: TouchEvent) {
                 <button
                     type="button"
                     class="neighbor-arrow"
-                    aria-label="Next character"
+                    :aria-label="t('characterCarousel.next')"
                     @click="move(1)"
                 >
                     <ChevronRight :size="19" aria-hidden="true" />
@@ -171,16 +191,23 @@ function onTouchEnd(event: TouchEvent) {
             </div>
             <p class="neighbors-position" aria-live="polite" aria-atomic="true">
                 <span class="sr-only"
-                    >{{ activeCharacter.name }}. Character
+                    >{{
+                        t('characterCarousel.position.character', {
+                            name: activeCharacter.name,
+                        })
+                    }}
                 </span>
                 {{ String(activeIndex + 1).padStart(2, '0') }}
-                <span aria-hidden="true">/</span><span class="sr-only">of</span>
+                <span aria-hidden="true">/</span
+                ><span class="sr-only">{{
+                    t('characterCarousel.position.of')
+                }}</span>
                 {{ String(featured.length).padStart(2, '0') }}
             </p>
         </div>
         <p class="neighbors-note">
-            Pick a face you love when you sign in. Guests get a surprise.<br />
-            Every character can have any role. Trust nobody’s wardrobe.
+            {{ t('characterCarousel.note.sign_in') }}<br />
+            {{ t('characterCarousel.note.roles') }}
         </p>
     </section>
 </template>

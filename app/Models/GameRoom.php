@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Model;
  * @property string $code
  * @property array<string, mixed> $state
  * @property CarbonImmutable|null $deadline
+ * @property CarbonImmutable|null $maintenance_at
  */
 class GameRoom extends Model
 {
@@ -21,6 +22,6 @@ class GameRoom extends Model
     /** @return array<string, string> */
     protected function casts(): array
     {
-        return ['state' => 'array', 'deadline' => 'immutable_datetime'];
+        return ['state' => 'array', 'deadline' => 'immutable_datetime', 'maintenance_at' => 'immutable_datetime'];
     }
 }

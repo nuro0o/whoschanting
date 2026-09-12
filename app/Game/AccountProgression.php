@@ -102,7 +102,7 @@ class AccountProgression
     /** @return array<string, mixed> */
     private function defaults(): array
     {
-        return ['xp' => 0, 'matches' => 0, 'wins' => 0, 'town_wins' => 0, 'cult_wins' => 0, 'roles_played' => [], 'achievements' => [],
+        return ['xp' => 0, 'coins' => 0, 'coins_earned' => 0, 'matches' => 0, 'wins' => 0, 'town_wins' => 0, 'cult_wins' => 0, 'roles_played' => [], 'achievements' => [],
             'customization' => ['title' => 'newcomer', 'frame' => 'plain', 'accent' => 'sea', 'background' => 'plain', 'character' => null, 'creator' => null]];
     }
 
@@ -182,6 +182,7 @@ class AccountProgression
             $before = $this->level($profile->xp);
             $charactersBefore = array_column(array_filter($this->characters($before, $profile->achievements, true), fn (array $item): bool => $item['unlocked']), 'id');
             $profile->xp += $xp;
+            $coins = (new CosmeticStore)->rewardLocked($profile, $match->id, $won);
             $profile->matches++;
             $profile->wins += (int) $won;
             if ($won) {
@@ -216,7 +217,7 @@ class AccountProgression
             $profile->achievements = $earned;
             $profile->save();
             $charactersAfter = array_column(array_filter($this->characters($this->level($profile->xp), $profile->achievements, true), fn (array $item): bool => $item['unlocked']), 'id');
-            $reward = ['match_id' => $match->id, 'season_id' => $season['id'], 'xp' => $xp, 'won' => $won,
+            $reward = ['match_id' => $match->id, 'season_id' => $season['id'], 'xp' => $xp, 'coins' => $coins, 'won' => $won,
                 'characters' => array_values(array_diff($charactersAfter, $charactersBefore)),
                 'earned_at' => $finishedAt->toISOString(), 'achievements' => $new, 'level_before' => $before, 'level_after' => $this->level($profile->xp)];
             MatchReward::create(['user_id' => $userId, 'match_id' => $match->id, 'data' => $reward]);
@@ -269,7 +270,8 @@ class AccountProgression
                 'history' => $seasons->filter(fn (PlayerSeason $s): bool => $s->season_id !== $season['id'])->map(fn (PlayerSeason $s): array => [
                     'id' => $s->season_id, 'xp' => $s->xp, 'matches' => $s->matches, 'wins' => $s->wins, 'tier' => $this->tier($s->xp)['name'],
                 ])->values()->all()],
-            'achievements' => $achievements, 'cosmetics' => $this->catalog($level, $profile['achievements'], $bestXp),
+            'achievements' => $achievements, 'cosmetics' => $this->catalog($level, $profile['achievements'], $bestXp, $userId),
+            'store' => (new CosmeticStore)->view($userId, $profile),
             'recent_rewards' => MatchReward::where('user_id', $userId)->latest('id')->limit(10)->pluck('data')->all(),
         ];
     }
@@ -307,7 +309,7 @@ class AccountProgression
     /** @param array<string, string> $achievements
      * @return array<string, list<array<string, mixed>>>
      */
-    private function catalog(int $level, array $achievements, int $seasonXp): array
+    private function catalog(int $level, array $achievements, int $seasonXp, int $userId): array
     {
         $catalog = [];
         foreach (config('progression.cosmetics') as $category => $items) {
@@ -320,6 +322,13 @@ class AccountProgression
 
                 $catalog[$category][] = ['id' => $item['id'], 'name' => $item['name'], 'unlocked' => $unlocked, 'requirement' => $requirement];
             }
+        }
+
+        $owned = (new CosmeticStore)->owned($userId);
+        foreach (config('store.items') as $item) {
+            $unlocked = in_array($item['id'], $owned, true);
+            $catalog[$item['category']][] = ['id' => $item['cosmetic_id'], 'name' => $item['name'], 'unlocked' => $unlocked,
+                'requirement' => $unlocked ? 'Owned from the village store' : $item['price'].' Crowns in the profile store'];
         }
 
         return $catalog;
@@ -337,7 +346,7 @@ class AccountProgression
         return DB::transaction(function () use ($userId, $input): array {
             $profile = $this->lockProfile($userId);
             $catalog = $this->catalog($this->level($profile->xp), $profile->achievements,
-                (int) (PlayerSeason::where('user_id', $userId)->max('xp') ?? 0));
+                (int) (PlayerSeason::where('user_id', $userId)->max('xp') ?? 0), $userId);
             $equipped = array_replace($this->defaults()['customization'], $profile->customization);
             foreach (['title' => 'titles', 'frame' => 'frames', 'accent' => 'accents', 'background' => 'backgrounds'] as $field => $category) {
                 // Older clients omit backgrounds; keep the player's saved choice.
@@ -382,6 +391,17 @@ class AccountProgression
         });
     }
 
+    /** @return array<string, mixed> */
+    public function purchase(int $userId, string $itemId): array
+    {
+        return DB::transaction(function () use ($userId, $itemId): array {
+            $profile = $this->lockProfile($userId);
+            (new CosmeticStore)->purchaseLocked($profile, $itemId);
+
+            return $this->view($userId);
+        });
+    }
+
     public function preferredCharacter(int $userId): ?string
     {
         $character = PlayerProfile::find($userId)?->customization['character'] ?? null;
@@ -400,6 +420,11 @@ class AccountProgression
         foreach (config('progression.cosmetics.titles') as $title) {
             if ($title['id'] === $equipped['title']) {
                 $titleName = $title['name'];
+            }
+        }
+        foreach (config('store.items') as $item) {
+            if ($item['category'] === 'titles' && $item['cosmetic_id'] === $equipped['title']) {
+                $titleName = $item['name'];
             }
         }
 

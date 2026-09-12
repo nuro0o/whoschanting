@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t } from '@/i18n';
 import { computed, ref } from 'vue';
 import { usePage } from '@inertiajs/vue3';
 import {
@@ -63,8 +64,10 @@ const setup = ref(defaultModeSetup());
 const setupError = computed(() => customModeError(setup.value));
 const modeDetail = computed(() =>
     setup.value.mode === 'custom'
-        ? `${rosterTotals(setup.value.roles).total} players · Your cast, your rules`
-        : 'Choose the rules for your village',
+        ? t('roomEntry.mode.custom_description', {
+              count: rosterTotals(setup.value.roles).total,
+          })
+        : t('roomEntry.mode.description'),
 );
 const name = ref((props.initialName ?? '').slice(0, 24));
 const selectedCharacter = computed(() =>
@@ -72,8 +75,12 @@ const selectedCharacter = computed(() =>
 );
 const selectedCharacterName = computed(() =>
     selectedCharacter.value?.hidden
-        ? `? · ${selectedCharacter.value.role_name ?? 'Sealed character'}`
-        : (selectedCharacter.value?.name ?? 'Choose a villager'),
+        ? t('roomEntry.character.hidden', {
+              role:
+                  selectedCharacter.value.role_name ??
+                  t('roomEntry.character.sealed'),
+          })
+        : (selectedCharacter.value?.name ?? t('roomEntry.character.choose')),
 );
 const code = ref(props.initialCode ?? '');
 const createPin = ref('');
@@ -117,10 +124,10 @@ async function enter() {
             mode.value === 'join' &&
             cause instanceof RoomError &&
             cause.status === 404
-                ? 'No room found with that code. Check the code and try again.'
+                ? t('roomEntry.errors.room_not_found')
                 : cause instanceof Error
                   ? cause.message
-                  : 'Something went wrong. Try again.';
+                  : t('roomEntry.errors.unexpected');
         pending.value = false;
     }
 }
@@ -130,13 +137,13 @@ async function enter() {
     <section
         ref="entryElement"
         class="entry-panel"
-        aria-label="Enter the village"
+        :aria-label="t('roomEntry.label')"
     >
         <div
             v-if="!initialCode"
             class="entry-tabs"
             role="group"
-            aria-label="Room action"
+            :aria-label="t('roomEntry.tabs.label')"
         >
             <button
                 type="button"
@@ -148,7 +155,7 @@ async function enter() {
                     error = '';
                 "
             >
-                <Plus :size="16" /> Create a room
+                <Plus :size="16" /> {{ t('roomEntry.tabs.create') }}
             </button>
             <button
                 type="button"
@@ -161,26 +168,27 @@ async function enter() {
                     error = '';
                 "
             >
-                <KeyRound :size="16" /> Join friends
+                <KeyRound :size="16" /> {{ t('roomEntry.tabs.join') }}
             </button>
         </div>
         <a v-if="!initialCode" href="/rooms" class="entry-browser-link">
-            <Globe :size="16" aria-hidden="true" /> Room browser
+            <Globe :size="16" aria-hidden="true" />
+            {{ t('roomEntry.room_browser') }}
             <ArrowRight :size="15" aria-hidden="true" />
         </a>
         <form class="entry-form" @submit.prevent="enter">
-            <label for="player-name">What should the village call you?</label>
+            <label for="player-name">{{ t('roomEntry.name.label') }}</label>
             <input
                 id="player-name"
                 v-model="name"
                 required
                 maxlength="24"
                 autocomplete="nickname"
-                placeholder="Your suspiciously innocent name"
+                :placeholder="t('roomEntry.name.placeholder')"
                 :disabled="pending"
             />
             <template v-if="mode === 'join'">
-                <label for="room-code">Secret room code</label>
+                <label for="room-code">{{ t('roomEntry.code.label') }}</label>
                 <input
                     id="room-code"
                     v-model="code"
@@ -189,7 +197,7 @@ async function enter() {
                     autocapitalize="characters"
                     autocomplete="off"
                     spellcheck="false"
-                    placeholder="e.g. MIST42"
+                    :placeholder="t('roomEntry.code.placeholder')"
                     class="code-input"
                     :disabled="pending || !!initialCode"
                 />
@@ -200,7 +208,7 @@ async function enter() {
                 :disabled="pending"
                 aria-describedby="room-visibility-help"
             >
-                <legend>Room visibility</legend>
+                <legend>{{ t('roomEntry.visibility.label') }}</legend>
                 <div class="visibility-options">
                     <label :class="{ selected: visibility === 'private' }">
                         <input
@@ -210,8 +218,12 @@ async function enter() {
                             value="private"
                         />
                         <span
-                            ><strong>Private</strong
-                            ><small>Invite your friends</small></span
+                            ><strong>{{
+                                t('roomEntry.visibility.private')
+                            }}</strong
+                            ><small>{{
+                                t('roomEntry.visibility.private_hint')
+                            }}</small></span
                         >
                     </label>
                     <label :class="{ selected: visibility === 'public' }">
@@ -222,25 +234,29 @@ async function enter() {
                             value="public"
                         />
                         <span
-                            ><strong>Public</strong
-                            ><small>Meet new suspects</small></span
+                            ><strong>{{
+                                t('roomEntry.visibility.public')
+                            }}</strong
+                            ><small>{{
+                                t('roomEntry.visibility.public_hint')
+                            }}</small></span
                         >
                     </label>
                 </div>
                 <p id="room-visibility-help" class="pin-help">
                     {{
                         visibility === 'public'
-                            ? 'Listed in the room browser, even with a PIN. Anyone can find your room.'
-                            : 'Hidden from the room browser. Share your room code or invite link to bring friends.'
+                            ? t('roomEntry.visibility.public_help')
+                            : t('roomEntry.visibility.private_help')
                     }}
                 </p>
             </fieldset>
             <label for="lobby-pin">{{
                 mode === 'create'
-                    ? 'Lobby PIN (optional)'
+                    ? t('roomEntry.pin.optional')
                     : pinRequired
-                      ? 'Lobby PIN'
-                      : 'Lobby PIN (if required)'
+                      ? t('roomEntry.pin.required')
+                      : t('roomEntry.pin.if_required')
             }}</label>
             <input
                 id="lobby-pin"
@@ -255,8 +271,8 @@ async function enter() {
                 "
                 :placeholder="
                     mode === 'create'
-                        ? 'Leave blank for no PIN'
-                        : 'Ask your host for the PIN'
+                        ? t('roomEntry.pin.create_placeholder')
+                        : t('roomEntry.pin.join_placeholder')
                 "
                 aria-describedby="lobby-pin-help"
                 :disabled="pending"
@@ -264,8 +280,8 @@ async function enter() {
             <p id="lobby-pin-help" class="pin-help">
                 {{
                     mode === 'create'
-                        ? 'Use 4–8 digits and share them with your friends. You can change or remove the PIN in the lobby.'
-                        : 'Protected lobbies need a 4–8 digit PIN, even when joining through an invite link.'
+                        ? t('roomEntry.pin.create_help')
+                        : t('roomEntry.pin.join_help')
                 }}
             </p>
             <div class="entry-settings">
@@ -290,7 +306,7 @@ async function enter() {
                         decorative
                     />
                     <span class="entry-setting-copy"
-                        ><small>Your character</small
+                        ><small>{{ t('roomEntry.character.label') }}</small
                         ><strong>{{ selectedCharacterName }}</strong></span
                     >
                     <ChevronRight
@@ -300,10 +316,11 @@ async function enter() {
                     />
                 </button>
                 <p v-else class="guest-character-note">
-                    The village will choose a random character for you.
-                    <a href="/login">Sign in</a> or
-                    <a href="/register">create an account</a> to pick your own.
-                    Looks never reveal your role.
+                    {{ t('roomEntry.guest.description') }}
+                    <a href="/login">{{ t('roomEntry.guest.sign_in') }}</a>
+                    {{ t('roomEntry.guest.or') }}
+                    <a href="/register">{{ t('roomEntry.guest.register') }}</a>
+                    {{ t('roomEntry.guest.pick_own') }}
                 </p>
                 <button
                     v-if="mode === 'create'"
@@ -319,7 +336,7 @@ async function enter() {
                         ><SlidersHorizontal :size="21" aria-hidden="true"
                     /></span>
                     <span class="entry-setting-copy"
-                        ><small>Game mode</small
+                        ><small>{{ t('roomEntry.mode.label') }}</small
                         ><strong>{{ modeName(setup) }}</strong
                         ><span>{{ modeDetail }}</span></span
                     >
@@ -335,7 +352,9 @@ async function enter() {
                 class="form-error"
                 role="status"
             >
-                {{ setupError }} Open Game mode to adjust your cast.
+                {{
+                    t('roomEntry.mode.adjust_error', { setupError: setupError })
+                }}
             </p>
             <p v-if="error" class="form-error" role="alert">{{ error }}</p>
             <button
@@ -348,21 +367,23 @@ async function enter() {
                 "
             >
                 <template v-if="pending"
-                    ><span role="status">Entering the village…</span
+                    ><span role="status">{{
+                        t('roomEntry.submit.pending')
+                    }}</span
                     ><LoaderCircle :size="18" class="spin" /></template
                 ><template v-else
                     >{{
                         mode === 'create'
-                            ? 'Gather your suspects'
-                            : 'Enter the village'
+                            ? t('roomEntry.submit.create')
+                            : t('roomEntry.label')
                     }}<ArrowRight :size="18"
                 /></template>
             </button>
             <p class="entry-note">
                 {{
                     signedIn
-                        ? 'Find your people. Keep them guessing.'
-                        : 'Play as a guest. Bring friends. Keep secrets.'
+                        ? t('roomEntry.note.signed_in')
+                        : t('roomEntry.note.guest')
                 }}
             </p>
         </form>
@@ -372,13 +393,13 @@ async function enter() {
             :trigger="editorTrigger"
             :title="
                 editor === 'characters'
-                    ? 'Choose your character'
-                    : 'Choose your game mode'
+                    ? t('roomEntry.editor.character_title')
+                    : t('roomEntry.editor.mode_title')
             "
             :description="
                 editor === 'characters'
-                    ? 'A familiar face. An unfamiliar alibi.'
-                    : 'Set the mood for a suspicious evening.'
+                    ? t('roomEntry.editor.character_description')
+                    : t('roomEntry.editor.mode_description')
             "
             :summary="
                 editor === 'characters'

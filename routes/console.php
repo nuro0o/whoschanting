@@ -7,7 +7,7 @@ use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schedule;
 
 Artisan::command('game:tick', function (MatchEngine $engine): void {
-    GameRoom::where('deadline', '<=', now())->select('id')->chunkById(100, function ($rooms) use ($engine): void {
+    GameRoom::where(fn ($query) => $query->where('deadline', '<=', now())->orWhere('maintenance_at', '<=', now()))->select('id')->chunkById(100, function ($rooms) use ($engine): void {
         foreach ($rooms as $room) {
             $engine->resolve($room->id);
         }

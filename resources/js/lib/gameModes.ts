@@ -1,3 +1,4 @@
+import { t } from '../i18n/index.ts';
 export interface ModeSetup {
     mode: 'classic' | 'hard' | 'chaos' | 'paranoia' | 'custom';
     classic_variant: 'classic' | 'illusions';
@@ -59,7 +60,7 @@ export function rosterTotals(roles: Record<string, number>) {
 export function customModeError(
     setup: ModeSetup,
     min = 3,
-    max = 10,
+    max = 15,
 ): string | null {
     if (setup.mode !== 'custom') return null;
     const counts = Object.values(setup.roles);
@@ -68,12 +69,11 @@ export function customModeError(
             (count) => !Number.isInteger(count) || count < 1 || count > max,
         )
     )
-        return `Each enabled role needs a whole count from 1 to ${max}.`;
+        return t('gameModes.errors.role_count', { max });
     const totals = rosterTotals(setup.roles);
-    if (!totals.town || !totals.cult)
-        return 'Include at least one Town role and one Cult role.';
+    if (!totals.town || !totals.cult) return t('gameModes.errors.factions');
     if (totals.total < min || totals.total > max)
-        return `Choose ${min}–${max} roles in total. You currently have ${totals.total}.`;
+        return t('gameModes.errors.total', { min, max, total: totals.total });
     return null;
 }
 export function modeName(
@@ -83,12 +83,16 @@ export function modeName(
     const current = copyModeSetup(setup, roster);
     if (current.mode === 'classic')
         return current.classic_variant === 'illusions'
-            ? 'Classic · Illusions'
-            : 'Classic';
+            ? t('gameModes.names.illusions')
+            : t('gameModes.names.classic');
     if (current.mode === 'chaos')
-        return `Chaos · ${current.chaos_variant === 'maelstrom' ? 'Maelstrom' : 'Wildcards'}`;
-    if (current.mode === 'paranoia') return 'Paranoia';
-    return current.mode === 'hard' ? 'Hard' : 'Custom';
+        return current.chaos_variant === 'maelstrom'
+            ? t('gameModes.names.maelstrom')
+            : t('gameModes.names.wildcards');
+    if (current.mode === 'paranoia') return t('gameModes.names.paranoia');
+    return current.mode === 'hard'
+        ? t('gameModes.names.hard')
+        : t('gameModes.names.custom');
 }
 export const chaosEvents = {
     mirrors: {

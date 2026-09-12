@@ -7,6 +7,8 @@ use Illuminate\Database\Eloquent\Model;
 /**
  * @property int $user_id
  * @property int $xp
+ * @property int $coins
+ * @property int $coins_earned
  * @property int $matches
  * @property int $wins
  * @property int $town_wins
@@ -26,7 +28,7 @@ class PlayerProfile extends Model
     /** @return array<string, string> */
     protected function casts(): array
     {
-        return ['xp' => 'integer', 'matches' => 'integer', 'wins' => 'integer', 'town_wins' => 'integer', 'cult_wins' => 'integer',
+        return ['xp' => 'integer', 'coins' => 'integer', 'coins_earned' => 'integer', 'matches' => 'integer', 'wins' => 'integer', 'town_wins' => 'integer', 'cult_wins' => 'integer',
             'roles_played' => 'array', 'achievements' => 'array', 'customization' => 'array'];
     }
 }

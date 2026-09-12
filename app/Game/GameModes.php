@@ -6,6 +6,20 @@ use Illuminate\Validation\ValidationException;
 
 class GameModes
 {
+    public function discussionBonus(int $count): int
+    {
+        return max(0, $count - config('game.discussion_base_players')) * config('game.discussion_extra_seconds_per_player');
+    }
+
+    /** @return array<string, int> */
+    public function phaseSeconds(int $count): array
+    {
+        $seconds = config('game.seconds');
+        $seconds['discussion'] += $this->discussionBonus($count);
+
+        return $seconds;
+    }
+
     /** @param array<string, mixed> $input
      * @return array<string, mixed>
      */
@@ -122,7 +136,7 @@ class GameModes
             }
             $cultCount = config('game.cultists_by_player_count.'.$count);
             $preview['team_counts'] = $error === null ? ['town' => $count - $cultCount, 'cult' => $cultCount] : null;
-            $preview['discussion_seconds'] = config('game.paranoia_discussion_seconds');
+            $preview['discussion_seconds'] = array_map(fn (int $seconds): int => $seconds + $this->discussionBonus($count), config('game.paranoia_discussion_seconds'));
         }
 
         return $preview;

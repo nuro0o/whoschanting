@@ -35,7 +35,7 @@ class CharacterCustomizerTest extends TestCase
         $this->flushSession();
         $this->actingAs($user)->get('/progression')->assertInertia(fn (Assert $page) => $page
             ->where('progression.profile.equipped', $this->outfit)
-            ->has('progression.cosmetics.backgrounds', 4));
+            ->has('progression.cosmetics.backgrounds', 6));
         $code = $this->postJson('/rooms', ['name' => 'Mara'])->assertCreated()->json('code');
         $this->getJson('/rooms/'.$code.'/state')->assertOk()
             ->assertJsonPath('me.character', 'mariner')
