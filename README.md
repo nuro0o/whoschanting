@@ -2,6 +2,14 @@
 
 A private-room social deduction game built with Laravel 13, Vue 3, TypeScript, Reverb + Echo, MySQL, and a responsive village card table. No account is required: guests use an encrypted browser session, while verified accounts can keep their seat and progression across devices.
 
+## Text moderation
+
+The server automatically replaces listed profanity with `*` in player names, chat, role claims, discussion answers, Last Words, and private match feedback. Only masked text is saved for new submissions, including match recaps. Existing room text is masked when loaded for play and saved on its next successful update; previously archived matches are not rewritten. Names must remain unique after masking.
+
+The English starter word list lives in `config/moderation.php`. Matching handles capitalization, common number/symbol substitutions, repeated letters, fullwidth letters, and separators inside words. Whole-word boundaries preserve ordinary names and words such as Scunthorpe and assistant. Add explicit inflections or additional languages to the list as needed; this is a word filter, not contextual abuse detection or a complete moderation system for public rooms.
+
+No migration, frontend rebuild, or `.env` change is required. Refresh cached configuration if used and restart long-running application processes after deployment or word-list changes.
+
 ## Run locally
 
 Requirements: PHP 8.3+, Composer, Node 22.12+ (or 24+), and MySQL 8. Docker is optional.
@@ -23,6 +31,14 @@ php artisan schedule:work
 Open <http://127.0.0.1:8000>. Create a room, send its code or invite link to friends, and have everyone mark themselves ready. Use separate browsers/profiles to test multiple seats; tabs in one browser deliberately share a seat. Reopening the room in the same browser recovers it. Guest seats require the original session; clearing cookies, session expiry, or changing browsers loses access. Verified account seats can be recovered by signing in again. The template keeps active sessions for seven days.
 
 For phones on a local network, serve on `0.0.0.0`, set `APP_URL` and the Reverb/Vite host to the machine’s LAN address, add that hostname to `REVERB_ALLOWED_ORIGINS`, and rebuild. Friends must reach both HTTP and WebSocket ports. Do not expose development servers to the internet.
+
+## Optional lobby PIN
+
+Hosts can enter an optional **4–8 digit PIN** when creating a room, or add, change, and remove it under **Lobby access** while the lobby is open. Leave it blank when creating a room to allow joining with only the room code. Existing rooms without a PIN keep working. Share the PIN separately: invitation links and QR codes never contain it.
+
+New seats must provide the correct PIN, including when arriving through an invite link. Existing guest sessions and linked verified accounts recover their own seats without re-entering it. Removed players need the current PIN to join again. Changing a PIN preserves seated players and readiness; it cannot be changed during a match. Rematches keep the PIN, and transferring the host transfers permission to replace or remove it.
+
+Only a password hash is stored in the room JSON. Room responses expose whether a PIN is required, never the PIN or its hash; neither appears in match recaps. Five unsuccessful joins per room and IP address in a minute trigger a temporary limit. Successful joins do not consume that budget; the existing overall join limit also applies. PINs are excluded from validation redirect input. No migration is required; rebuild frontend assets and restart long-running application processes after deployment.
 
 ## Playable tutorial
 

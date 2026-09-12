@@ -60,6 +60,7 @@ import DiscussionAbility from '@/components/chanting/DiscussionAbility.vue';
 import PersistentActionBar from '@/components/chanting/PersistentActionBar.vue';
 import PlayerDetailsDrawer from '@/components/chanting/PlayerDetailsDrawer.vue';
 import LobbyInvites from '@/components/chanting/LobbyInvites.vue';
+import LobbyPin from '@/components/chanting/LobbyPin.vue';
 import ReadabilityControl from '@/components/chanting/ReadabilityControl.vue';
 import SpectatorView from '@/components/chanting/SpectatorView.vue';
 import {
@@ -96,6 +97,7 @@ import '../../css/game-upgrades.css';
 const props = withDefaults(
     defineProps<{
         code: string;
+        pinRequired?: boolean;
         characters?: Character[];
         preferredCharacter?: string | null;
         music?: MusicLibrary;
@@ -1188,6 +1190,7 @@ onBeforeUnmount(() => {
             <h1>A seat is waiting.</h1>
             <p>Choose your name to join room {{ code }}.</p>
             <RoomEntry
+                :pin-required="pinRequired"
                 :initial-code="code"
                 :characters="characters"
                 :preferred-character="preferredCharacter"
@@ -2334,6 +2337,12 @@ onBeforeUnmount(() => {
                             </p>
                         </div>
                         <LobbyInvites :url="inviteUrl" :code="code" />
+                        <LobbyPin
+                            :state="state"
+                            :pending="pending || disconnected"
+                            :error="error"
+                            :submit="act"
+                        />
                         <CharacterPicker
                             v-if="signedIn"
                             :model-value="state.me.character"

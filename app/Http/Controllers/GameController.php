@@ -40,10 +40,11 @@ class GameController extends Controller
 
     public function show(Request $request, string $code): Response
     {
-        GameRoom::where('code', strtoupper($code))->firstOrFail();
+        $room = GameRoom::where('code', strtoupper($code))->firstOrFail();
 
         return Inertia::render('Game', [
             'code' => strtoupper($code),
+            'pinRequired' => isset($room->state['pin_hash']),
             'music' => (new MusicLibrary)->tracks(public_path('assets/Music')),
             'whispers' => (new WhisperLibrary)->tracks(public_path('assets/Sounds/Whispers')),
             ...$this->characterProps($request),
@@ -52,8 +53,8 @@ class GameController extends Controller
 
     public function create(Request $request): JsonResponse
     {
-        $data = $request->validate(['name' => ['required', 'string', 'min:2', 'max:24'], 'character' => $this->characterRules($request), ...$this->modeRules()]);
-        $room = $this->engine->create($this->identity($request), $data['name'], $this->selectedCharacter($request, $data), $data['setup'] ?? [], $request->user()?->id);
+        $data = $request->validate(['name' => ['required', 'string', 'min:2', 'max:24'], 'pin' => $this->pinRules(), 'character' => $this->characterRules($request), ...$this->modeRules()]);
+        $room = $this->engine->create($this->identity($request), $data['name'], $this->selectedCharacter($request, $data), $data['setup'] ?? [], $request->user()?->id, $data['pin'] ?? null);
         $this->rememberCharacter($request, $data);
 
         return response()->json(['code' => $room->code], 201);
@@ -61,8 +62,8 @@ class GameController extends Controller
 
     public function join(Request $request): JsonResponse
     {
-        $data = $request->validate(['code' => ['required', 'string', 'size:6', 'alpha_num:ascii'], 'name' => ['required', 'string', 'min:2', 'max:24'], 'character' => $this->characterRules($request)]);
-        $room = $this->engine->join(strtoupper($data['code']), $this->identity($request), $data['name'], $this->selectedCharacter($request, $data), $request->user()?->id);
+        $data = $request->validate(['code' => ['required', 'string', 'size:6', 'alpha_num:ascii'], 'name' => ['required', 'string', 'min:2', 'max:24'], 'pin' => $this->pinRules(), 'character' => $this->characterRules($request)]);
+        $room = $this->engine->join(strtoupper($data['code']), $this->identity($request), $data['name'], $this->selectedCharacter($request, $data), $request->user()?->id, $data['pin'] ?? null);
         $this->rememberCharacter($request, $data);
 
         return response()->json(['code' => $room->code]);
@@ -76,7 +77,8 @@ class GameController extends Controller
     public function action(Request $request, string $code): JsonResponse
     {
         $data = $request->validate([
-            'type' => ['required', 'string', 'in:ready,start,night,vote,chat,rematch,character,discussion_ready,solve_curse,roster,exorcise,oath,configure_mode,claim,discussion_response,prediction,transfer_host,remove_player,extend_discussion,feedback,accuse,defend'],
+            'type' => ['required', 'string', 'in:ready,start,night,vote,chat,rematch,character,discussion_ready,solve_curse,roster,exorcise,oath,configure_mode,claim,discussion_response,prediction,transfer_host,remove_player,extend_discussion,feedback,accuse,defend,set_pin'],
+            'pin' => ['present_if:type,set_pin', ...$this->pinRules()],
             'phase_id' => ['required', 'integer', 'min:1'],
             'target' => ['nullable', 'string', 'uuid'],
             'use_ability' => ['sometimes', 'boolean'],
@@ -105,6 +107,12 @@ class GameController extends Controller
         }
 
         return response()->json($state);
+    }
+
+    /** @return list<string> */
+    private function pinRules(): array
+    {
+        return ['nullable', 'string', 'regex:/\A[0-9]{4,8}\z/'];
     }
 
     /** @return array<string, mixed> */

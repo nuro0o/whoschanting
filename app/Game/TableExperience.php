@@ -10,6 +10,8 @@ use Illuminate\Validation\ValidationException;
 /** Social actions share the match's row lock, but never consume a role action. */
 class TableExperience
 {
+    public function __construct(private ProfanityFilter $profanity = new ProfanityFilter) {}
+
     private const PROMPTS = [
         ['id' => 'detail', 'question' => 'Whose story needs one more detail, and what would you ask?'],
         ['id' => 'change', 'question' => 'Which claim changed your mind, and why?'],
@@ -24,6 +26,13 @@ class TableExperience
     {
         $type = $a['type'];
         $p = $s['players'][$id];
+        if ($type === 'set_pin') {
+            $this->ensure($s['phase'] === 'lobby' && $s['host_id'] === $id, 'Only the host can change the PIN while the lobby is open.');
+            $this->ensure(array_key_exists('pin', $a) && ($a['pin'] === null || is_string($a['pin'])), 'Supply a PIN, or leave it blank to remove it.');
+            $s['pin_hash'] = LobbyPin::hash($a['pin']);
+
+            return true;
+        }
         if ($type === 'accuse') {
             $this->ensure($p['alive'] && $s['phase'] === 'discussion' && isset($s['match_rules']['seconds']['last_words']), 'Living players can accuse someone during discussion in a new match.');
             $target = $a['target'] ?? null;
@@ -46,7 +55,7 @@ class TableExperience
             }
             $body = trim($a['body'] ?? '');
             $this->ensure($body !== '' && mb_strlen($body) <= 280, 'Write a defense of 1–280 characters.');
-            $s['rounds'][$s['day']]['last_words']['defenses'][] = ['player_id' => $id, 'body' => $body];
+            $s['rounds'][$s['day']]['last_words']['defenses'][] = ['player_id' => $id, 'body' => $this->profanity->mask($body)];
 
             return true;
         }
@@ -80,7 +89,7 @@ class TableExperience
             $this->ensure($body !== '' && mb_strlen($body) <= 280, 'Write a statement of 1–280 characters.');
             $target = $a['target'] ?? null;
             $this->ensure($target === null || (is_string($target) && isset($s['players'][$target])), 'Choose a player at this table.');
-            $entry = ['id' => (string) Str::uuid(), 'player_id' => $id, 'day' => $s['day'], 'body' => $body, 'target_id' => $target];
+            $entry = ['id' => (string) Str::uuid(), 'player_id' => $id, 'day' => $s['day'], 'body' => $this->profanity->mask($body), 'target_id' => $target];
             if ($type === 'claim') {
                 $role = $a['role'] ?? null;
                 $this->ensure(is_string($role) && array_key_exists($role, config('game.role_alignments')), 'Choose a role to claim.');
@@ -133,7 +142,7 @@ class TableExperience
             $this->ensure(in_array($a['engagement'] ?? null, ['engaged', 'mixed', 'waiting'], true), 'Choose how involved you felt.');
             $body = trim($a['body'] ?? '');
             $this->ensure(mb_strlen($body) <= 280, 'Keep your feedback within 280 characters.');
-            $s['feedback'][$id] = ['engagement' => $a['engagement'], 'body' => $body, 'role' => $p['role']];
+            $s['feedback'][$id] = ['engagement' => $a['engagement'], 'body' => $this->profanity->mask($body), 'role' => $p['role']];
             // Keep observations after a rematch without exposing another player's feedback.
             if (isset($s['match_id'])) {
                 $match = GameMatch::where('id', $s['match_id'])->first();

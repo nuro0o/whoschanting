@@ -13,7 +13,7 @@ use Illuminate\Validation\ValidationException;
 
 class MatchEngine
 {
-    public function __construct(private CurseEngine $curses, private GameModes $modes = new GameModes, private AccountProgression $progression = new AccountProgression, private TableExperience $table = new TableExperience) {}
+    public function __construct(private CurseEngine $curses, private GameModes $modes = new GameModes, private AccountProgression $progression = new AccountProgression, private TableExperience $table = new TableExperience, private ProfanityFilter $profanity = new ProfanityFilter) {}
 
     /** @return array<string, mixed> */
     public function rules(): array
@@ -33,11 +33,13 @@ class MatchEngine
     }
 
     /** @param array<string, mixed> $setup */
-    public function create(string $identity, string $name, ?string $character = null, array $setup = [], ?int $accountId = null): GameRoom
+    public function create(string $identity, string $name, ?string $character = null, array $setup = [], ?int $accountId = null, #[\SensitiveParameter] ?string $pin = null): GameRoom
     {
         $setup = $this->modes->normalize($setup);
+        $name = $this->profanity->mask(trim($name));
+        $pinHash = LobbyPin::hash($pin);
 
-        return DB::transaction(function () use ($identity, $name, $character, $setup, $accountId): GameRoom {
+        return DB::transaction(function () use ($identity, $name, $character, $setup, $accountId, $pinHash): GameRoom {
             $id = (string) Str::uuid();
             do {
                 $code = strtoupper(Str::random(6));
@@ -45,6 +47,7 @@ class MatchEngine
 
             return GameRoom::create(['code' => $code, 'state' => [
                 'phase' => 'lobby', 'phase_id' => 1, 'revision' => 1, 'day' => 0,
+                'pin_hash' => $pinHash,
                 'mode_setup' => $setup, 'roster' => $setup['classic_variant'],
                 'host_id' => $id, 'players' => [$id => $this->seat($id, $identity, $name, $character, $accountId)],
                 'tokens' => 0, 'threshold' => 0, 'mission' => null, 'winner' => null,
@@ -70,11 +73,13 @@ class MatchEngine
             'character' => $selected];
     }
 
-    public function join(string $code, string $identity, string $name, ?string $character = null, ?int $accountId = null): GameRoom
+    public function join(string $code, string $identity, string $name, ?string $character = null, ?int $accountId = null, #[\SensitiveParameter] ?string $pin = null): GameRoom
     {
-        return DB::transaction(function () use ($code, $identity, $name, $character, $accountId): GameRoom {
+        $name = $this->profanity->mask(trim($name));
+
+        return DB::transaction(function () use ($code, $identity, $name, $character, $accountId, $pin): GameRoom {
             $room = GameRoom::where('code', $code)->lockForUpdate()->firstOrFail();
-            $s = $room->state;
+            $s = $this->profanity->roomText($room->state);
             $existing = $this->playerId($s, $identity, $accountId);
             if ($existing !== null) {
                 if ($accountId !== null && $s['phase'] === 'lobby') {
@@ -97,6 +102,7 @@ class MatchEngine
                 return $room;
             }
             $this->ensure($s['phase'] === 'lobby', 'This match has already begun.');
+            LobbyPin::verify($s, $pin);
             $setup = $this->modes->setup($s);
             $capacity = $setup['mode'] === 'custom' ? array_sum($setup['roles']) : config('game.max_players');
             $this->ensure(count($s['players']) < $capacity, 'This room is full for its selected role setup.');
@@ -138,7 +144,7 @@ class MatchEngine
     {
         $result = DB::transaction(function () use ($code, $identity, $action, $accountId): array {
             $room = GameRoom::where('code', $code)->lockForUpdate()->firstOrFail();
-            $s = $room->state;
+            $s = $this->profanity->roomText($room->state);
             $id = $this->playerId($s, $identity, $accountId);
             abort_if($id === null, 403, 'Join this room to take a seat.');
             if ($room->deadline?->isPast()) {
@@ -170,7 +176,7 @@ class MatchEngine
             if ($room === null || ! $room->deadline?->isPast()) {
                 return;
             }
-            $s = $room->state;
+            $s = $this->profanity->roomText($room->state);
             $this->advance($room, $s);
             $this->save($room, $s);
         });
@@ -230,7 +236,7 @@ class MatchEngine
             $body = trim($a['body'] ?? '');
             $this->ensure($body !== '' && mb_strlen($body) <= 280, 'Write a message of 1–280 characters.');
             $s['messages'][] = ['id' => (string) Str::uuid(), 'player_id' => $id, 'name' => $p['name'],
-                'body' => $body, 'day' => $s['day'], 'sent_at' => now()->toISOString()];
+                'body' => $this->profanity->mask($body), 'day' => $s['day'], 'sent_at' => now()->toISOString()];
             $s['messages'] = array_slice($s['messages'], -100);
 
             return;
@@ -851,6 +857,7 @@ class MatchEngine
 
         return [
             'id' => $room->id, 'code' => $room->code, 'match_id' => $s['match_id'] ?? null,
+            'pin_required' => isset($s['pin_hash']),
             'phase' => $s['phase'], 'phase_id' => $s['phase_id'],
             'revision' => $s['revision'], 'day' => $s['day'], 'deadline' => $room->deadline?->toISOString(),
             'roster' => $s['roster'] ?? 'classic',

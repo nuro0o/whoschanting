@@ -230,6 +230,7 @@ export interface Curse {
     challenge: CurseChallenge | null;
 }
 export interface RoomState {
+    pin_required?: boolean;
     table?: {
         last_words?: LastWordsRecord | null;
         claims: PublicClaim[];

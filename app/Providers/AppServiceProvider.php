@@ -14,6 +14,7 @@ use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Validation\Rules\Password;
+use Symfony\Component\HttpFoundation\Response;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -31,6 +32,14 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         $this->configureDefaults();
+        RateLimiter::for('game-join', function (Request $request): Limit {
+            $code = $request->input('code');
+
+            return Limit::perMinute(5)
+                ->by(hash('sha256', ($request->ip() ?? 'unknown').'|'.(is_string($code) ? strtoupper(trim($code)) : 'invalid')))
+                ->after(fn (Response $response): bool => $response->getStatusCode() !== 200)
+                ->response(fn (Request $request, array $headers) => response()->json(['message' => 'Too many unsuccessful join attempts. Wait a minute and try again.'], 429, $headers));
+        });
         Event::listen(Verified::class, function (Verified $event): void {
             if ($event->user instanceof User) {
                 SendWelcomeEmail::dispatch($event->user->id);

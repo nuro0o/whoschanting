@@ -31,6 +31,7 @@ import {
 const props = withDefaults(
     defineProps<{
         initialCode?: string;
+        pinRequired?: boolean;
         characters?: Character[];
         preferredCharacter?: string | null;
         initialName?: string;
@@ -74,6 +75,15 @@ const selectedCharacterName = computed(() =>
         : (selectedCharacter.value?.name ?? 'Choose a villager'),
 );
 const code = ref(props.initialCode ?? '');
+const createPin = ref('');
+const joinPin = ref('');
+const pin = computed({
+    get: () => (mode.value === 'create' ? createPin.value : joinPin.value),
+    set: (value: string) => {
+        if (mode.value === 'create') createPin.value = value;
+        else joinPin.value = value;
+    },
+});
 const pending = ref(false);
 const error = ref('');
 async function enter() {
@@ -89,6 +99,7 @@ async function enter() {
             mode.value === 'create' ? '/rooms' : '/rooms/join',
             {
                 name: name.value.trim(),
+                pin: pin.value || null,
                 ...(signedIn.value ? { character: character.value } : {}),
                 ...(mode.value === 'join'
                     ? { code: code.value.trim().toUpperCase() }
@@ -174,6 +185,39 @@ async function enter() {
                     :disabled="pending || !!initialCode"
                 />
             </template>
+            <label for="lobby-pin">{{
+                mode === 'create'
+                    ? 'Lobby PIN (optional)'
+                    : pinRequired
+                      ? 'Lobby PIN'
+                      : 'Lobby PIN (if required)'
+            }}</label>
+            <input
+                id="lobby-pin"
+                v-model="pin"
+                type="password"
+                inputmode="numeric"
+                pattern="[0-9]{4,8}"
+                minlength="4"
+                maxlength="8"
+                :autocomplete="
+                    mode === 'create' ? 'new-password' : 'current-password'
+                "
+                :placeholder="
+                    mode === 'create'
+                        ? 'Leave blank for no PIN'
+                        : 'Ask your host for the PIN'
+                "
+                aria-describedby="lobby-pin-help"
+                :disabled="pending"
+            />
+            <p id="lobby-pin-help" class="pin-help">
+                {{
+                    mode === 'create'
+                        ? 'Use 4–8 digits and share them with your friends. You can change or remove the PIN in the lobby.'
+                        : 'Protected lobbies need a 4–8 digit PIN, even when joining through an invite link.'
+                }}
+            </p>
             <div class="entry-settings">
                 <button
                     v-if="signedIn"
@@ -306,6 +350,12 @@ async function enter() {
 </template>
 
 <style scoped>
+.pin-help {
+    margin: 0 0 8px;
+    color: var(--account-muted, var(--muted));
+    font-size: 13px;
+    line-height: 1.5;
+}
 .entry-settings {
     margin: 6px 0 2px;
     border-block: 1px solid var(--account-line, var(--line));

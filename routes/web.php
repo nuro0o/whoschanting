@@ -12,7 +12,7 @@ Route::inertia('/tutorial', 'Tutorial')->middleware(PrivateGameResponse::class)-
 
 Route::middleware([PrivateGameResponse::class, EnsureVerifiedAccount::class])->group(function (): void {
     Route::post('/rooms', [GameController::class, 'create'])->middleware('throttle:10,1')->block();
-    Route::post('/rooms/join', [GameController::class, 'join'])->middleware('throttle:20,1')->block();
+    Route::post('/rooms/join', [GameController::class, 'join'])->middleware(['throttle:20,1', 'throttle:game-join'])->block();
     Route::get('/rooms/{code}', [GameController::class, 'show'])->name('game');
     Route::get('/rooms/{code}/state', [GameController::class, 'state'])->middleware('throttle:game-state')->block();
     Route::post('/rooms/{code}/actions', [GameController::class, 'action'])->middleware('throttle:game-action')->block();
