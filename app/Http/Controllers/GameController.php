@@ -67,7 +67,7 @@ class GameController extends Controller
     public function create(Request $request): JsonResponse
     {
         $data = $request->validate(['name' => ['required', 'string', 'min:2', 'max:24'], 'visibility' => ['sometimes', 'string', 'in:private,public'], 'pin' => $this->pinRules(), 'character' => $this->characterRules($request), ...$this->modeRules()]);
-        $room = $this->engine->create($this->identity($request), $data['name'], $this->selectedCharacter($request, $data), $data['setup'] ?? [], $request->user()?->id, $data['pin'] ?? null, $data['visibility'] ?? 'private');
+        $room = $this->engine->create($this->identity($request), $data['name'], $this->selectedCharacter($request, $data), $data['setup'] ?? [], $request->user()?->id, $data['pin'] ?? null, $data['visibility'] ?? 'private', ipAddress: $request->ip() ?? '');
         $this->engine->presence($room->code, $this->identity($request), 'pending', accountId: $request->user()?->id);
         $this->rememberCharacter($request, $data);
 
@@ -77,7 +77,7 @@ class GameController extends Controller
     public function join(Request $request): JsonResponse
     {
         $data = $request->validate(['code' => ['required', 'string', 'size:6', 'alpha_num:ascii'], 'name' => ['required', 'string', 'min:2', 'max:24'], 'pin' => $this->pinRules(), 'character' => $this->characterRules($request)]);
-        $room = $this->engine->join(strtoupper($data['code']), $this->identity($request), $data['name'], $this->selectedCharacter($request, $data), $request->user()?->id, $data['pin'] ?? null);
+        $room = $this->engine->join(strtoupper($data['code']), $this->identity($request), $data['name'], $this->selectedCharacter($request, $data), $request->user()?->id, $data['pin'] ?? null, ipAddress: $request->ip() ?? '');
         $this->engine->presence($room->code, $this->identity($request), 'pending', accountId: $request->user()?->id);
         $this->rememberCharacter($request, $data);
 

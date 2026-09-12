@@ -1152,7 +1152,7 @@ class GameTest extends TestCase
         $this->getJson('/rooms/'.$code.'/state')->assertJsonPath('me.character', $character);
         $this->postJson('/rooms/'.$code.'/actions', ['type' => 'character', 'character' => 'baker', 'phase_id' => 1])->assertUnprocessable();
         $this->postJson('/rooms/'.$code.'/actions', ['type' => 'character', 'phase_id' => 1])->assertForbidden();
-        $this->withSession(['chanting.identity' => 'new-guest']);
+        $this->withServerVariables(['REMOTE_ADDR' => '192.0.2.2'])->withSession(['chanting.identity' => 'new-guest']);
         $this->postJson('/rooms/join', ['name' => 'Other guest', 'code' => $code, 'character' => 'baker'])->assertUnprocessable();
         $this->postJson('/rooms/join', ['name' => 'Other guest', 'code' => $code])->assertOk();
         $this->assertCount(2, GameRoom::first()->state['players']);

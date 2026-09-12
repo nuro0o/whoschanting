@@ -2,8 +2,10 @@
 
 return [
     'currency' => 'Crowns',
-    'match_coins' => 25,
-    'win_coins' => 10,
+    'coins_per_player' => 1,
+    'small_game_max_players' => 6,
+    'small_game_win_coins' => 5,
+    'large_game_win_coins' => 10,
     // Permanent cosmetics only. Prices and grants are always resolved on the server.
     'items' => [
         ['id' => 'title-night-market', 'category' => 'titles', 'cosmetic_id' => 'night_market', 'name' => 'Night Market Regular',

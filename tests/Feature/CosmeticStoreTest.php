@@ -35,7 +35,7 @@ class CosmeticStoreTest extends TestCase
         $this->actingAs($user)->get('/settings/profile')->assertOk()->assertInertia(fn (Assert $page) => $page
             ->component('settings/Profile')->where('progression.store.balance', 0)
             ->where('progression.store.currency', 'Crowns')->has('progression.store.items', 6)
-            ->where('progression.store.rewards', ['match' => 25, 'win' => 10]));
+            ->where('progression.store.rewards', ['per_player' => 1, 'small_game_max_players' => 6, 'small_game_win' => 5, 'large_game_win' => 10]));
         $this->assertDatabaseCount('player_profiles', 0);
         $this->assertDatabaseCount('coin_transactions', 0);
 

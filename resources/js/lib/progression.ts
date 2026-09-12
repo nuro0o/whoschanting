@@ -50,7 +50,12 @@ export interface StoreData {
     currency: 'Crowns';
     balance: number;
     lifetime_earned: number;
-    rewards: { match: number; win: number };
+    rewards: {
+        per_player: number;
+        small_game_max_players: number;
+        small_game_win: number;
+        large_game_win: number;
+    };
     items: StoreItem[];
     recent_transactions: {
         id: number;

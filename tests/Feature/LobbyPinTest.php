@@ -71,7 +71,8 @@ class LobbyPinTest extends TestCase
         $this->assertStringNotContainsString('pin_hash', $view->getContent());
         $this->assertStringNotContainsString('004271', $view->getContent());
         $this->assertArrayNotHasKey('state', $room->toArray());
-        $this->withSession(['chanting.identity' => 'guest'])->postJson('/rooms/join', ['code' => $room->code, 'name' => 'Guest', 'pin' => '004271'])->assertOk();
+        $this->withServerVariables(['REMOTE_ADDR' => '192.0.2.2'])->withSession(['chanting.identity' => 'guest'])
+            ->postJson('/rooms/join', ['code' => $room->code, 'name' => 'Guest', 'pin' => '004271'])->assertOk();
         $this->assertCount(2, $room->fresh()->state['players']);
     }
 
@@ -193,13 +194,13 @@ class LobbyPinTest extends TestCase
         $this->postJson('/rooms/join', ['code' => $room->code, 'name' => 'Guest', 'pin' => '004271'])->assertOk();
     }
 
-    public function test_successful_joins_on_shared_wifi_do_not_consume_the_failed_attempt_budget(): void
+    public function test_successful_reconnects_do_not_consume_the_failed_attempt_budget(): void
     {
         $room = $this->engine->create('host', 'Host', pin: '004271');
         for ($i = 0; $i < 9; $i++) {
-            $this->withSession(['chanting.identity' => 'friend-'.$i])->postJson('/rooms/join', ['code' => $room->code, 'name' => 'Friend '.$i, 'pin' => '004271'])->assertOk();
+            $this->withSession(['chanting.identity' => 'friend'])->postJson('/rooms/join', ['code' => $room->code, 'name' => 'Friend', 'pin' => '004271'])->assertOk();
         }
-        $this->assertCount(10, $room->fresh()->state['players']);
+        $this->assertCount(2, $room->fresh()->state['players']);
     }
 
     public function test_validation_redirects_never_flash_a_pin_to_the_session(): void

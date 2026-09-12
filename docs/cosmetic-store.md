@@ -4,13 +4,21 @@ The store lives on **Profile** at `/settings/profile#store`. Verified players ea
 
 ## Earning and spending
 
-- A qualifying completed match awards **25 Crowns**, plus **10 for winning**. XP rewards remain unchanged.
+- A qualifying completed match awards **1 Crown per starting player**, plus **5 for winning with 1–6 players** or **10 for winning with 7+ players**. A 10-player match pays 10 Crowns for participation or 20 for a win. The archived starting roster determines the amount, including guests and eliminated players. XP rewards remain unchanged.
 - Eligibility follows account progression: a verified account linked to the seat, at least one submitted night action and one submitted vote. Explicit abstention counts. Eliminated players can still qualify. Tutorial practice, inactive seats, guests, unverified accounts, and incomplete matches earn nothing.
 - Crowns arrive when the server archives the completed match, once per account per match. Previous match receipts are not backfilled. Older receipts without currency continue to render.
 - Crowns and purchased cosmetics persist across seasons. Crowns are in-game currency with no cash value or withdrawal feature.
 - The initial six cosmetics cost 100–250 Crowns. Definitions, prices, and match earnings live in `config/store.php`; the browser never supplies a trusted price or balance.
 
 `POST /account/store/purchase` accepts `{ "item_id": "title-night-market" }` and returns the refreshed progression payload. Authentication, email verification, CSRF protection, request throttling, and private response headers apply. Unknown products and insufficient funds return validation errors. Repeating a successful purchase returns the current state without another debit, including when the remaining balance is zero.
+
+## One player per IP address
+
+Room creation and joining reserve a private, room-specific HMAC fingerprint of the request IP for each seat. Another seat using that address is rejected inside the room transaction. IPv4 and IPv4-mapped IPv6 addresses are treated as identical. Rejoining an existing seat remains possible, including from another unused address; previously used addresses stay reserved while that seat remains in the room, including rematches. Leaving the lobby releases the seat and its addresses. Addresses and fingerprints are excluded from public views, broadcasts, and match recaps. Existing seats acquire fingerprints when they next join through the HTTP endpoint.
+
+This also blocks separate people on the same Wi-Fi/shared public IP. VPNs, mobile data, and separate IP addresses can bypass an IP-only restriction; it is a deterrent rather than proof that each seat belongs to a different person.
+
+Behind a reverse proxy, set `TRUSTED_PROXIES` to its explicit IPs/CIDRs so Laravel resolves the original client address. Keep it empty for direct connections. Do not trust arbitrary proxies or client-supplied forwarded headers. Refresh cached configuration and restart long-running workers after changing deployment settings.
 
 ## Persistence
 

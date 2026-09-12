@@ -13,6 +13,8 @@ $engine = app(MatchEngine::class);
 try {
     if ($argv[1] === 'resolve') {
         $engine->resolve((int) $argv[2]);
+    } elseif ($argv[1] === 'join') {
+        $engine->join($argv[2], $argv[3], $argv[3], ipAddress: $argv[4]);
     } else {
         $engine->access($argv[2], $argv[3], ['type' => 'night', 'phase_id' => (int) $argv[4]]);
     }

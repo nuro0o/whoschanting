@@ -13,6 +13,31 @@ class GameConcurrencyTest extends TestCase
 {
     use DatabaseMigrations;
 
+    public function test_mysql_serializes_competing_joins_from_the_same_ip(): void
+    {
+        if (config('database.default') !== 'mysql') {
+            $this->markTestSkipped('Run against a dedicated MySQL test database to verify row locks.');
+        }
+        Event::fake([RoomUpdated::class]);
+        $room = app(MatchEngine::class)->create('host', 'Host', ipAddress: '192.0.2.1');
+        $workers = [
+            $this->worker(['join', $room->code, 'guest-one', '192.0.2.2']),
+            $this->worker(['join', $room->code, 'guest-two', '192.0.2.2']),
+        ];
+        foreach ($workers as $worker) {
+            $worker->start();
+        }
+        $results = [];
+        foreach ($workers as $worker) {
+            $worker->wait();
+            $this->assertTrue($worker->isSuccessful(), $worker->getErrorOutput());
+            $results[] = $worker->getOutput();
+        }
+        sort($results);
+        $this->assertSame(['accepted', 'rejected'], $results);
+        $this->assertCount(2, $room->fresh()->state['players']);
+    }
+
     public function test_mysql_serializes_competing_actions_and_deadline_workers(): void
     {
         if (config('database.default') !== 'mysql') {

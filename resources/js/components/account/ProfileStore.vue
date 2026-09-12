@@ -130,10 +130,14 @@ function transactionName(itemId: string | null) {
                 <div>
                     <p>
                         <strong
-                            >{{ store.rewards.match }} Crowns per completed
-                            match</strong
+                            >{{ store.rewards.per_player }} Crown per starting
+                            player in a completed match</strong
                         >
-                        + {{ store.rewards.win }} more for a win.
+                        + {{ store.rewards.small_game_win }} for a win with 1–{{
+                            store.rewards.small_game_max_players
+                        }}
+                        players, or + {{ store.rewards.large_game_win }} with
+                        {{ store.rewards.small_game_max_players + 1 }}+ players.
                     </p>
                     <p>
                         Join with your verified account, submit a night action

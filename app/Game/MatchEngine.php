@@ -33,20 +33,20 @@ class MatchEngine
     }
 
     /** @param array<string, mixed> $setup */
-    public function create(string $identity, string $name, ?string $character = null, array $setup = [], ?int $accountId = null, #[\SensitiveParameter] ?string $pin = null, string $visibility = 'private'): GameRoom
+    public function create(string $identity, string $name, ?string $character = null, array $setup = [], ?int $accountId = null, #[\SensitiveParameter] ?string $pin = null, string $visibility = 'private', #[\SensitiveParameter] ?string $ipAddress = null): GameRoom
     {
         $this->ensure(in_array($visibility, ['private', 'public'], true), 'Choose a public or private room.');
         $setup = $this->modes->normalize($setup);
         $name = $this->profanity->playerName($name);
         $pinHash = LobbyPin::hash($pin);
 
-        return DB::transaction(function () use ($identity, $name, $character, $setup, $accountId, $pinHash, $visibility): GameRoom {
+        return DB::transaction(function () use ($identity, $name, $character, $setup, $accountId, $pinHash, $visibility, $ipAddress): GameRoom {
             $id = (string) Str::uuid();
             do {
                 $code = strtoupper(Str::random(6));
             } while (GameRoom::where('code', $code)->exists());
 
-            return GameRoom::create(['code' => $code, 'state' => [
+            $state = [
                 'phase' => 'lobby', 'phase_id' => 1, 'revision' => 1, 'day' => 0,
                 'pin_hash' => $pinHash,
                 'visibility' => $visibility,
@@ -55,7 +55,10 @@ class MatchEngine
                 'tokens' => 0, 'threshold' => 0, 'mission' => null, 'winner' => null,
                 'win_reason' => null, 'actions' => [], 'awards' => [], 'messages' => [],
                 'log' => ['A new gathering takes shape.'], 'cult_banished' => false,
-            ]]);
+            ];
+            $this->claimNetwork($state, $code, $id, $ipAddress);
+
+            return GameRoom::create(['code' => $code, 'state' => $state]);
         });
     }
 
@@ -75,15 +78,16 @@ class MatchEngine
             'character' => $selected];
     }
 
-    public function join(string $code, string $identity, string $name, ?string $character = null, ?int $accountId = null, #[\SensitiveParameter] ?string $pin = null): GameRoom
+    public function join(string $code, string $identity, string $name, ?string $character = null, ?int $accountId = null, #[\SensitiveParameter] ?string $pin = null, #[\SensitiveParameter] ?string $ipAddress = null): GameRoom
     {
-        return DB::transaction(function () use ($code, $identity, $name, $character, $accountId, $pin): GameRoom {
+        return DB::transaction(function () use ($code, $identity, $name, $character, $accountId, $pin, $ipAddress): GameRoom {
             $room = GameRoom::where('code', $code)->lockForUpdate()->firstOrFail();
             $s = $this->profanity->roomText($room->state);
             abort_if($s['phase'] === 'closed', 410, $s['closed_reason'] ?? 'This room has closed.');
             $existing = $this->playerId($s, $identity, $accountId);
             if ($existing !== null) {
                 $this->ensure(($s['players'][$existing]['in_room'] ?? true), 'Your seat ended with the match. Wait for a new gathering to join.');
+                $this->claimNetwork($s, $room->code, $existing, $ipAddress);
                 if ($accountId !== null && $s['phase'] === 'lobby') {
                     $this->ensure(User::whereKey($accountId)->whereNotNull('email_verified_at')->exists(), 'Verify your account before joining.');
                     if ($character !== null) {
@@ -118,10 +122,40 @@ class MatchEngine
             }
             $id = (string) Str::uuid();
             $s['players'][$id] = $this->seat($id, $identity, $name, $character, $accountId);
+            $this->claimNetwork($s, $room->code, $id, $ipAddress);
             $this->save($room, $s);
 
             return $room;
         });
+    }
+
+    /** Claim under the room lock; fingerprints stay private and survive reconnects and rematches.
+     * @param  array<string, mixed>  $s
+     */
+    private function claimNetwork(array &$s, string $code, string $seatId, #[\SensitiveParameter] ?string $ipAddress): void
+    {
+        // Internal callers and legacy seats may have no request address. HTTP entry points always supply one.
+        if ($ipAddress === null) {
+            return;
+        }
+        $packed = @inet_pton($ipAddress);
+        if ($packed === false) {
+            throw ValidationException::withMessages(['code' => 'We could not verify your network address. Please reconnect and try again.']);
+        }
+        // Treat IPv4-mapped IPv6 as the same address as its IPv4 representation.
+        if (strlen($packed) === 16 && substr($packed, 0, 12) === str_repeat("\0", 10)."\xff\xff") {
+            $packed = substr($packed, 12);
+        }
+        $fingerprint = hash_hmac('sha256', $code.'|'.$packed, config('app.key'));
+        foreach ($s['players'] as $id => $player) {
+            if ($id !== $seatId && in_array($fingerprint, $player['network_hashes'] ?? [], true)) {
+                throw ValidationException::withMessages(['code' => 'Another player in this room is already using your IP address. Only one player per internet connection can join the same room.']);
+            }
+        }
+        $hashes = $s['players'][$seatId]['network_hashes'] ?? [];
+        if (! in_array($fingerprint, $hashes, true)) {
+            $s['players'][$seatId]['network_hashes'] = [...$hashes, $fingerprint];
+        }
     }
 
     /** @param array<string, mixed> $s */

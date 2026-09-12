@@ -15,6 +15,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Str;
 use Inertia\Testing\AssertableInertia as Assert;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
 class ProgressionTest extends TestCase
@@ -69,8 +70,8 @@ class ProgressionTest extends TestCase
         $first = $this->award($match, $state);
         $this->assertSame($first, $this->award($match, $state));
         $this->assertSame(140, $first['seat']['xp']);
-        $this->assertSame(35, $first['seat']['coins']);
-        $this->assertDatabaseHas('player_profiles', ['user_id' => $user->id, 'coins' => 35, 'coins_earned' => 35]);
+        $this->assertSame(8, $first['seat']['coins']);
+        $this->assertDatabaseHas('player_profiles', ['user_id' => $user->id, 'coins' => 8, 'coins_earned' => 8]);
         $this->assertDatabaseCount('coin_transactions', 1);
         $this->assertEqualsCanonicalizing(['first_watch', 'town_victory', 'kept_oath'], $first['seat']['achievements']);
         $this->assertDatabaseHas('player_profiles', ['user_id' => $user->id, 'xp' => 140, 'matches' => 1, 'wins' => 1]);
@@ -86,10 +87,43 @@ class ProgressionTest extends TestCase
         $this->assertSame(30, $view['profile']['level_xp']);
         $this->assertSame(500, $view['profile']['next_level_xp']);
         $this->assertSame(280, $view['season']['xp']);
-        $this->assertSame(70, $view['store']['balance']);
+        $this->assertSame(16, $view['store']['balance']);
         $this->assertDatabaseCount('coin_transactions', 2);
         $this->assertCount(2, $view['recent_rewards']);
         $this->assertIsArray($view['recent_rewards'][0]);
+    }
+
+    /** @return array<string, array{int, string, int}> */
+    public static function crownRewards(): array
+    {
+        return [
+            'one player win' => [1, 'town', 6],
+            'five player win' => [5, 'town', 10],
+            'six player win' => [6, 'town', 11],
+            'six player loss' => [6, 'cult', 6],
+            'seven player win' => [7, 'town', 17],
+            'seven player loss' => [7, 'cult', 7],
+            'ten player win' => [10, 'town', 20],
+            'ten player loss' => [10, 'cult', 10],
+            'full room win' => [15, 'town', 25],
+        ];
+    }
+
+    #[DataProvider('crownRewards')]
+    public function test_crowns_use_archived_starting_count_and_win_bonus(int $playerCount, string $alignment, int $expected): void
+    {
+        $user = User::factory()->create();
+        $match = $this->archive();
+        $match->update(['player_count' => $playerCount]);
+        // Only one eligible account remains in this fixture; rewards still use the full starting roster.
+        $state = $this->state($match, $user, $alignment);
+        $state['players']['seat']['alive'] = false;
+        $reward = $this->award($match, $state);
+        $this->assertSame($expected, $reward['seat']['coins']);
+        $this->assertSame($reward, $this->award($match, $state));
+        $this->assertDatabaseHas('player_profiles', ['user_id' => $user->id, 'coins' => $expected, 'coins_earned' => $expected]);
+        $this->assertDatabaseHas('coin_transactions', ['user_id' => $user->id, 'amount' => $expected, 'balance_after' => $expected]);
+        $this->assertDatabaseCount('coin_transactions', 1);
     }
 
     public function test_character_achievement_unlocks_are_awarded_once_and_survive_a_new_season(): void
@@ -123,7 +157,7 @@ class ProgressionTest extends TestCase
         $state['rounds'][] = ['night' => ['actions' => [['player_id' => 'seat', 'submitted' => false]]]];
         $reward = $this->award($match, $state)['seat'];
         $this->assertSame(80, $reward['xp']); // Loss, with one missed action: no win or attendance bonus.
-        $this->assertSame(25, $reward['coins']);
+        $this->assertSame(3, $reward['coins']);
         $this->assertFalse($reward['won']);
     }
 
@@ -254,7 +288,7 @@ class ProgressionTest extends TestCase
         foreach ($users as $i => $user) {
             $view = $engine->access($room->code, 'p'.$i, accountId: $user->id);
             $this->assertSame($view['me']['alignment'] === 'town' ? 140 : 100, $view['me']['match_reward']['xp']);
-            $this->assertSame($view['me']['alignment'] === 'town' ? 35 : 25, $view['me']['match_reward']['coins']);
+            $this->assertSame($view['me']['alignment'] === 'town' ? 8 : 3, $view['me']['match_reward']['coins']);
             $this->assertArrayNotHasKey('match_rewards', $view);
             $this->assertArrayNotHasKey('user_id', $view['players'][0]);
         }

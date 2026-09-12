@@ -182,7 +182,7 @@ class AccountProgression
             $before = $this->level($profile->xp);
             $charactersBefore = array_column(array_filter($this->characters($before, $profile->achievements, true), fn (array $item): bool => $item['unlocked']), 'id');
             $profile->xp += $xp;
-            $coins = (new CosmeticStore)->rewardLocked($profile, $match->id, $won);
+            $coins = (new CosmeticStore)->rewardLocked($profile, $match->id, $won, $match->player_count);
             $profile->matches++;
             $profile->wins += (int) $won;
             if ($won) {

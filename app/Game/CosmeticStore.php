@@ -32,7 +32,12 @@ class CosmeticStore
 
         return [
             'currency' => config('store.currency'), 'balance' => $balance, 'lifetime_earned' => (int) $profile['coins_earned'],
-            'rewards' => ['match' => (int) config('store.match_coins'), 'win' => (int) config('store.win_coins')],
+            'rewards' => [
+                'per_player' => (int) config('store.coins_per_player'),
+                'small_game_max_players' => (int) config('store.small_game_max_players'),
+                'small_game_win' => (int) config('store.small_game_win_coins'),
+                'large_game_win' => (int) config('store.large_game_win_coins'),
+            ],
             'items' => array_map(fn (array $item): array => [...$item,
                 'owned' => in_array($item['id'], $owned, true), 'affordable' => $balance >= $item['price'],
             ], $this->items()),
@@ -46,9 +51,11 @@ class CosmeticStore
     }
 
     /** Called only within the match transaction with this profile locked. */
-    public function rewardLocked(PlayerProfile $profile, string $matchId, bool $won): int
+    public function rewardLocked(PlayerProfile $profile, string $matchId, bool $won, int $playerCount): int
     {
-        $amount = (int) config('store.match_coins') + ($won ? (int) config('store.win_coins') : 0);
+        $winBonus = $playerCount <= (int) config('store.small_game_max_players')
+            ? (int) config('store.small_game_win_coins') : (int) config('store.large_game_win_coins');
+        $amount = $playerCount * (int) config('store.coins_per_player') + ($won ? $winBonus : 0);
         $profile->coins += $amount;
         $profile->coins_earned += $amount;
         $this->record($profile, 'match_reward', 'match:'.$matchId, $amount);
