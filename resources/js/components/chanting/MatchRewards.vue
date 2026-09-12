@@ -35,6 +35,14 @@ const page = usePage();
                         : ''
                 }}Your lifetime and season records are updated.
             </p>
+            <p v-if="reward.crown_cooldown_until">
+                No Crowns were awarded for this match because a Crown cooldown
+                was active after several very short games. You can keep playing
+                for XP and achievements.
+                <Link href="/settings/profile#store"
+                    >Check Crown earning status</Link
+                >
+            </p>
             <div v-if="unlockedCharacters.length" class="character-rewards">
                 <h4>
                     New

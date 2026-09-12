@@ -182,7 +182,8 @@ class AccountProgression
             $before = $this->level($profile->xp);
             $charactersBefore = array_column(array_filter($this->characters($before, $profile->achievements, true), fn (array $item): bool => $item['unlocked']), 'id');
             $profile->xp += $xp;
-            $coins = (new CosmeticStore)->rewardLocked($profile, $match->id, $won, $match->player_count);
+            $crownCooldown = (new CrownEarningGuard)->checkLocked($profile, $match);
+            $coins = $crownCooldown === null ? (new CosmeticStore)->rewardLocked($profile, $match->id, $won, $match->player_count) : 0;
             $profile->matches++;
             $profile->wins += (int) $won;
             if ($won) {
@@ -218,6 +219,7 @@ class AccountProgression
             $profile->save();
             $charactersAfter = array_column(array_filter($this->characters($this->level($profile->xp), $profile->achievements, true), fn (array $item): bool => $item['unlocked']), 'id');
             $reward = ['match_id' => $match->id, 'season_id' => $season['id'], 'xp' => $xp, 'coins' => $coins, 'won' => $won,
+                'crown_cooldown_until' => $crownCooldown?->toISOString(),
                 'characters' => array_values(array_diff($charactersAfter, $charactersBefore)),
                 'earned_at' => $finishedAt->toISOString(), 'achievements' => $new, 'level_before' => $before, 'level_after' => $this->level($profile->xp)];
             MatchReward::create(['user_id' => $userId, 'match_id' => $match->id, 'data' => $reward]);

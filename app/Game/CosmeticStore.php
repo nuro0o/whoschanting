@@ -29,9 +29,11 @@ class CosmeticStore
     {
         $owned = $this->owned($userId);
         $balance = (int) $profile['coins'];
+        $cooldown = isset($profile['crown_cooldown_until']) ? CarbonImmutable::parse($profile['crown_cooldown_until']) : null;
 
         return [
             'currency' => config('store.currency'), 'balance' => $balance, 'lifetime_earned' => (int) $profile['coins_earned'],
+            'crown_cooldown_until' => $cooldown?->isFuture() ? $cooldown->toISOString() : null,
             'rewards' => [
                 'per_player' => (int) config('store.coins_per_player'),
                 'small_game_max_players' => (int) config('store.small_game_max_players'),

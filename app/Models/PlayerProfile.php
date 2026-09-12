@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Model;
 
 /**
@@ -9,6 +10,8 @@ use Illuminate\Database\Eloquent\Model;
  * @property int $xp
  * @property int $coins
  * @property int $coins_earned
+ * @property CarbonImmutable|null $crown_cooldown_until
+ * @property list<string>|null $rapid_crown_matches
  * @property int $matches
  * @property int $wins
  * @property int $town_wins
@@ -29,6 +32,7 @@ class PlayerProfile extends Model
     protected function casts(): array
     {
         return ['xp' => 'integer', 'coins' => 'integer', 'coins_earned' => 'integer', 'matches' => 'integer', 'wins' => 'integer', 'town_wins' => 'integer', 'cult_wins' => 'integer',
+            'crown_cooldown_until' => 'immutable_datetime', 'rapid_crown_matches' => 'array',
             'roles_played' => 'array', 'achievements' => 'array', 'customization' => 'array'];
     }
 }

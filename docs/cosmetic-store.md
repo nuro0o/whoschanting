@@ -12,13 +12,17 @@ The store lives on **Profile** at `/settings/profile#store`. Verified players ea
 
 `POST /account/store/purchase` accepts `{ "item_id": "title-night-market" }` and returns the refreshed progression payload. Authentication, email verification, CSRF protection, request throttling, and private response headers apply. Unknown products and insufficient funds return validation errors. Repeating a successful purchase returns the current state without another debit, including when the remaining balance is zero.
 
-## One player per IP address
+## Shared Wi-Fi and crown farming
 
-Room creation and joining reserve a private, room-specific HMAC fingerprint of the request IP for each seat. Another seat using that address is rejected inside the room transaction. IPv4 and IPv4-mapped IPv6 addresses are treated as identical. Rejoining an existing seat remains possible, including from another unused address; previously used addresses stay reserved while that seat remains in the room, including rematches. Leaving the lobby releases the seat and its addresses. Addresses and fingerprints are excluded from public views, broadcasts, and match recaps. Existing seats acquire fingerprints when they next join through the HTTP endpoint.
+Public and private rooms allow multiple people on the same internet connection. The server no longer collects or checks room IP fingerprints. Each account has one seat per room and can receive only one reward per match. Every eligible verified account can earn its own reward, even on shared Wi-Fi. Email verification does not prove one person owns only one account.
 
-This also blocks separate people on the same Wi-Fi/shared public IP. VPNs, mobile data, and separate IP addresses can bypass an IP-only restriction; it is a deterrent rather than proof that each seat belongs to a different person.
+The account-level crown guard in `config/store.php` tracks qualifying matches lasting **under 120 seconds**. The **fourth such match awarded within a rolling 15-minute window** starts a **15-minute crown cooldown**, and that match pays no Crowns. The first three still pay normally. Duration comes from server-recorded start and finish timestamps; the rolling window and cooldown use the server award-processing time. This avoids trusting client clocks and makes the cooldown consistent across rooms, sessions, and workers. Delayed processing of several short matches can also trigger the guard.
 
-Behind a reverse proxy, set `TRUSTED_PROXIES` to its explicit IPs/CIDRs so Laravel resolves the original client address. Keep it empty for direct connections. Do not trust arbitrary proxies or client-supplied forwarded headers. Refresh cached configuration and restart long-running workers after changing deployment settings.
+The cooldown affects only new match Crowns. Joining, rematches, XP, achievements, and spending existing Crowns continue. Matches completed during the cooldown do not extend it or get paid retroactively. At expiry, the rapid-match history resets and earning resumes. Ineligible or incomplete matches do not count. A retry returns the original receipt without another credit or another cooldown strike. The shop shows the remaining wait and match receipts explain withheld Crowns without accusing the player of cheating.
+
+The profile row lock serializes cooldown decisions across rooms. Profile changes and reward receipts commit atomically, and only positive Crown grants create currency transactions. Cooldowns do not modify existing balances. They deter rapid farming; they are not complete multi-account or bot detection.
+
+`TRUSTED_PROXIES` still supports accurate client addresses for existing request rate limits behind explicit trusted proxy IPs/CIDRs. It is not used to restrict shared-Wi-Fi players or their rewards.
 
 ## Persistence
 
@@ -36,6 +40,6 @@ Future payment integration should grant cosmetic entitlements from verified paym
 
 ## Deployment and checks
 
-Run `php artisan migrate`, rebuild with `npm run build`, and restart long-running game and queue workers. New installations apply the store migration with the other migrations. There is no new scheduler task or environment secret.
+Run `php artisan migrate`, rebuild with `npm run build`, and restart long-running game and queue workers. New installations apply the store migration with the other migrations. The crown cooldown migration adds nullable state to player profiles. Run migrations before starting the updated workers. There is no new scheduler task or environment secret.
 
-Feature coverage in `CosmeticStoreTest` and `ProgressionTest` checks eligibility, real match awards, retries, rollback, insufficient funds, server pricing, account isolation, permanent ownership, wardrobe validation, and account deletion. The standard SQLite feature suite checks transaction behavior and retry semantics; it does not prove production MySQL row-lock behavior.
+Feature coverage in `CosmeticStoreTest`, `ProgressionTest`, `CrownCooldownTest`, and `RoomNetworkTest` checks eligibility, real match awards, retries, rollback, insufficient funds, server pricing, account isolation, permanent ownership, wardrobe validation, and account deletion. The standard SQLite feature suite checks transaction behavior and retry semantics; it does not prove production MySQL row-lock behavior.

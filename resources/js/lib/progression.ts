@@ -23,6 +23,7 @@ export interface MatchReward {
     season_id: string;
     xp: number;
     coins?: number;
+    crown_cooldown_until?: string | null;
     won: boolean;
     earned_at: string;
     achievements: string[];
@@ -50,6 +51,7 @@ export interface StoreData {
     currency: 'Crowns';
     balance: number;
     lifetime_earned: number;
+    crown_cooldown_until: string | null;
     rewards: {
         per_player: number;
         small_game_max_players: number;

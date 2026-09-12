@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Link, usePage } from '@inertiajs/vue3';
 import { ArrowRight, Check, Coins, Crown, ShoppingBag } from '@lucide/vue';
+import { useNow } from '@vueuse/core';
 import { computed, nextTick, ref, watch } from 'vue';
 import CharacterPortrait from '@/components/chanting/CharacterPortrait.vue';
 import { Button } from '@/components/ui/button';
@@ -30,6 +31,19 @@ watch(
     },
 );
 const store = computed(() => data.value?.store);
+const now = useNow({ interval: 1000 });
+const cooldownMinutes = computed(() =>
+    store.value?.crown_cooldown_until
+        ? Math.max(
+              0,
+              Math.ceil(
+                  (Date.parse(store.value.crown_cooldown_until) -
+                      now.value.getTime()) /
+                      60000,
+              ),
+          )
+        : 0,
+);
 const selectedId = ref<string | null>(null);
 const selected = computed(() =>
     store.value?.items.find((item) => item.id === selectedId.value),
@@ -143,6 +157,18 @@ function transactionName(itemId: string | null) {
                         Join with your verified account, submit a night action
                         and a vote. Abstention counts. Crowns arrive when the
                         match finishes; eliminated players can still earn.
+                    </p>
+                    <p v-if="cooldownMinutes" role="status">
+                        Crown earnings resume in {{ cooldownMinutes }}
+                        {{ cooldownMinutes === 1 ? 'minute' : 'minutes' }} after
+                        several very short matches. Keep playing for XP and
+                        achievements; your existing Crowns are still available
+                        to spend.
+                    </p>
+                    <p v-else>
+                        Repeated very short matches may briefly pause Crown
+                        earnings. You can always keep playing for XP and
+                        achievements.
                     </p>
                 </div>
                 <Link href="/dashboard" class="account-text-link"

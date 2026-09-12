@@ -6,6 +6,12 @@ return [
     'small_game_max_players' => 6,
     'small_game_win_coins' => 5,
     'large_game_win_coins' => 10,
+    'earning_guard' => [
+        'rapid_match_seconds' => 120,
+        'window_minutes' => 15,
+        'rapid_match_limit' => 4,
+        'cooldown_minutes' => 15,
+    ],
     // Permanent cosmetics only. Prices and grants are always resolved on the server.
     'items' => [
         ['id' => 'title-night-market', 'category' => 'titles', 'cosmetic_id' => 'night_market', 'name' => 'Night Market Regular',
