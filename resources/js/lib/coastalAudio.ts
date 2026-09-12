@@ -200,7 +200,9 @@ export class CoastalAudio {
         const now = this.context.currentTime;
         this.effects.gain.setTargetAtTime(preferences.effects / 100, now, 0.08);
         // Leave plenty of room for friends speaking around the table.
-        const daytime = phase === 'discussion' || phase === 'voting' ? 0.28 : 1;
+        const daytime = ['discussion', 'last_words', 'voting'].includes(phase)
+            ? 0.28
+            : 1;
         this.ambience.gain.setTargetAtTime(
             (preferences.ambience / 100) * daytime,
             now,

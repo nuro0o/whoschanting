@@ -99,6 +99,19 @@ export function buildRecapStory(
                 }),
             });
         }
+        if (round?.last_words?.accused_ids.length) {
+            const record = round.last_words;
+            steps.push({
+                id: `last-words-${day}`,
+                label: `Day ${day} · Last Words`,
+                title: 'The accused had the floor',
+                body: `${record.accused_ids.map(name).join(', ')} received the most accusations. The village heard their defenses before voting.`,
+                details: record.accused_ids.map(
+                    (id) =>
+                        `${name(id)}: ${record.defenses.find((entry) => entry.player_id === id)?.body ?? 'No defense was submitted.'}`,
+                ),
+            });
+        }
         if (round?.vote) {
             const vote = round.vote;
             const final = day === finalVoteDay;

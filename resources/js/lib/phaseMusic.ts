@@ -37,7 +37,7 @@ export class PhaseMusic {
         this.allowed = allowed;
         this.volume =
             Math.max(0, Math.min(1, volume / 100)) *
-            (phase === 'discussion' || phase === 'voting' ? 0.35 : 1);
+            (['discussion', 'last_words', 'voting'].includes(phase) ? 0.35 : 1);
         if (period !== this.period) {
             this.release();
             this.period = period;

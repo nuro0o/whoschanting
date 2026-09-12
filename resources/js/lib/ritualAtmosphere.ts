@@ -19,6 +19,6 @@ export function usesNightAtmosphere(
 ): boolean {
     return (
         phase === 'night' ||
-        (finalVote && (phase === 'discussion' || phase === 'voting'))
+        (finalVote && ['discussion', 'last_words', 'voting'].includes(phase))
     );
 }

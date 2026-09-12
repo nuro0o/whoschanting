@@ -36,6 +36,14 @@ The village record lets living players publish one unverified role claim and one
 
 The recap now includes a step-through reveal, and `/tutorial` offers Counterfeiter, Tracker, and Bellkeeper exercises alongside the Oracle round. Optional private post-match feedback helps assess whether every role feels involved; `php artisan game:feedback` summarizes responses by role. See [table experience](docs/table-experience.md) for rules, deployment, and playtest guidance. No database migration is required for these additions.
 
+## Last Words
+
+During discussion, each living player may publicly accuse one other living player. Accusations are optional and final for that round; they do not submit a ballot or mark anyone ready. When discussion ends, the players tied for the most accusations share a 30-second **Last Words** window. Each may publish one public defense of up to 280 characters, or remain silent. Chat pauses and voting stays closed for the full window so everyone can read. If nobody is accused, voting opens directly.
+
+The final ballot can still target any other living player or abstain. Existing ties, curses, oaths, and victory rules apply. Blocking curses must be solved before accusing or defending; Mind Mist hides the statements. The final ritual vote also includes Last Words when someone was accused. Defenses remain visible during voting and appear with accusations in the recap and archive. Every new day starts fresh accusations; rematches clear them.
+
+New matches use `last-words-v1`; matches already in progress retain their existing flow. The duration is snapshotted from `config/game.php` at match start. No database migration is needed. Rebuild the frontend and restart long-running application processes when deploying.
+
 ## Account progression
 
 Verified accounts have a **Progression** page at `/progression`, linked from the dashboard and account navigation. It includes lifetime XP and levels, quarterly seasons, eight permanent achievements, recent match rewards, and a wardrobe for titles, portrait frames, accent colors and character preferences. Cosmetics never change roles or abilities. Levels and equipped cosmetics appear in rooms; wardrobe changes apply when joining a lobby or starting a match.

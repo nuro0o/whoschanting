@@ -18,6 +18,8 @@ const nextAction = computed(() => {
         return 'You are watching until the next match. Read public events and chat in the meantime.';
     if (me.curse?.type === 'puzzle' || me.curse?.type === 'mist')
         return 'Complete the curse challenge to return to the room. The phase timer keeps running; the curse also expires at the next dawn.';
+    if (phase === 'last_words')
+        return 'Open Last Words in Play. The most accused players share a short defense window and may each publish one final statement. Chat pauses; voting opens when the timer ends. You may still vote for any other living player or abstain.';
     if (me.submitted)
         return 'Your choice is submitted. Wait for the next phase; during discussion and voting you can still use Chat.';
     if (props.state.ritual.final_vote)
@@ -27,7 +29,9 @@ const nextAction = computed(() => {
     if (phase === 'night')
         return 'In Play, reveal your private action. Choose a target if your ability needs one, then confirm before the timer ends.';
     if (phase === 'discussion')
-        return 'Open Chat to compare stories with the village. Choose Ready for voting in Play when you have finished discussing.';
+        return props.state.table?.last_words
+            ? 'Open Chat to compare stories. In Play, you may publicly accuse one other living player. The most accused players get Last Words before voting. Choose Ready for voting when you have finished discussing.'
+            : 'Open Chat to compare stories with the village. Choose Ready for voting in Play when you have finished discussing.';
     return 'In Play, choose a living player or Abstain, then press the confirmation button. Your submitted vote is final.';
 });
 </script>

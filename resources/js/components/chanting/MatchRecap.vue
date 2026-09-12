@@ -395,6 +395,30 @@ function actionDescription(action: RecapNightAction) {
                     </ul>
                 </section>
                 <section
+                    v-if="round.last_words?.accusations.length"
+                    class="chronicle-phase"
+                    :aria-labelledby="`recap-last-words-${round.day}`"
+                >
+                    <h4 :id="`recap-last-words-${round.day}`">Last Words</h4>
+                    <ul>
+                        <li
+                            v-for="entry in round.last_words.accusations"
+                            :key="entry.player_id"
+                        >
+                            {{ name(entry.player_id) }} accused
+                            {{ name(entry.target_id) }}.
+                        </li>
+                    </ul>
+                    <p v-for="id in round.last_words.accused_ids" :key="id">
+                        <strong>{{ name(id) }}:</strong>
+                        {{
+                            round.last_words.defenses.find(
+                                (entry) => entry.player_id === id,
+                            )?.body ?? 'No defense was submitted.'
+                        }}
+                    </p>
+                </section>
+                <section
                     v-if="round.vote"
                     class="chronicle-phase chronicle-vote"
                     :aria-labelledby="`recap-vote-${round.day}`"

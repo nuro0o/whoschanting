@@ -1,5 +1,12 @@
 export interface RitualSceneInput {
-    phase: 'lobby' | 'reveal' | 'night' | 'discussion' | 'voting' | 'finished';
+    phase:
+        | 'lobby'
+        | 'reveal'
+        | 'night'
+        | 'discussion'
+        | 'last_words'
+        | 'voting'
+        | 'finished';
     tokens: number;
     threshold: number;
     winner: 'town' | 'cult' | null;
@@ -25,7 +32,9 @@ export function ritualSceneState(input: RitualSceneInput) {
             (input.phase === 'night' ||
                 summoned ||
                 (progress === 1 &&
-                    ['discussion', 'voting'].includes(input.phase))),
+                    ['discussion', 'last_words', 'voting'].includes(
+                        input.phase,
+                    ))),
         cracks: calmed ? 0 : Math.max(0, (progress - 0.35) / 0.65),
         mist: calmed ? 0 : Math.max(0, (progress - 0.45) / 0.55),
         emergence:

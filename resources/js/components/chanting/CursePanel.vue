@@ -163,7 +163,7 @@ function restoreFocus(event: Event) {
             player instead. The Medium can only be redirected to another
             banished player. It happens once. Abstaining does not trigger it;
             <template v-if="challenge"
-                >align the rings first to break this curse.</template
+                >clear all three seals first to break this curse.</template
             >
             <template v-else
                 >this older curse has no puzzle to break it.</template
@@ -212,6 +212,8 @@ function restoreFocus(event: Event) {
                         role="status"
                         aria-live="polite"
                         aria-atomic="true"
+                        ><template v-if="curse.set_name"
+                            >{{ curse.set_name }} · </template
                         >Seal {{ stage }} of {{ stages }}</span
                     >
                 </div>
@@ -250,7 +252,7 @@ function restoreFocus(event: Event) {
                             room.</template
                         >
                         <template v-else
-                            >Align the rings before choosing your next target to
+                            >Clear the seals before choosing your next target to
                             prevent it being redirected. You can return to the
                             village and finish later.</template
                         >
@@ -423,7 +425,7 @@ function restoreFocus(event: Event) {
                                 {{
                                     blocking
                                         ? 'Solve this mechanism to return to the room. The game keeps moving.'
-                                        : 'Solve the rings before choosing your next target to prevent redirection. Return to the village any time; your progress stays here.'
+                                        : 'Clear the seals before choosing your next target to prevent redirection. Return to the village any time; your progress stays here.'
                                 }}
                             </p>
                             <ul

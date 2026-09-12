@@ -76,7 +76,7 @@ class GameController extends Controller
     public function action(Request $request, string $code): JsonResponse
     {
         $data = $request->validate([
-            'type' => ['required', 'string', 'in:ready,start,night,vote,chat,rematch,character,discussion_ready,solve_curse,roster,exorcise,oath,configure_mode,claim,discussion_response,prediction,transfer_host,remove_player,extend_discussion,feedback'],
+            'type' => ['required', 'string', 'in:ready,start,night,vote,chat,rematch,character,discussion_ready,solve_curse,roster,exorcise,oath,configure_mode,claim,discussion_response,prediction,transfer_host,remove_player,extend_discussion,feedback,accuse,defend'],
             'phase_id' => ['required', 'integer', 'min:1'],
             'target' => ['nullable', 'string', 'uuid'],
             'use_ability' => ['sometimes', 'boolean'],

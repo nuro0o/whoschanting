@@ -25,6 +25,12 @@ const announcement = computed(() => {
                 detail: 'Bring your stories to the table.',
                 icon: Sun,
             };
+        case 'last_words':
+            return {
+                title: 'Last Words',
+                detail: 'The accused have the floor. Hear them before voting.',
+                icon: Vote,
+            };
         case 'voting':
             return {
                 title: props.finalVote

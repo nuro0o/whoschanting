@@ -24,6 +24,32 @@ class TableExperience
     {
         $type = $a['type'];
         $p = $s['players'][$id];
+        if ($type === 'accuse') {
+            $this->ensure($p['alive'] && $s['phase'] === 'discussion' && isset($s['match_rules']['seconds']['last_words']), 'Living players can accuse someone during discussion in a new match.');
+            $target = $a['target'] ?? null;
+            $this->ensure(is_string($target) && $target !== $id && ($s['players'][$target]['alive'] ?? false), 'Choose another living player.');
+            $record = $s['rounds'][$s['day']]['last_words'] ?? ['accusations' => [], 'accused_ids' => [], 'defenses' => []];
+            foreach ($record['accusations'] as $accusation) {
+                $this->ensure($accusation['player_id'] !== $id, 'Your accusation for this discussion is already sealed.');
+            }
+            $record['accusations'][] = ['player_id' => $id, 'target_id' => $target];
+            $s['rounds'][$s['day']]['day'] = $s['day'];
+            $s['rounds'][$s['day']]['last_words'] = $record;
+
+            return true;
+        }
+        if ($type === 'defend') {
+            $record = $s['rounds'][$s['day']]['last_words'] ?? [];
+            $this->ensure($p['alive'] && $s['phase'] === 'last_words' && in_array($id, $record['accused_ids'] ?? [], true), 'Only the accused can give Last Words now.');
+            foreach ($record['defenses'] as $defense) {
+                $this->ensure($defense['player_id'] !== $id, 'Your Last Words are already sealed.');
+            }
+            $body = trim($a['body'] ?? '');
+            $this->ensure($body !== '' && mb_strlen($body) <= 280, 'Write a defense of 1–280 characters.');
+            $s['rounds'][$s['day']]['last_words']['defenses'][] = ['player_id' => $id, 'body' => $body];
+
+            return true;
+        }
         if (in_array($type, ['transfer_host', 'remove_player'], true)) {
             $this->ensure($s['host_id'] === $id, 'Only the host can manage seats.');
             $target = $a['target'] ?? null;
@@ -87,7 +113,7 @@ class TableExperience
             return true;
         }
         if ($type === 'prediction') {
-            $this->ensure(! $p['alive'] && in_array($s['phase'], ['night', 'discussion', 'voting'], true), 'Seal a prediction after you are banished and before the match ends.');
+            $this->ensure(! $p['alive'] && in_array($s['phase'], ['night', 'discussion', 'last_words', 'voting'], true), 'Seal a prediction after you are banished and before the match ends.');
             $this->ensure(! isset($s['predictions'][$id]), 'Your prediction is already sealed.');
             $ids = $a['cultist_ids'] ?? null;
             $living = array_keys(array_filter($s['players'], fn (array $player): bool => $player['alive']));
@@ -138,6 +164,7 @@ class TableExperience
         $mist = ($s['players'][$id]['curse']['type'] ?? null) === 'mist' && $s['phase'] !== 'finished';
 
         return [
+            'last_words' => $mist || ! isset($s['match_rules']['seconds']['last_words']) ? null : ($s['rounds'][$s['day']]['last_words'] ?? ['accusations' => [], 'accused_ids' => [], 'defenses' => []]),
             'claims' => $mist ? [] : ($s['claims'] ?? []),
             'responses' => $mist ? [] : ($s['responses'] ?? []),
             'prompt' => $s['phase'] === 'discussion' ? $this->prompt($s['day']) : null,

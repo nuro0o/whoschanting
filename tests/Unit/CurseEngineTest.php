@@ -22,11 +22,14 @@ class CurseEngineTest extends TestCase
                 $this->assertSame($type, $curse['type']);
                 $this->assertArrayNotHasKey('solution', $engine->view($curse));
                 $this->assertContains($curse['challenge']['kind'], match ($type) {
-                    'mist' => ['lanterns'],
-                    'misdirection' => ['rings'],
-                    default => ['rings', 'towers'],
+                    'mist' => ['lanterns', 'focus', 'odd'],
+                    'misdirection' => ['rings', 'reverse', 'odd'],
+                    default => ['rings', 'towers', 'cipher'],
                 });
-                $this->assertSame($curse['challenge']['kind'], $curse['challenge']['scene']['kind']);
+                $this->assertNotEmpty($curse['set_name']);
+                if (isset($curse['challenge']['scene'])) {
+                    $this->assertSame($curse['challenge']['kind'], $curse['challenge']['scene']['kind']);
+                }
             }
         }
     }
@@ -247,35 +250,90 @@ class CurseEngineTest extends TestCase
         }
     }
 
-    public function test_all_curses_require_three_unguided_seals_with_increasing_complexity(): void
+    /** @return iterable<string, array{string, string, string, list<string>}> */
+    public static function puzzleSets(): iterable
+    {
+        yield 'astral-binding' => ['puzzle', 'astral-binding', 'Astral Binding', ['rings', 'order', 'cipher']];
+        yield 'drowned-tribute' => ['puzzle', 'drowned-tribute', 'Drowned Tribute', ['towers', 'arithmetic', 'missing']];
+        yield 'rune-prison' => ['puzzle', 'rune-prison', 'Rune Prison', ['cipher', 'towers', 'order']];
+        yield 'lost-shore' => ['mist', 'lost-shore', 'Lost Shore', ['lanterns', 'focus', 'missing']];
+        yield 'echoing-fog' => ['mist', 'echoing-fog', 'Echoing Fog', ['focus', 'reverse', 'lanterns']];
+        yield 'false-lights' => ['mist', 'false-lights', 'False Lights', ['odd', 'lanterns', 'order']];
+        yield 'crooked-compass' => ['misdirection', 'crooked-compass', 'Crooked Compass', ['rings', 'reverse', 'odd']];
+        yield 'mirror-trail' => ['misdirection', 'mirror-trail', 'Mirror Trail', ['reverse', 'order', 'rings']];
+        yield 'false-oracle' => ['misdirection', 'false-oracle', 'False Oracle', ['odd', 'cipher', 'reverse']];
+    }
+
+    /** @param list<string> $kinds */
+    #[DataProvider('puzzleSets')]
+    public function test_each_set_persists_through_three_distinct_seals(string $type, string $set, string $name, array $kinds): void
     {
         $engine = new CurseEngine;
+        $this->assertCount(3, array_unique($kinds));
         foreach ([1 => 0, 2 => 2, 3 => 4] as $level => $tokens) {
-            foreach (['puzzle', 'mist'] as $type) {
-                $curse = $engine->create($tokens, 6, 2, $type);
-                $this->assertSame(3, $curse['stages']);
-                $this->assertSame(1, $curse['stage']);
-                $this->assertSame($level, $curse['challenge']['scene']['difficulty']);
-                $this->assertSame(false, $curse['challenge']['scene']['guided']);
-                for ($stage = 1; $stage <= 3; $stage++) {
-                    $this->assertSame($stage, $engine->view($curse)['stage']);
-                    $this->assertSame(3, $engine->view($curse)['stages']);
-                    $next = $engine->advance($curse);
-                    if ($stage === 3) {
-                        $this->assertNull($next);
-                        break;
-                    }
+            if ($type === 'misdirection' && $level < 3) {
+                continue;
+            }
+            $curse = $engine->create($tokens, 6, 2, $type, $set);
+            for ($stage = 1; $stage <= 3; $stage++) {
+                // Match state is stored as JSON between actions and page reloads.
+                $curse = json_decode(json_encode($curse, JSON_THROW_ON_ERROR), true, flags: JSON_THROW_ON_ERROR);
+                $view = $engine->view($curse);
+                $this->assertSame($stage, $view['stage']);
+                $this->assertSame(3, $view['stages']);
+                $this->assertSame($set, $curse['puzzle_set']);
+                $this->assertSame($name, $view['set_name']);
+                $this->assertSame($kinds[$stage - 1], $view['challenge']['kind']);
+                $this->assertArrayNotHasKey('solution', $view);
+                $this->assertArrayNotHasKey('puzzle_set', $view);
+                $this->assertSame($level, $curse['level']);
+                $this->assertSame(2, $curse['day']);
+                if (isset($view['challenge']['scene'])) {
+                    $this->assertSame($level, $view['challenge']['scene']['difficulty']);
+                    $this->assertFalse($view['challenge']['scene']['guided']);
+                }
+                $next = $engine->advance($curse);
+                if ($stage === 3) {
+                    $this->assertNull($next);
+                } else {
                     $this->assertNotSame($curse['id'], $next['id']);
-                    $this->assertSame(2, $next['day']);
-                    $this->assertSame($level, $next['level']);
                     $this->assertEmpty(array_intersect($curse['solution'], $next['solution']));
-                    if ($type === 'puzzle') {
-                        $this->assertNotSame($curse['challenge']['kind'], $next['challenge']['kind']);
-                    }
                     $curse = $next;
                 }
             }
         }
+    }
+
+    public function test_sets_cannot_be_used_for_another_curse_type(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        (new CurseEngine)->create(4, 6, 1, 'mist', 'astral-binding');
+    }
+
+    public function test_unknown_sets_are_rejected(): void
+    {
+        $this->expectException(\InvalidArgumentException::class);
+        (new CurseEngine)->create(4, 6, 1, 'puzzle', 'unknown');
+    }
+
+    public function test_legacy_curses_continue_their_original_sequence(): void
+    {
+        $engine = new CurseEngine;
+        foreach (['puzzle' => 'rings', 'mist' => 'lanterns', 'misdirection' => 'rings'] as $type => $kind) {
+            $curse = ['id' => 'legacy', 'type' => $type, 'day' => 1, 'level' => 3, 'stage' => 1, 'stages' => 3,
+                ...$engine->challenge($kind, 3)];
+            $next = $engine->advance($curse);
+            $this->assertSame($type === 'puzzle' ? 'towers' : $kind, $next['challenge']['kind']);
+            $next = $engine->advance($next);
+            $this->assertSame($kind, $next['challenge']['kind']);
+            $this->assertNull($engine->advance($next));
+        }
+        $this->assertNull($engine->advance(['id' => 'legacy', ...$engine->challenge('focus', 1)]));
+    }
+
+    public function test_easy_spatial_challenges_remain_unguided(): void
+    {
+        $engine = new CurseEngine;
         $easy = $engine->challenge('lanterns', 1)['challenge'];
         $labels = array_column($easy['options'], 'label');
         sort($labels);
@@ -287,6 +345,5 @@ class CurseEngineTest extends TestCase
         foreach ($rings as $ring) {
             $this->assertContains($ring['start'], [1, 2], 'Each ring needs at least two turns.');
         }
-        $this->assertNull($engine->advance(['id' => 'legacy', ...$engine->challenge('focus', 1)]));
     }
 }

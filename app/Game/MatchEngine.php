@@ -206,7 +206,7 @@ class MatchEngine
             $this->ensure($type === 'night' && in_array($p['role'], ['veilweaver', 'acolyte'], true) && ($a['target'] ?? null) !== null, 'Only a cultist cursing a target can choose a curse.');
             $this->ensure(in_array($selectedCurse, $this->curses->availableTypes($s['tokens'], $s['threshold']), true), 'Choose an unlocked curse. Misdirection unlocks at ritual level 3.');
         }
-        if ($p['alive'] && in_array($s['phase'], ['discussion', 'voting', 'night'], true)
+        if ($p['alive'] && in_array($s['phase'], ['discussion', 'last_words', 'voting', 'night'], true)
             && in_array($p['curse']['type'] ?? null, ['puzzle', 'mist'], true)) {
             $this->ensure($type === 'solve_curse', 'Break your curse before returning to the village. It also fades at the next dawn.');
         }
@@ -303,7 +303,7 @@ class MatchEngine
         $this->ensure($p['alive'], 'Banished players may only watch.');
         if ($type === 'solve_curse') {
             $curse = $p['curse'] ?? null;
-            $this->ensure(in_array($s['phase'], ['discussion', 'voting', 'night'], true), 'There is no curse to break now.');
+            $this->ensure(in_array($s['phase'], ['discussion', 'last_words', 'voting', 'night'], true), 'There is no curse to break now.');
             $this->ensure($curse !== null && in_array($curse['type'], ['puzzle', 'mist', 'misdirection'], true)
                 && ($curse['challenge'] ?? null) !== null && ($curse['solution'] ?? []) !== []
                 && ($a['curse_id'] ?? null) === $curse['id'], 'This curse has already faded or changed.');
@@ -415,6 +415,20 @@ class MatchEngine
                 }
                 break;
             case 'discussion':
+                $record = $s['rounds'][$s['day']]['last_words'] ?? null;
+                $counts = array_count_values(array_column($record['accusations'] ?? [], 'target_id'));
+                if (isset($s['match_rules']['seconds']['last_words']) && $counts !== []) {
+                    $most = max($counts);
+                    $leaders = array_keys(array_filter($counts, fn (int $count): bool => $count === $most));
+                    $s['rounds'][$s['day']]['last_words']['accused_ids'] = $leaders;
+                    $this->phase($room, $s, 'last_words');
+                    $names = array_column(array_intersect_key($s['players'], array_flip($leaders)), 'name');
+                    $s['log'][] = 'Last Words: '.implode(', ', $names).' may give a final defense. Voting opens when the timer ends.';
+                    break;
+                }
+                $this->phase($room, $s, 'voting');
+                break;
+            case 'last_words':
                 $this->phase($room, $s, 'voting');
                 break;
             case 'voting':
@@ -764,7 +778,7 @@ class MatchEngine
                 $s['log'][] = 'Maelstrom — '.$events[$s['chaos_event']];
             }
         }
-        if (in_array($phase, ['voting', 'finished'], true)) {
+        if (in_array($phase, ['last_words', 'voting', 'finished'], true)) {
             foreach ($s['players'] as &$player) {
                 $player['haunting'] = null;
             }
@@ -844,7 +858,7 @@ class MatchEngine
             'server_time' => now()->toISOString(), 'host_id' => $s['host_id'],
             'table' => $this->table->view($s, $id),
             'ritual' => ['tokens' => $s['tokens'], 'threshold' => $s['threshold'], 'level' => $this->curses->level($s['tokens'], $s['threshold']),
-                'final_vote' => $s['threshold'] > 0 && $s['tokens'] >= $s['threshold'] && in_array($s['phase'], ['discussion', 'voting'], true)],
+                'final_vote' => $s['threshold'] > 0 && $s['tokens'] >= $s['threshold'] && in_array($s['phase'], ['discussion', 'last_words', 'voting'], true)],
             'winner' => $s['winner'], 'win_reason' => $s['win_reason'], 'players' => $players,
             'me' => array_replace(array_intersect_key($me, array_flip(['id', 'name', 'alive', 'role', 'alignment', 'results'])), [
                 'character' => $this->character($me),

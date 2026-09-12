@@ -9,6 +9,34 @@ const players = [
 ];
 const base = { rounds: [], ritual_goal: 5 };
 
+void test('Last Words precede the ballot reveal and preserve defenses and silence', () => {
+    const story = buildRecapStory(
+        {
+            ...base,
+            rounds: [
+                {
+                    day: 1,
+                    last_words: {
+                        accusations: [{ player_id: 'c', target_id: 'a' }],
+                        accused_ids: ['a', 'b'],
+                        defenses: [{ player_id: 'a', body: 'I kept watch.' }],
+                    },
+                    vote: { ballots: [], banished_id: null },
+                },
+            ],
+        },
+        players,
+    );
+    assert.deepEqual(
+        story.map((step) => step.id),
+        ['last-words-1', 'vote-1'],
+    );
+    assert.deepEqual(story[0].details, [
+        'Ada: I kept watch.',
+        'Bo: No defense was submitted.',
+    ]);
+});
+
 test('the reveal uses recorded forgeries and prevented steps without assigning unrecorded blame', () => {
     const story = buildRecapStory(
         {

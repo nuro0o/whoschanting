@@ -188,7 +188,7 @@ class GameTest extends TestCase
         $this->expire($room);
         $this->expire($room);
         $recap = $this->engine->access($room->code, 'secret-0')['recap'];
-        $this->assertSame('vigilante-v1', $recap['rules_version']);
+        $this->assertSame('last-words-v1', $recap['rules_version']);
         $actions = array_column($recap['rounds'][0]['night']['actions'], null, 'player_id');
         $this->assertTrue($actions[$r['warden']]['prevented_curse']);
         $this->assertTrue($actions[$r['lamplighter']]['visited']);
@@ -1715,49 +1715,69 @@ class GameTest extends TestCase
         }
     }
 
-    public function test_curse_seals_persist_and_only_the_last_seal_releases_the_player(): void
+    /** @return iterable<string, array{string, string}> */
+    public static function cursePuzzleSets(): iterable
     {
-        foreach (['puzzle', 'mist'] as $type) {
-            foreach ([1 => 0, 2 => 2, 3 => 4] as $level => $tokens) {
-                [$room, $identities] = $this->match();
-                $roles = $this->roles($room);
-                $this->expire($room);
-                $this->expire($room);
-                $id = $roles['oracle'];
-                $curse = app(CurseEngine::class)->create($tokens, 6, $room->state['day'], $type);
-                $state = $room->fresh()->state;
-                $state['players'][$id]['curse'] = $curse;
-                $room->update(['state' => $state]);
-                $deadline = $room->fresh()->deadline;
-                for ($stage = 1; $stage <= 3; $stage++) {
-                    $this->assertRejected(fn () => $this->act($room, $identities[$id], 'discussion_ready'));
-                    $payload = ['type' => 'solve_curse', 'phase_id' => $room->fresh()->state['phase_id'],
-                        'curse_id' => $curse['id'], 'answer' => $curse['solution']];
-                    $this->withSession(['chanting.identity' => $identities[$roles['townsperson']]])
-                        ->postJson('/rooms/'.$room->code.'/actions', $payload)->assertUnprocessable();
-                    $this->withSession(['chanting.identity' => $identities[$id]])
-                        ->postJson('/rooms/'.$room->code.'/actions', [...$payload, 'answer' => [(string) Str::uuid()]])->assertUnprocessable();
-                    $this->assertEquals($curse, $room->fresh()->state['players'][$id]['curse']);
-                    $response = $this->postJson('/rooms/'.$room->code.'/actions', $payload)->assertOk();
-                    $this->postJson('/rooms/'.$room->code.'/actions', $payload)->assertUnprocessable();
-                    $view = $this->engine->access($room->code, $identities[$id]);
-                    $this->assertEquals($deadline, $room->fresh()->deadline);
-                    if ($stage === 3) {
-                        $response->assertJsonPath('me.curse', null);
-                        $this->assertNull($view['me']['curse']);
-                    } else {
-                        $response->assertJsonPath('me.curse.stage', $stage + 1)->assertJsonPath('me.curse.stages', 3);
-                        $this->assertSame($stage + 1, $view['me']['curse']['stage']);
-                        $this->assertSame($level, $view['me']['curse']['level']);
-                        $this->assertArrayNotHasKey('solution', $view['me']['curse']);
-                        $next = $room->fresh()->state['players'][$id]['curse'];
-                        $this->assertNotSame($curse['id'], $next['id']);
-                        $this->assertSame($curse['day'], $next['day']);
-                        $curse = $next;
-                    }
-                }
-                $this->act($room, $identities[$id], 'discussion_ready');
+        foreach ([
+            'puzzle' => ['astral-binding', 'drowned-tribute', 'rune-prison'],
+            'mist' => ['lost-shore', 'echoing-fog', 'false-lights'],
+            'misdirection' => ['crooked-compass', 'mirror-trail', 'false-oracle'],
+        ] as $type => $sets) {
+            foreach ($sets as $set) {
+                yield $set => [$type, $set];
             }
+        }
+    }
+
+    #[DataProvider('cursePuzzleSets')]
+    public function test_curse_seals_persist_and_only_the_last_seal_releases_the_player(string $type, string $set): void
+    {
+        foreach ([1 => 0, 2 => 2, 3 => 4] as $level => $tokens) {
+            if ($type === 'misdirection' && $level < 3) {
+                continue;
+            }
+            [$room, $identities] = $this->match();
+            $roles = $this->roles($room);
+            $this->expire($room);
+            $this->expire($room);
+            $id = $roles['oracle'];
+            $curse = app(CurseEngine::class)->create($tokens, 6, $room->state['day'], $type, $set);
+            $state = $room->fresh()->state;
+            $state['players'][$id]['curse'] = $curse;
+            $room->update(['state' => $state]);
+            $deadline = $room->fresh()->deadline;
+            for ($stage = 1; $stage <= 3; $stage++) {
+                if ($type !== 'misdirection') {
+                    $this->assertRejected(fn () => $this->act($room, $identities[$id], 'discussion_ready'));
+                }
+                $payload = ['type' => 'solve_curse', 'phase_id' => $room->fresh()->state['phase_id'],
+                    'curse_id' => $curse['id'], 'answer' => $curse['solution']];
+                $this->withSession(['chanting.identity' => $identities[$roles['townsperson']]])
+                    ->postJson('/rooms/'.$room->code.'/actions', $payload)->assertUnprocessable();
+                $this->withSession(['chanting.identity' => $identities[$id]])
+                    ->postJson('/rooms/'.$room->code.'/actions', [...$payload, 'answer' => [(string) Str::uuid()]])->assertUnprocessable();
+                $this->assertEquals($curse, $room->fresh()->state['players'][$id]['curse']);
+                $response = $this->postJson('/rooms/'.$room->code.'/actions', $payload)->assertOk();
+                $this->postJson('/rooms/'.$room->code.'/actions', $payload)->assertUnprocessable();
+                $view = $this->engine->access($room->code, $identities[$id]);
+                $this->assertEquals($deadline, $room->fresh()->deadline);
+                if ($stage === 3) {
+                    $response->assertJsonPath('me.curse', null);
+                    $this->assertNull($view['me']['curse']);
+                } else {
+                    $response->assertJsonPath('me.curse.stage', $stage + 1)->assertJsonPath('me.curse.stages', 3);
+                    $this->assertSame($stage + 1, $view['me']['curse']['stage']);
+                    $this->assertSame($level, $view['me']['curse']['level']);
+                    $this->assertArrayNotHasKey('solution', $view['me']['curse']);
+                    $this->assertSame($curse['set_name'], $view['me']['curse']['set_name']);
+                    $next = $room->fresh()->state['players'][$id]['curse'];
+                    $this->assertSame($set, $next['puzzle_set']);
+                    $this->assertNotSame($curse['id'], $next['id']);
+                    $this->assertSame($curse['day'], $next['day']);
+                    $curse = $next;
+                }
+            }
+            $this->act($room, $identities[$id], 'discussion_ready');
         }
     }
 
@@ -1795,7 +1815,7 @@ class GameTest extends TestCase
         $this->expire($room);
         $this->expire($room);
         $id = $roles['oracle'];
-        $curse = app(CurseEngine::class)->create(4, 6, $room->state['day'], 'misdirection');
+        $curse = app(CurseEngine::class)->create(4, 6, $room->state['day'], 'misdirection', 'crooked-compass');
         $state = $room->fresh()->state;
         $state['players'][$id]['curse'] = $curse;
         $room->update(['state' => $state]);

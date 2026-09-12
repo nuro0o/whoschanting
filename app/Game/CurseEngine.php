@@ -6,6 +6,25 @@ use Illuminate\Support\Str;
 
 class CurseEngine
 {
+    /** Each curse has three themed sets, with a different mechanic at every seal. */
+    private const PUZZLE_SETS = [
+        'puzzle' => [
+            'astral-binding' => ['name' => 'Astral Binding', 'kinds' => ['rings', 'order', 'cipher']],
+            'drowned-tribute' => ['name' => 'Drowned Tribute', 'kinds' => ['towers', 'arithmetic', 'missing']],
+            'rune-prison' => ['name' => 'Rune Prison', 'kinds' => ['cipher', 'towers', 'order']],
+        ],
+        'mist' => [
+            'lost-shore' => ['name' => 'Lost Shore', 'kinds' => ['lanterns', 'focus', 'missing']],
+            'echoing-fog' => ['name' => 'Echoing Fog', 'kinds' => ['focus', 'reverse', 'lanterns']],
+            'false-lights' => ['name' => 'False Lights', 'kinds' => ['odd', 'lanterns', 'order']],
+        ],
+        'misdirection' => [
+            'crooked-compass' => ['name' => 'Crooked Compass', 'kinds' => ['rings', 'reverse', 'odd']],
+            'mirror-trail' => ['name' => 'Mirror Trail', 'kinds' => ['reverse', 'order', 'rings']],
+            'false-oracle' => ['name' => 'False Oracle', 'kinds' => ['odd', 'cipher', 'reverse']],
+        ],
+    ];
+
     public function level(int $tokens, int $threshold): int
     {
         return min(3, 1 + intdiv(max(0, $tokens) * 3, max(1, $threshold)));
@@ -18,21 +37,23 @@ class CurseEngine
     }
 
     /** @return array<string, mixed> */
-    public function create(int $tokens, int $threshold, int $day, string $type = 'puzzle'): array
+    public function create(int $tokens, int $threshold, int $day, string $type = 'puzzle', ?string $puzzleSet = null): array
     {
         $level = $this->level($tokens, $threshold);
         if (! in_array($type, $this->availableTypes($tokens, $threshold), true)) {
             throw new \InvalidArgumentException('Choose an unlocked curse type.');
         }
-        $puzzles = ['rings', 'towers'];
+        $sets = self::PUZZLE_SETS[$type];
+        $puzzleSet ??= array_rand($sets);
+        if (! isset($sets[$puzzleSet])) {
+            throw new \InvalidArgumentException('Choose a puzzle set belonging to this curse type.');
+        }
+        $set = $sets[$puzzleSet];
 
         return ['id' => (string) Str::uuid(), 'type' => $type, 'level' => $level, 'day' => $day,
-            'stage' => 1, 'stages' => 3,
-            ...$this->challenge(match ($type) {
-                'mist' => 'lanterns',
-                'misdirection' => 'rings',
-                default => $puzzles[array_rand($puzzles)],
-            }, $level)];
+            'puzzle_set' => $puzzleSet, 'set_name' => $set['name'],
+            'stage' => 1, 'stages' => count($set['kinds']),
+            ...$this->challenge($set['kinds'][0], $level)];
     }
 
     /** Advance only after the current seal has been checked by MatchEngine.
@@ -44,7 +65,10 @@ class CurseEngine
         if (($curse['stage'] ?? 1) >= ($curse['stages'] ?? 1)) {
             return null;
         }
-        $kind = match ($curse['type']) {
+        // Keep the selected set across seals and reloads. Older stored curses
+        // without a set continue their original sequence.
+        $set = self::PUZZLE_SETS[$curse['type']][$curse['puzzle_set'] ?? ''] ?? null;
+        $kind = $set['kinds'][$curse['stage']] ?? match ($curse['type']) {
             'mist' => 'lanterns',
             'misdirection' => 'rings',
             default => $curse['challenge']['kind'] === 'rings' ? 'towers' : 'rings',
@@ -306,7 +330,7 @@ class CurseEngine
      */
     public function view(?array $curse): ?array
     {
-        return $curse === null ? null : array_intersect_key($curse, array_flip(['id', 'type', 'level', 'day', 'challenge', 'stage', 'stages']));
+        return $curse === null ? null : array_intersect_key($curse, array_flip(['id', 'type', 'level', 'day', 'challenge', 'stage', 'stages', 'set_name']));
     }
 
     public function garble(string $body, string $salt): string

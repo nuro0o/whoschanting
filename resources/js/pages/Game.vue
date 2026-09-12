@@ -51,6 +51,7 @@ import MatchRewards from '@/components/chanting/MatchRewards.vue';
 import CursePanel from '@/components/chanting/CursePanel.vue';
 import MatchRecap from '@/components/chanting/MatchRecap.vue';
 import TableStories from '@/components/chanting/TableStories.vue';
+import LastWords from '@/components/chanting/LastWords.vue';
 import BanishedPredictions from '@/components/chanting/BanishedPredictions.vue';
 import TableHostControls from '@/components/chanting/TableHostControls.vue';
 import MatchFeedback from '@/components/chanting/MatchFeedback.vue';
@@ -190,19 +191,19 @@ const curseChoices: {
         type: 'puzzle',
         label: 'Soul Bind',
         description:
-            'Bind them to a series of rune rings or stone-tower seals.',
+            'Bind them to three seals of mechanisms, rune clues, and number puzzles.',
     },
     {
         type: 'mist',
         label: 'Mind Mist',
         description:
-            'Obscure the village and chat until they light lanterns in the mist.',
+            'Obscure the village and chat until they solve three seals of lights, patterns, and echoes.',
     },
     {
         type: 'misdirection',
         label: 'Misdirection',
         description:
-            'Redirect their next target unless they untangle the rune rings.',
+            'Redirect their next target unless they solve three seals of misleading runes and clues.',
     },
 ];
 const limitedAbility = computed(
@@ -333,6 +334,8 @@ const dockTitle = computed(() => {
             : 'Read your private role before getting ready';
     if (state.value?.phase === 'discussion')
         return 'Ready means you are happy to end discussion early';
+    if (state.value?.phase === 'last_words')
+        return 'Hear the final defenses before voting';
     if (state.value?.phase === 'voting' && !privateVisible.value)
         return 'Your ballot is hidden';
     return target.value
@@ -368,6 +371,14 @@ async function reviewDock() {
         ?.focus({ preventScroll: true });
     if (state.value?.phase === 'reveal') await showRole();
 }
+async function showLastWords() {
+    await navigate('play', false);
+    await nextTick();
+    document
+        .getElementById('last-words-panel')
+        ?.scrollIntoView({ block: 'start' });
+    document.getElementById('last-words-panel')?.focus({ preventScroll: true });
+}
 const chatVisible = ref(false);
 let chatObserver: IntersectionObserver | undefined;
 const unreadChat = computed(
@@ -387,18 +398,21 @@ const newResults = computed(() =>
         : 0,
 );
 const phaseLabel = computed(() =>
-    state.value?.ritual.final_vote
-        ? state.value.phase === 'discussion'
-            ? 'Final discussion'
-            : 'Final vote'
-        : {
-              lobby: 'Lobby',
-              reveal: 'Read your role',
-              night: 'Night actions',
-              discussion: 'Discussion',
-              voting: 'Voting',
-              finished: 'Match complete',
-          }[state.value?.phase ?? 'lobby'],
+    state.value?.phase === 'last_words'
+        ? 'Last Words'
+        : state.value?.ritual.final_vote
+          ? state.value.phase === 'discussion'
+              ? 'Final discussion'
+              : 'Final vote'
+          : {
+                lobby: 'Lobby',
+                reveal: 'Read your role',
+                night: 'Night actions',
+                discussion: 'Discussion',
+                last_words: 'Last Words',
+                voting: 'Voting',
+                finished: 'Match complete',
+            }[state.value?.phase ?? 'lobby'],
 );
 const showTargetHint = computed(
     () => !hintDismissed.value && canSelectSeat.value,
@@ -483,6 +497,10 @@ const phaseInfo = {
     discussion: [
         'Someone knows something.',
         'Share what you saw. Question what you heard. Your neighbors are listening.',
+    ],
+    last_words: [
+        'One chance to be heard.',
+        'The accused have the floor. Hear their defenses before voting.',
     ],
     voting: [
         'Who do you believe?',
@@ -587,6 +605,7 @@ const tableDisplay = computed(() => {
                       reveal: 'Role reveal',
                       night: 'Night',
                       discussion: 'Discussion',
+                      last_words: 'Last Words',
                       voting: 'Voting',
                       finished: 'Match complete',
                   }[phase],
@@ -1229,6 +1248,24 @@ onBeforeUnmount(() => {
                             :blocker="turnBlocker"
                         >
                             <template #controls>
+                                <button
+                                    v-if="
+                                        state.table?.last_words &&
+                                        [
+                                            'discussion',
+                                            'last_words',
+                                            'voting',
+                                        ].includes(state.phase)
+                                    "
+                                    class="button"
+                                    @click="showLastWords"
+                                >
+                                    {{
+                                        state.phase === 'discussion'
+                                            ? 'Accusations'
+                                            : 'Read Last Words'
+                                    }}
+                                </button>
                                 <button
                                     v-if="
                                         state.phase === 'reveal' &&
@@ -2088,6 +2125,13 @@ onBeforeUnmount(() => {
                     aria-label="Play"
                     v-show="activeView === 'play'"
                 >
+                    <LastWords
+                        v-if="!puzzleCursed && !mistCursed"
+                        :state="state"
+                        :countdown="timeLabel"
+                        :disabled="pending || disconnected || seconds === 0"
+                        :submit="act"
+                    />
                     <SpectatorView
                         v-if="spectator"
                         :state="state"
@@ -2102,9 +2146,12 @@ onBeforeUnmount(() => {
                     <aside
                         v-if="
                             currentChaosEvent &&
-                            ['night', 'discussion', 'voting'].includes(
-                                state.phase,
-                            )
+                            [
+                                'night',
+                                'discussion',
+                                'last_words',
+                                'voting',
+                            ].includes(state.phase)
                         "
                         class="chaos-event-banner"
                         aria-label="Active Maelstrom rule"
@@ -2700,7 +2747,9 @@ onBeforeUnmount(() => {
                                         ? `${message.length}/280 · Keep your secrets. Or don’t.`
                                         : !state.me.alive
                                           ? 'Banished players can chat again after the match.'
-                                          : 'Chat opens in the lobby, discussion, voting, and after the match.'
+                                          : state.phase === 'last_words'
+                                            ? 'Chat pauses for Last Words. Read the defenses in Play; chat reopens for voting.'
+                                            : 'Chat opens in the lobby, discussion, voting, and after the match.'
                                 }}
                             </p>
                         </form>
@@ -3325,6 +3374,9 @@ onBeforeUnmount(() => {
     .is-immersive .room-workspace[data-view='journal'] {
         scroll-padding-top: 0;
     }
+    .is-immersive[data-phase='last_words'] .room-workspace[data-view='play'] {
+        scroll-padding-top: 0;
+    }
     .is-immersive .room-workspace > * {
         flex-shrink: 0;
         margin-bottom: 0;
@@ -3347,6 +3399,11 @@ onBeforeUnmount(() => {
         padding: 0;
         background: #192b29;
         border-color: #4a5d4d;
+    }
+    .is-immersive[data-phase='last_words']
+        .room-workspace[data-view='play']
+        .room-chat {
+        display: none;
     }
     .is-immersive .room-workspace[data-view='chat'] .room-chat,
     .is-immersive .room-workspace[data-view='chat'] .chat-panel {

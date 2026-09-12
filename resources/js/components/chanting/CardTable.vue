@@ -156,6 +156,7 @@ const caption = computed(() =>
               reveal: 'Your secret awaits in your private role card.',
               night: 'Cards down. Secrets kept.',
               discussion: 'Stories on the table.',
+              last_words: 'The accused have the floor.',
               voting: 'One choice. Sealed until the count.',
               finished: 'Every secret has a face.',
           }[props.phase],

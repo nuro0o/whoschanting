@@ -157,6 +157,11 @@ export interface MatchFeedbackResponse {
     engagement: 'engaged' | 'mixed' | 'waiting';
     body: string;
 }
+export interface LastWordsRecord {
+    accusations: { player_id: string; target_id: string }[];
+    accused_ids: string[];
+    defenses: { player_id: string; body: string }[];
+}
 export interface MatchRecapData {
     claims?: PublicClaim[];
     responses?: DiscussionResponse[];
@@ -175,6 +180,7 @@ export interface MatchRecapData {
     missed_actions: { night: number; vote: number };
     rounds: {
         day: number;
+        last_words?: LastWordsRecord;
         discussion?: {
             type: 'exorcise' | 'oath';
             player_id: string;
@@ -220,10 +226,12 @@ export interface Curse {
     day: number;
     stage?: number;
     stages?: number;
+    set_name?: string;
     challenge: CurseChallenge | null;
 }
 export interface RoomState {
     table?: {
+        last_words?: LastWordsRecord | null;
         claims: PublicClaim[];
         prompt: { id: string; question: string } | null;
         responses: DiscussionResponse[];
@@ -244,7 +252,14 @@ export interface RoomState {
     roster?: 'classic' | 'illusions';
     id: number;
     code: string;
-    phase: 'lobby' | 'reveal' | 'night' | 'discussion' | 'voting' | 'finished';
+    phase:
+        | 'lobby'
+        | 'reveal'
+        | 'night'
+        | 'discussion'
+        | 'last_words'
+        | 'voting'
+        | 'finished';
     phase_id: number;
     revision: number;
     day: number;

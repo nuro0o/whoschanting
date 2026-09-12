@@ -38,6 +38,13 @@ const step = computed(() => {
                   ? 'The living are deciding who to banish. The result arrives shortly.'
                   : 'Follow the chat and public events until the next match.',
         ];
+    if (phase === 'last_words')
+        return [
+            'Last Words',
+            props.state.table?.last_words?.accused_ids.includes(me.id)
+                ? 'You have the floor. Open Last Words to publish your defense before the timer ends.'
+                : 'Listen to the accused. Voting opens when the defense timer ends.',
+        ];
     if (me.submitted)
         return phase === 'reveal'
             ? ['You are ready', 'Waiting for everyone to read their role.']
@@ -76,7 +83,9 @@ const step = computed(() => {
     if (phase === 'discussion')
         return [
             'Discuss with the village',
-            'Compare stories in chat or on a call. Voting starts when everyone is ready or the timer ends.',
+            props.state.table?.last_words
+                ? 'Compare stories in chat or on a call. You may accuse a suspect before getting ready. The accused get Last Words before voting.'
+                : 'Compare stories in chat or on a call. Voting starts when everyone is ready or the timer ends.',
         ];
     return [
         'Choose, then confirm your vote',
@@ -103,7 +112,9 @@ const step = computed(() => {
                         {{
                             state.phase === 'finished'
                                 ? 'MATCH COMPLETE'
-                                : state.phase
+                                : state.phase === 'last_words'
+                                  ? 'LAST WORDS'
+                                  : state.phase
                         }}
                     </p>
                     <span v-if="pending" class="turn-pending" role="status"

@@ -98,19 +98,19 @@ const terms = [
     ],
     [
         'Eldritch curse',
-        'A private affliction placed by a cultist. It takes hold at dawn and expires at the following dawn. The caster chooses Soul Bind, Mind Mist, or Misdirection (unlocked at ritual level 3). Every new curse has three seals. Higher ritual levels add more pieces and closer tower heights; lanterns have random numbers and decoys without next-step hints. Cleared seals stay cleared across refreshes. Being cursed does not reveal your alignment.',
+        'A private affliction placed by a cultist. It takes hold at dawn and expires at the following dawn. The caster chooses Soul Bind, Mind Mist, or Misdirection (unlocked at ritual level 3). Each type randomly draws from three themed puzzle sets, each with three different seals and fresh clues. Higher ritual levels add more pieces and reasoning steps. Cleared seals stay cleared across refreshes. Being cursed does not reveal your alignment.',
     ],
     [
         'Soul Bind',
-        'Break a series of seals by rotating rune rings toward the north beacon or waking stone towers from shortest to tallest. Early seals have fewer objects and obvious differences; higher ritual levels bring more complex mechanisms. Clear every seal to return to the room; the phase timer continues. Keyboard controls are available.',
+        "Draws Astral Binding, Drowned Tribute, or Rune Prison: three seals combining ring alignment, tower heights, rune ordering, ciphers, cargo payments, or missing numbers. Follow each seal's instructions. Higher ritual levels add more steps. Clear every seal to return to the room; the phase timer continues. Keyboard controls are available.",
     ],
     [
         'Mind Mist',
-        'Blurs the village scenery and turns chat into gibberish. Light lanterns in numerical order, not height order. Level 1 uses just 1, 2, 3 with a next-lantern hint and forgiving clicks. Higher levels add more numbers, word decoys, and thicker mist. Clear every seal to restore the room and chat; the phase timer continues.',
+        "Blurs the village scenery and turns chat into gibberish. Draws Lost Shore, Echoing Fog, or False Lights: three seals mixing numbered lanterns, number sorting, sequences, mirror whispers, broken inscriptions, or rune ordering. Follow each seal's instructions and ignore its decoys. Clear every seal to restore the room and chat; the phase timer continues.",
     ],
     [
         'Misdirection',
-        'Only appears at ritual level 3, from two-thirds progress. Your next chosen night or vote target changes once to another legal player unless you first solve its rune rings. You can keep playing or open the optional puzzle. The Medium can only be redirected to another banished player. Abstaining does not trigger it. It fades at the following dawn.',
+        'Only appears at ritual level 3, from two-thirds progress. Your next chosen night or vote target changes once to another legal player unless you first clear all three seals. Draws Crooked Compass, Mirror Trail, or False Oracle, combining rings, mirror whispers, broken inscriptions, rune ordering, or ciphers. You can keep playing or open the optional puzzles. The Medium can only be redirected to another banished player. Abstaining does not trigger it. It fades at the following dawn.',
     ],
     [
         'Chant',
