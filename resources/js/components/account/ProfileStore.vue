@@ -1,9 +1,26 @@
 <script setup lang="ts">
 import { Link, usePage } from '@inertiajs/vue3';
-import { ArrowRight, Check, Coins, Crown, ShoppingBag } from '@lucide/vue';
+import {
+    ArrowRight,
+    Check,
+    Coins,
+    Crown,
+    ShoppingBag,
+    Sparkles,
+    Play,
+    ExternalLink,
+} from '@lucide/vue';
 import { useNow } from '@vueuse/core';
-import { computed, nextTick, ref, watch } from 'vue';
+import {
+    computed,
+    nextTick,
+    onBeforeUnmount,
+    onMounted,
+    ref,
+    watch,
+} from 'vue';
 import CharacterPortrait from '@/components/chanting/CharacterPortrait.vue';
+import CosmeticScenePreview from '@/components/chanting/CosmeticScenePreview.vue';
 import { Button } from '@/components/ui/button';
 import {
     Dialog,
@@ -18,6 +35,8 @@ import {
     recordDate,
     type ProgressionData,
     type StoreItem,
+    type StoreBundle,
+    type CheckoutStatus,
 } from '@/lib/progression';
 import { send } from '@/routes/verification';
 
@@ -31,6 +50,129 @@ watch(
     },
 );
 const store = computed(() => data.value?.store);
+const bundles = computed(() => store.value?.bundles ?? []);
+const checkoutBundleId = ref<string | null>(null);
+const checkoutError = ref('');
+const checkoutMessage = ref('');
+const checkoutStatusElement = ref<HTMLElement>();
+const checkoutStatus = ref<CheckoutStatus | null>(null);
+const checkingPayment = ref(false);
+const previewBundle = ref<StoreBundle | null>(null);
+let sessionId = '';
+let paymentTimer: ReturnType<typeof setTimeout> | undefined;
+let mounted = false;
+let paymentChecks = 0;
+const categoryNames: Record<string, string> = {
+    titles: 'Title',
+    frames: 'Portrait frame',
+    accents: 'Accent',
+    backgrounds: 'Backdrop',
+    tables: 'Table',
+    banishments: 'Banishment',
+    celebrations: 'Victory celebration',
+};
+function bundleCosmetic(bundle: StoreBundle, category: string) {
+    return bundle.cosmetics.find((item) => item.category === category)?.id;
+}
+function money(bundle: StoreBundle) {
+    return new Intl.NumberFormat('en-IE', {
+        style: 'currency',
+        currency: bundle.currency,
+    }).format(bundle.amount / 100);
+}
+async function checkout(bundle: StoreBundle) {
+    if (
+        checkoutBundleId.value ||
+        checkingPayment.value ||
+        checkoutStatus.value === 'pending' ||
+        !bundle.available ||
+        bundle.owned
+    )
+        return;
+    checkoutBundleId.value = bundle.id;
+    checkoutError.value = '';
+    try {
+        const result = await roomRequest<{ url: string }>(
+            '/account/store/checkout',
+            { bundle_id: bundle.id },
+        );
+        const destination = new URL(result.url);
+        if (
+            destination.protocol !== 'https:' ||
+            destination.hostname !== 'checkout.stripe.com'
+        ) {
+            throw new Error('Checkout could not be opened. Please try again.');
+        }
+        window.location.assign(destination.href);
+    } catch (caught) {
+        checkoutError.value =
+            caught instanceof Error
+                ? caught.message
+                : 'Checkout could not be opened. Please try again.';
+        checkoutBundleId.value = null;
+        await nextTick();
+        checkoutStatusElement.value?.focus();
+    }
+}
+async function checkPayment(manual = false) {
+    if (!sessionId || checkingPayment.value) return;
+    clearTimeout(paymentTimer);
+    if (manual) paymentChecks = 0;
+    checkingPayment.value = true;
+    checkoutError.value = '';
+    try {
+        const result = await roomRequest<{
+            status: CheckoutStatus;
+            progression: ProgressionData;
+        }>(`/account/store/status?session_id=${encodeURIComponent(sessionId)}`);
+        if (!mounted) return;
+        data.value = result.progression;
+        checkoutStatus.value = result.status;
+        const messages: Record<CheckoutStatus, string> = {
+            pending:
+                'Your payment is being confirmed. Your collection will update here as soon as it is ready.',
+            paid: 'Payment confirmed. Your bundle is yours to keep — open your wardrobe to equip it.',
+            refunded:
+                'This payment has been refunded. Your collection now shows your current unlocks.',
+            disputed:
+                'This payment is under review. Your collection now shows your current unlocks.',
+            expired:
+                'This checkout expired. You can start a new checkout below.',
+            failed: 'This payment was not completed. You can try checkout again below.',
+        };
+        checkoutMessage.value = messages[result.status];
+        if (result.status === 'pending' && ++paymentChecks < 8) {
+            paymentTimer = setTimeout(() => void checkPayment(), 3000);
+        }
+    } catch (caught) {
+        if (!mounted) return;
+        checkoutError.value =
+            caught instanceof Error
+                ? caught.message
+                : 'We could not check your payment. Please refresh its status.';
+        checkoutMessage.value =
+            'Your payment has not been confirmed here yet. Refresh its status before starting another checkout.';
+    } finally {
+        checkingPayment.value = false;
+    }
+}
+onMounted(() => {
+    mounted = true;
+    const query = new URL(window.location.href).searchParams;
+    if (query.get('checkout') === 'cancelled')
+        checkoutMessage.value =
+            'Checkout closed. Your collection is unchanged. You can return whenever you are ready.';
+    if (query.get('checkout') === 'success' && query.get('session_id')) {
+        sessionId = query.get('session_id')!;
+        checkoutStatus.value = 'pending';
+        checkoutMessage.value = 'Checking your payment…';
+        void checkPayment();
+    }
+});
+onBeforeUnmount(() => {
+    mounted = false;
+    clearTimeout(paymentTimer);
+});
 const now = useNow({ interval: 1000 });
 const cooldownMinutes = computed(() =>
     store.value?.crown_cooldown_until
@@ -119,8 +261,8 @@ function transactionName(itemId: string | null) {
                 </p>
                 <h2 id="store-title">A little more <em>you.</em></h2>
                 <p>
-                    Earn your Crowns at the table. Find something to make your
-                    resident record your own.
+                    Earn your Crowns at the table. Collect keepsakes, or support
+                    the village with a look your whole gathering can enjoy.
                 </p>
             </div>
             <div class="store-wallet" aria-label="Your Crown balance">
@@ -139,6 +281,180 @@ function transactionName(itemId: string | null) {
         </header>
 
         <template v-if="store">
+            <section
+                v-if="bundles.length"
+                class="premium-collection"
+                aria-labelledby="premium-title"
+            >
+                <header class="premium-heading">
+                    <div>
+                        <p class="account-kicker">
+                            Keep the village lanterns lit
+                        </p>
+                        <h3 id="premium-title">
+                            Something worth gathering around.
+                        </h3>
+                    </div>
+                    <p>
+                        One payment. Yours to keep.<br />Every gameplay feature
+                        stays free.
+                    </p>
+                </header>
+                <div
+                    v-if="checkoutMessage || checkoutError"
+                    ref="checkoutStatusElement"
+                    tabindex="-1"
+                    class="premium-status"
+                    :class="{ 'has-error': checkoutError }"
+                >
+                    <p v-if="checkoutMessage" role="status">
+                        {{ checkoutMessage }}
+                    </p>
+                    <p v-if="checkoutError" class="store-error" role="alert">
+                        {{ checkoutError }}
+                    </p>
+                    <Button
+                        v-if="
+                            sessionId &&
+                            (checkoutStatus === 'pending' || checkoutError)
+                        "
+                        variant="secondary"
+                        :disabled="checkingPayment"
+                        @click="checkPayment(true)"
+                        >{{
+                            checkingPayment
+                                ? 'Checking payment…'
+                                : 'Refresh payment status'
+                        }}</Button
+                    >
+                    <Link
+                        v-if="checkoutStatus === 'paid'"
+                        href="/progression"
+                        class="account-text-link"
+                        >Open wardrobe <ArrowRight :size="14"
+                    /></Link>
+                </div>
+                <div class="premium-bundles">
+                    <article
+                        v-for="bundle in bundles"
+                        :key="bundle.id"
+                        class="premium-bundle"
+                        :class="[
+                            `premium-bundle--${bundle.id}`,
+                            { 'is-owned': bundle.owned },
+                        ]"
+                    >
+                        <div class="premium-art">
+                            <span class="premium-edition">{{
+                                bundle.id === 'founders-pack'
+                                    ? 'The founding collection'
+                                    : 'A gathering in a different light'
+                            }}</span>
+                            <div class="premium-portrait-stage">
+                                <span
+                                    class="premium-orbit"
+                                    aria-hidden="true"
+                                ></span
+                                ><CharacterPortrait
+                                    :character="
+                                        data?.profile.equipped.character ??
+                                        'mariner'
+                                    "
+                                    :creator="data?.profile.equipped.creator"
+                                    :frame="
+                                        bundleCosmetic(bundle, 'frames') ??
+                                        'plain'
+                                    "
+                                    :accent="bundleCosmetic(bundle, 'accents')"
+                                    :background="
+                                        bundleCosmetic(bundle, 'backgrounds')
+                                    "
+                                    decorative
+                                />
+                            </div>
+                            <span class="premium-art-caption"
+                                ><Sparkles :size="13" aria-hidden="true" /> A
+                                signature for your table</span
+                            >
+                        </div>
+                        <div class="premium-copy">
+                            <p class="account-kicker">
+                                Permanent cosmetic bundle
+                                <span v-if="bundle.owned"> · Owned</span>
+                            </p>
+                            <h4>{{ bundle.name }}</h4>
+                            <p class="premium-description">
+                                {{ bundle.description }}
+                            </p>
+                            <ul
+                                class="premium-contents"
+                                :aria-label="`${bundle.name} contents`"
+                            >
+                                <li
+                                    v-for="item in bundle.cosmetics"
+                                    :key="`${item.category}-${item.id}`"
+                                >
+                                    <Check :size="12" aria-hidden="true" /><span
+                                        >{{ item.name
+                                        }}<small>{{
+                                            categoryNames[item.category] ??
+                                            item.category
+                                        }}</small></span
+                                    >
+                                </li>
+                            </ul>
+                            <button
+                                type="button"
+                                class="premium-preview-button"
+                                @click="previewBundle = bundle"
+                            >
+                                <Play :size="13" aria-hidden="true" /> Preview
+                                the collection
+                            </button>
+                            <div class="premium-purchase">
+                                <div>
+                                    <strong>{{ money(bundle) }}</strong
+                                    ><small>One-time purchase</small>
+                                </div>
+                                <Link
+                                    v-if="bundle.owned"
+                                    href="/progression"
+                                    class="store-equip"
+                                    >Equip <ArrowRight :size="14" /></Link
+                                ><Button
+                                    v-else
+                                    :disabled="
+                                        !!checkoutBundleId ||
+                                        checkingPayment ||
+                                        checkoutStatus === 'pending' ||
+                                        !bundle.available
+                                    "
+                                    @click="checkout(bundle)"
+                                    >{{
+                                        checkoutBundleId === bundle.id
+                                            ? 'Opening checkout…'
+                                            : bundle.available
+                                              ? 'Get the bundle'
+                                              : 'Coming soon'
+                                    }}<ExternalLink
+                                        v-if="
+                                            bundle.available &&
+                                            !checkoutBundleId
+                                        "
+                                        :size="12"
+                                        aria-hidden="true"
+                                /></Button>
+                            </div>
+                        </div>
+                    </article>
+                </div>
+                <p class="premium-note">
+                    Secure checkout with Stripe. Table looks are shared when you
+                    host. Your banishment plays when you are voted out; one
+                    winner’s equipped celebration is chosen at random for
+                    everyone to enjoy.
+                </p>
+            </section>
             <div class="store-earning">
                 <Coins :size="23" :stroke-width="1.3" aria-hidden="true" />
                 <div>
@@ -328,23 +644,43 @@ function transactionName(itemId: string | null) {
             </p>
         </div>
 
-        <aside class="store-future" aria-labelledby="store-future-title">
-            <span class="store-later">Coming later</span>
-            <div>
-                <h3 id="store-future-title">More ways to make it yours.</h3>
-                <p>
-                    Optional cosmetic purchases, season passes, and a supporter
-                    subscription are planned. Every gameplay feature stays free.
-                    Cosmetics never change your odds.
-                </p>
-            </div>
-        </aside>
         <p class="store-footnote">
             Crowns are in-game currency with no cash value or withdrawals. Store
             cosmetics are yours to keep. Progression rewards remain earned
             through play.
         </p>
 
+        <Dialog
+            :open="!!previewBundle"
+            @update:open="!$event && (previewBundle = null)"
+        >
+            <DialogContent class="account-theme premium-preview-dialog">
+                <template v-if="previewBundle">
+                    <DialogHeader
+                        ><DialogTitle>{{ previewBundle.name }}</DialogTitle
+                        ><DialogDescription
+                            >Take a seat at this table. Play the banishment and
+                            victory effects to see what your gathering will
+                            enjoy.</DialogDescription
+                        ></DialogHeader
+                    >
+                    <CosmeticScenePreview
+                        :table="bundleCosmetic(previewBundle, 'tables')"
+                        :banishment="
+                            bundleCosmetic(previewBundle, 'banishments')
+                        "
+                        :celebration="
+                            bundleCosmetic(previewBundle, 'celebrations')
+                        "
+                    />
+                    <p class="premium-note">
+                        All {{ previewBundle.cosmetics.length }} cosmetics are
+                        included for {{ money(previewBundle) }}. Equip each
+                        detail separately in your wardrobe.
+                    </p>
+                </template>
+            </DialogContent>
+        </Dialog>
         <Dialog :open="!!selected" @update:open="close">
             <DialogContent
                 class="account-theme store-confirmation"
@@ -412,6 +748,290 @@ function transactionName(itemId: string | null) {
 </template>
 
 <style scoped>
+.premium-collection {
+    padding: 30px 0;
+}
+.premium-heading {
+    display: flex;
+    justify-content: space-between;
+    align-items: end;
+    gap: 28px;
+    margin-bottom: 23px;
+}
+.premium-heading h3 {
+    max-width: 470px;
+    font:
+        400 clamp(25px, 3vw, 34px)/1.18 'Fraunces',
+        Georgia,
+        serif;
+    margin-top: 8px;
+    letter-spacing: -0.7px;
+}
+.premium-heading > p {
+    flex-shrink: 0;
+    color: var(--account-muted);
+    font-size: 11px;
+    line-height: 1.8;
+}
+.premium-bundles {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 20px;
+}
+.premium-bundle {
+    --bundle-accent: #c3afd8;
+    --bundle-dark: #343246;
+    background: var(--account-panel);
+    border: 1px solid var(--account-line);
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+}
+.premium-bundle--founders-pack {
+    --bundle-accent: #dec58a;
+    --bundle-dark: #263d32;
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: minmax(230px, 0.85fr) minmax(0, 1.5fr);
+    border-top: 3px solid #8e743d;
+}
+.premium-bundle--harvest-festival {
+    --bundle-accent: #edbe79;
+    --bundle-dark: #4b392b;
+}
+.premium-art {
+    position: relative;
+    color: #f5efd9;
+    background: radial-gradient(
+        ellipse at 50% 50%,
+        color-mix(in srgb, var(--bundle-accent) 22%, var(--bundle-dark)),
+        var(--bundle-dark) 78%
+    );
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 25px 16px;
+    min-height: 205px;
+    overflow: hidden;
+    border-bottom: 1px solid
+        color-mix(in srgb, var(--bundle-accent) 40%, transparent);
+}
+.premium-edition {
+    font-size: 9px;
+    text-transform: uppercase;
+    letter-spacing: 1.6px;
+    color: var(--bundle-accent);
+    text-align: center;
+}
+.premium-portrait-stage {
+    position: relative;
+    display: grid;
+    place-items: center;
+    width: 190px;
+    height: 146px;
+}
+.premium-orbit {
+    position: absolute;
+    width: 170px;
+    height: 72px;
+    bottom: 4px;
+    border: 1px solid color-mix(in srgb, var(--bundle-accent) 65%, transparent);
+    border-radius: 50%;
+    box-shadow:
+        0 6px 0 -3px var(--bundle-dark),
+        0 7px 0 -3px color-mix(in srgb, var(--bundle-accent) 45%, transparent);
+    transform: rotate(-8deg);
+}
+.premium-art .character-portrait {
+    display: block;
+    width: 64px;
+    height: 78px;
+    border-radius: 35px 35px 4px 4px;
+    border: 2px solid var(--bundle-accent);
+}
+.premium-bundle--founders-pack .premium-portrait-stage {
+    height: 200px;
+}
+.premium-bundle--founders-pack .premium-art .character-portrait {
+    width: 85px;
+    height: 103px;
+}
+.premium-bundle--founders-pack .premium-orbit {
+    width: 215px;
+    height: 90px;
+    bottom: 12px;
+}
+.premium-art-caption {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font:
+        italic 12px 'Fraunces',
+        Georgia,
+        serif;
+    color: #ece3ca;
+}
+.premium-copy {
+    padding: 23px;
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+}
+.premium-copy > .account-kicker {
+    font-size: 9px;
+    letter-spacing: 1.4px;
+}
+.premium-copy h4 {
+    font:
+        400 28px/1.15 'Fraunces',
+        Georgia,
+        serif;
+    margin: 8px 0 10px;
+    letter-spacing: -0.6px;
+}
+.premium-description {
+    font-size: 12px;
+    line-height: 1.8;
+    color: var(--account-muted);
+}
+.premium-contents {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px 16px;
+    margin: 21px 0;
+    padding: 0;
+    list-style: none;
+}
+.premium-contents li {
+    display: flex;
+    align-items: start;
+    gap: 6px;
+    font-size: 11px;
+    line-height: 1.5;
+}
+.premium-contents svg {
+    flex-shrink: 0;
+    color: var(--account-green);
+    margin-top: 3px;
+}
+.premium-contents small {
+    display: block;
+    color: var(--account-muted);
+    font-size: 9px;
+}
+.premium-preview-button {
+    display: inline-flex;
+    align-items: center;
+    align-self: start;
+    gap: 7px;
+    font-size: 11px;
+    text-decoration: underline;
+    text-underline-offset: 4px;
+    padding: 8px 0;
+    margin-top: auto;
+    cursor: pointer;
+    color: var(--account-green);
+}
+.premium-preview-button:focus-visible {
+    outline: 2px solid var(--account-green);
+    outline-offset: 4px;
+}
+.premium-purchase {
+    border-top: 1px solid var(--account-line);
+    margin-top: 16px;
+    padding-top: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+.premium-purchase strong {
+    display: block;
+    font:
+        400 28px 'Fraunces',
+        Georgia,
+        serif;
+}
+.premium-purchase small {
+    display: block;
+    color: var(--account-muted);
+    font-size: 9px;
+    margin-top: 3px;
+}
+.premium-purchase button {
+    font-size: 11px;
+}
+.premium-purchase button:disabled {
+    opacity: 1;
+    color: var(--account-muted);
+    background: var(--account-deep);
+}
+.premium-note {
+    color: var(--account-muted);
+    font-size: 11px;
+    line-height: 1.8;
+    margin-top: 14px;
+}
+.premium-status {
+    background: var(--account-deep);
+    border-left: 3px solid var(--account-green);
+    padding: 16px 19px;
+    margin-bottom: 22px;
+    font-size: 12px;
+    line-height: 1.8;
+}
+.premium-status.has-error {
+    border-left-color: var(--destructive);
+}
+.premium-status button,
+.premium-status a {
+    margin-top: 10px;
+}
+:global(.account-theme.premium-preview-dialog) {
+    max-width: min(660px, calc(100vw - 2rem));
+    max-height: calc(100dvh - 2rem);
+    overflow-y: auto;
+}
+@media (max-width: 750px) {
+    .premium-heading {
+        align-items: start;
+        flex-direction: column;
+        gap: 12px;
+    }
+    .premium-bundle--founders-pack {
+        grid-template-columns: 1fr;
+    }
+    .premium-bundle--founders-pack .premium-portrait-stage {
+        height: 170px;
+    }
+    .premium-copy {
+        padding: 20px 16px;
+    }
+    .premium-purchase {
+        flex-wrap: wrap;
+    }
+    .premium-contents {
+        grid-template-columns: 1fr;
+    }
+    .premium-bundle--founders-pack .premium-contents {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+@media (max-width: 480px) {
+    .premium-bundles {
+        grid-template-columns: 1fr;
+    }
+    .premium-bundle--founders-pack {
+        grid-column: auto;
+    }
+    .premium-contents {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+    .premium-heading h3 {
+        max-width: 320px;
+    }
+}
 .profile-store {
     margin: 8px 0 42px;
     scroll-margin-top: 24px;

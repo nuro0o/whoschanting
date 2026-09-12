@@ -1,0 +1,228 @@
+import * as THREE from 'three';
+import type { RitualCosmeticEvent, RitualSceneSeat } from './ritualSceneState';
+
+/** Fixed geometry pool, shared by the store preview and live table. */
+export function createTableCosmetics(scene: THREE.Scene) {
+    const geometries = new Set<THREE.BufferGeometry>();
+    const materials = new Set<THREE.Material>();
+    const ornaments = new THREE.Group();
+    const effect = new THREE.Group();
+    scene.add(ornaments, effect);
+    const gold = new THREE.MeshStandardMaterial({
+        color: 0xc9a65a,
+        metalness: 0.8,
+        roughness: 0.35,
+    });
+    const silver = new THREE.MeshStandardMaterial({
+        color: 0xa9b8e6,
+        metalness: 0.7,
+        roughness: 0.3,
+    });
+    const copper = new THREE.MeshStandardMaterial({
+        color: 0xcd7938,
+        metalness: 0.45,
+    });
+    const glow = new THREE.MeshStandardMaterial({
+        color: 0xf5ce7a,
+        emissive: 0xc68b37,
+        emissiveIntensity: 0.6,
+        transparent: true,
+    });
+    const shadow = new THREE.MeshStandardMaterial({
+        color: 0x425c58,
+        transparent: true,
+    });
+    [gold, silver, copper, glow, shadow].forEach((material) =>
+        materials.add(material),
+    );
+    function geometry<T extends THREE.BufferGeometry>(value: T): T {
+        geometries.add(value);
+        return value;
+    }
+    const ring = geometry(new THREE.TorusGeometry(0.35, 0.045, 6, 32));
+    const jewel = geometry(new THREE.OctahedronGeometry(0.12));
+    const leaf = geometry(new THREE.SphereGeometry(0.15, 8, 6));
+    const moon = geometry(
+        new THREE.TorusGeometry(0.42, 0.075, 8, 40, Math.PI * 1.45),
+    );
+    const lantern = geometry(new THREE.CylinderGeometry(0.1, 0.14, 0.22, 6));
+    const crown = geometry(
+        new THREE.CylinderGeometry(0.2, 0.17, 0.2, 10, 1, true),
+    );
+    const crownVertices = crown.getAttribute('position');
+    for (let i = 0; i < crownVertices.count; i++) {
+        if (crownVertices.getY(i) > 0)
+            crownVertices.setY(i, i % 2 === 0 ? 0.23 : 0.07);
+    }
+    crown.computeVertexNormals();
+    const body = geometry(new THREE.ConeGeometry(0.26, 0.7, 12));
+    const head = geometry(new THREE.SphereGeometry(0.14, 12, 8));
+    function mesh(
+        shape: THREE.BufferGeometry,
+        material: THREE.Material,
+        parent: THREE.Object3D,
+    ) {
+        const object = new THREE.Mesh(shape, material);
+        parent.add(object);
+        return object;
+    }
+    // Actual inlaid crowns, silver crescents, or copper leaves around the rim.
+    const motifs = Array.from({ length: 12 }, (_, i) => {
+        const group = new THREE.Group();
+        const angle = (i / 12) * Math.PI * 2;
+        group.position.set(
+            Math.cos(angle) * 4.62,
+            0.15,
+            Math.sin(angle) * 3.22,
+        );
+        group.rotation.set(-Math.PI / 2, 0, angle);
+        group.scale.setScalar(0.55);
+        ornaments.add(group);
+        const crown = new THREE.Group();
+        group.add(crown);
+        mesh(ring, gold, crown).scale.y = 0.48;
+        for (let j = 0; j < 3; j++) {
+            const point = mesh(jewel, gold, crown);
+            point.position.set((j - 1) * 0.23, 0.25, 0);
+        }
+        const crescent = mesh(moon, silver, group);
+        const leaves = new THREE.Group();
+        group.add(leaves);
+        for (let j = 0; j < 3; j++) {
+            const sprig = mesh(leaf, copper, leaves);
+            sprig.scale.set(0.5, 1.5, 0.22);
+            sprig.rotation.z = (j - 1) * 0.65;
+            sprig.position.x = (j - 1) * 0.18;
+        }
+        return { crown, crescent, leaves };
+    });
+    const halo = mesh(ring, glow, effect);
+    halo.rotation.x = -Math.PI / 2;
+    const risingMoon = mesh(moon, glow, effect);
+    const pawn = new THREE.Group();
+    effect.add(pawn);
+    mesh(body, shadow, pawn).position.y = 0.35;
+    mesh(head, shadow, pawn).position.y = 0.88;
+    const particles = Array.from({ length: 28 }, () =>
+        mesh(jewel, glow, effect),
+    );
+    let active: RitualCosmeticEvent | null = null;
+    let elapsed = 0;
+    const origin = new THREE.Vector3();
+    effect.visible = false;
+
+    return {
+        table(id: string) {
+            motifs.forEach(({ crown, crescent, leaves }) => {
+                crown.visible = id === 'founders_oak';
+                crescent.visible = id === 'moonlit';
+                leaves.visible = id === 'harvest';
+            });
+            return id === 'moonlit'
+                ? 0x7e8dad
+                : id === 'harvest'
+                  ? 0xe6ad6a
+                  : id === 'founders_oak'
+                    ? 0xddbf84
+                    : 0xc3b39a;
+        },
+        play(event: RitualCosmeticEvent | null, seats: RitualSceneSeat[]) {
+            if (event?.id === active?.id) return;
+            active = event;
+            elapsed = 0;
+            effect.visible = !!event;
+            const seat = seats.find((seat) => seat.id === event?.player_id);
+            origin.set(
+                seat ? (seat.x - 0.5) * 10 : 0,
+                0.25,
+                seat ? (seat.y - 0.5) * 7.2 : 0,
+            );
+            const lunar =
+                event?.effect === 'lunar_rift' || event?.effect === 'moonrise';
+            const harvest =
+                event?.effect === 'ember_spiral' ||
+                event?.effect === 'lantern_festival';
+            glow.color.setHex(lunar ? 0xc5c5ff : harvest ? 0xffb75e : 0xf5ce7a);
+            glow.emissive.setHex(
+                lunar ? 0x8071db : harvest ? 0xc25a23 : 0xc68b37,
+            );
+            particles.forEach((particle) => {
+                particle.geometry =
+                    event?.effect === 'lantern_festival'
+                        ? lantern
+                        : event?.effect === 'crownfall'
+                          ? crown
+                          : jewel;
+            });
+        },
+        update(delta: number, reduced: boolean) {
+            const event = active;
+            if (!event) return;
+            elapsed += reduced ? 0 : delta;
+            const progress = reduced ? 0.45 : Math.min(1, elapsed / 3.2);
+            effect.visible = reduced || progress < 1;
+            const banish = event.kind === 'banishment';
+            const fade = reduced
+                ? 1
+                : Math.min(1, progress * 8, (1 - progress) * 6);
+            glow.opacity = fade;
+            shadow.opacity = fade;
+            pawn.visible = banish;
+            pawn.position.copy(origin).multiplyScalar(1 - progress);
+            pawn.position.y =
+                0.3 + Math.sin(progress * Math.PI) * 1.4 - progress * 0.4;
+            pawn.scale.setScalar(Math.max(0.03, 1 - progress));
+            pawn.rotation.y = progress * Math.PI * 3;
+            halo.position.copy(
+                banish ? pawn.position : new THREE.Vector3(0, 0.35, 0),
+            );
+            halo.scale.setScalar(
+                banish
+                    ? 1.2 + Math.sin(progress * Math.PI) * 2
+                    : 3 + progress * 4,
+            );
+            risingMoon.visible = event.effect === 'moonrise';
+            risingMoon.position.set(0, 0.6 + progress * 3.5, 0);
+            risingMoon.scale.setScalar(2);
+            particles.forEach((particle, i) => {
+                const angle = i * 2.4 + progress * Math.PI * (banish ? 5 : 0.8);
+                if (banish) {
+                    const radius =
+                        (0.3 + (i % 5) * 0.12) * Math.sin(progress * Math.PI);
+                    particle.position.set(
+                        pawn.position.x + Math.cos(angle) * radius,
+                        pawn.position.y + (i % 7) * 0.12,
+                        pawn.position.z + Math.sin(angle) * radius,
+                    );
+                    if (event.effect === 'lunar_rift')
+                        particle.position.x =
+                            pawn.position.x + Math.cos(angle) * radius * 0.2;
+                    if (event.effect === 'ember_spiral')
+                        particle.position.y += progress * (i % 4);
+                } else {
+                    const radius = 0.5 + (i % 7) * 0.57;
+                    particle.position.set(
+                        Math.cos(angle) * radius,
+                        event.effect === 'crownfall'
+                            ? 3.8 - progress * 3.3 + (i % 3) * 0.2
+                            : 0.5 + progress * (1.8 + (i % 4)),
+                        Math.sin(angle) * radius * 0.7,
+                    );
+                }
+                particle.rotation.set(
+                    event.effect === 'lantern_festival' ? 0 : progress * 4 + i,
+                    angle,
+                    event.effect === 'lantern_festival' ? 0 : i,
+                );
+                particle.scale.setScalar(
+                    event.effect === 'crownfall' ? 0.8 : 0.5 + (i % 3) * 0.2,
+                );
+            });
+        },
+        dispose() {
+            scene.remove(ornaments, effect);
+            geometries.forEach((value) => value.dispose());
+            materials.forEach((value) => value.dispose());
+        },
+    };
+}

@@ -17,7 +17,8 @@ class CharacterCustomizerTest extends TestCase
 {
     use RefreshDatabase;
 
-    private array $outfit = ['title' => 'newcomer', 'frame' => 'plain', 'accent' => 'storm', 'background' => 'harbor', 'character' => 'mariner', 'creator' => null];
+    private array $outfit = ['title' => 'newcomer', 'frame' => 'plain', 'accent' => 'storm', 'background' => 'harbor',
+        'table' => 'classic', 'banishment' => 'classic', 'celebration' => 'classic', 'character' => 'mariner', 'creator' => null];
 
     protected function setUp(): void
     {
@@ -35,7 +36,7 @@ class CharacterCustomizerTest extends TestCase
         $this->flushSession();
         $this->actingAs($user)->get('/progression')->assertInertia(fn (Assert $page) => $page
             ->where('progression.profile.equipped', $this->outfit)
-            ->has('progression.cosmetics.backgrounds', 6));
+            ->has('progression.cosmetics.backgrounds', 9));
         $code = $this->postJson('/rooms', ['name' => 'Mara'])->assertCreated()->json('code');
         $this->getJson('/rooms/'.$code.'/state')->assertOk()
             ->assertJsonPath('me.character', 'mariner')
@@ -50,7 +51,8 @@ class CharacterCustomizerTest extends TestCase
         $progression->rememberCharacter($user->id, 'archivist');
         $legacy = ['title' => 'newcomer', 'frame' => 'plain', 'accent' => 'sea', 'character' => 'archivist'];
         PlayerProfile::findOrFail($user->id)->update(['customization' => $legacy]);
-        $this->assertEquals([...$legacy, 'background' => 'plain', 'creator' => null], $progression->view($user->id)['profile']['equipped']);
+        $this->assertEquals([...$legacy, 'background' => 'plain', 'creator' => null,
+            'table' => 'classic', 'banishment' => 'classic', 'celebration' => 'classic'], $progression->view($user->id)['profile']['equipped']);
         $this->assertSame('plain', $progression->appearance($user->id)['background']);
         $this->actingAs($user)->postJson('/account/customization', $legacy)->assertOk()
             ->assertJsonPath('progression.profile.equipped.background', 'plain');

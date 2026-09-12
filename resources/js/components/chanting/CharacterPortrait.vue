@@ -25,8 +25,10 @@ const portraitImages: Record<string, string> = {
     maskmaker: '/assets/chanting/unlocks/maskmaker-illustrated.png',
     drowned_regent: '/assets/chanting/unlocks/drowned_regent-illustrated.png',
     seasonal_warden: '/assets/chanting/unlocks/seasonal_warden-illustrated.png',
-    seasonal_cultist: '/assets/chanting/unlocks/seasonal_cultist-illustrated.png',
-    seasonal_oathkeeper: '/assets/chanting/unlocks/seasonal_oathkeeper-illustrated.png',
+    seasonal_cultist:
+        '/assets/chanting/unlocks/seasonal_cultist-illustrated.png',
+    seasonal_oathkeeper:
+        '/assets/chanting/unlocks/seasonal_oathkeeper-illustrated.png',
 };
 const portraitImage = computed(() => portraitImages[props.character]);
 const label = computed(() =>
@@ -75,6 +77,7 @@ const artwork = computed(() => {
             'portrait-frame-copper': frame === 'copper',
             'portrait-frame-lantern': frame === 'lantern',
             'portrait-frame-tidal': frame === 'tidal',
+            'portrait-frame-founder': frame === 'founder',
         }"
         :role="decorative ? undefined : 'img'"
         :aria-hidden="decorative || undefined"
@@ -105,6 +108,27 @@ const artwork = computed(() => {
     </span>
 </template>
 <style scoped>
+.character-portrait.portrait-frame-founder {
+    outline: 3px double #ddbd70;
+    outline-offset: 3px;
+    box-shadow:
+        0 0 0 7px #33483c,
+        0 0 0 8px #aa8a43;
+}
+.portrait-frame-founder::after {
+    content: '♛';
+    position: absolute;
+    z-index: 1;
+    top: -15px;
+    left: 50%;
+    transform: translateX(-50%);
+    font:
+        17px Georgia,
+        serif;
+    line-height: 1;
+    color: #f1d795;
+    text-shadow: 0 1px 3px #18271e;
+}
 .character-portrait.portrait-frame-copper {
     outline: 2px solid #b58561;
     outline-offset: 2px;

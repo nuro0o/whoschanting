@@ -1319,6 +1319,8 @@ onBeforeUnmount(() => {
         <main v-else class="game-main">
             <div class="immersive-table-stage" aria-label="Village table">
                 <CardTable
+                    :match-id="state.match_id"
+                    :cosmetics="state.cosmetics"
                     :haunted-seat-id="state.me.haunting?.seat_id ?? null"
                     :class="{ 'is-mist-cursed': mistCursed }"
                     :players="state.players"

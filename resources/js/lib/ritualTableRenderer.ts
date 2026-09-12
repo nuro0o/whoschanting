@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { createTableCosmetics } from './ritualCosmetics';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import {
     poseRimTentacle,
@@ -13,11 +14,13 @@ import {
 } from './tableChat';
 import type {
     RitualSceneSeat,
+    RitualCosmeticEvent,
     RitualSceneState,
     RitualTableDisplay,
 } from './ritualSceneState';
 
 export interface RitualTableRenderer {
+    updateCosmetics: (table: string, event: RitualCosmeticEvent | null) => void;
     update: (state: RitualSceneState, seats: RitualSceneSeat[]) => void;
     updateDisplay: (display?: RitualTableDisplay) => void;
     updateBubbles: (bubbles: TableChatBubble[]) => void;
@@ -49,6 +52,7 @@ export function createRitualTable(
         antialias: true,
     });
     const scene = new THREE.Scene();
+    let cosmetics: ReturnType<typeof createTableCosmetics> | undefined;
     const geometries = new Set<THREE.BufferGeometry>();
     const materials = new Set<THREE.Material>();
     const textures = new Set<THREE.Texture>();
@@ -172,6 +176,7 @@ export function createRitualTable(
         canvas.removeEventListener('keydown', keydown);
         controls.removeEventListener('change', cameraChanged);
         controls.dispose();
+        cosmetics?.dispose();
         geometries.forEach((geometry) => geometry.dispose());
         materials.forEach((material) => material.dispose());
         textures.forEach((texture) => texture.dispose());
@@ -505,6 +510,8 @@ export function createRitualTable(
         textures.add(woodTexture);
         const wood = standard(0xc3b39a);
         wood.map = woodTexture;
+        cosmetics = createTableCosmetics(scene);
+        cosmetics.table('classic');
         const brass = standard(0x91815a, 0.72, 0.42);
         const black = standard(0x111f20, 0.25);
         const oval = new THREE.Group();
@@ -857,6 +864,7 @@ export function createRitualTable(
 
         function render(delta = 0) {
             if (disposed) return;
+            cosmetics?.update(delta, motion.matches);
             drawDial();
             const sealScale = display ? 1.62 : 1;
             seal.scale.set(sealScale, 1, sealScale);
@@ -986,6 +994,12 @@ export function createRitualTable(
         motion.addEventListener('change', changeMotion);
         schedule();
         return {
+            updateCosmetics(table, event) {
+                if (disposed || !cosmetics) return;
+                wood.color.setHex(cosmetics.table(table));
+                cosmetics.play(event, seats);
+                schedule();
+            },
             update(next, nextSeats) {
                 if (disposed) return;
                 const oldRuneCount = state.runeCount;

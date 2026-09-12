@@ -241,7 +241,7 @@ class ProgressionTest extends TestCase
         $this->getJson('/rooms/'.$room->code.'/state')->assertForbidden();
         $public = $engine->access($room->code, 'device-two', accountId: $user->id);
         $this->assertArrayNotHasKey('user_id', $public['players'][0]);
-        $this->assertSame(['level', 'title', 'title_name', 'frame', 'accent', 'background'], array_keys($public['players'][0]['customization']));
+        $this->assertSame(['level', 'title', 'title_name', 'frame', 'accent', 'background', 'table', 'banishment', 'celebration'], array_keys($public['players'][0]['customization']));
 
         $guest = $engine->create('guest', 'Guest');
         $engine->join($guest->code, 'guest', 'Guest', accountId: $other->id);

@@ -63,3 +63,44 @@ export interface RitualSceneSeat {
     y: number;
     alive: boolean;
 }
+
+export interface RitualCosmeticEvent {
+    id: string;
+    kind: 'banishment' | 'celebration';
+    player_id: string;
+    effect: string;
+    created_at: string;
+}
+
+/** Initial/reconnected snapshots establish a baseline; only live, fresh events play. */
+export function createCosmeticEventStream() {
+    let match: string | null | undefined;
+    const seen = new Set<string>();
+    return {
+        consume(
+            matchId: string | null,
+            events: RitualCosmeticEvent[],
+            serverTime: string,
+        ) {
+            const baseline = match !== matchId;
+            if (baseline) {
+                match = matchId;
+                seen.clear();
+            }
+            const now = Date.parse(serverTime);
+            const fresh = events.filter((event) => {
+                if (seen.has(event.id)) return false;
+                seen.add(event.id);
+                const age = now - Date.parse(event.created_at);
+                return (
+                    !baseline &&
+                    Number.isFinite(age) &&
+                    age >= 0 &&
+                    age < 20_000
+                );
+            });
+            // The server emits in resolution order: final banishment, then victory.
+            return fresh;
+        },
+    };
+}

@@ -2,6 +2,7 @@
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import type {
     RitualSceneSeat,
+    RitualCosmeticEvent,
     RitualSceneState,
     RitualTableDisplay,
 } from '@/lib/ritualSceneState';
@@ -14,6 +15,8 @@ const props = defineProps<{
     interactive?: boolean;
     display?: RitualTableDisplay;
     bubbles?: TableChatBubble[];
+    table?: string;
+    effect?: RitualCosmeticEvent | null;
 }>();
 const emit = defineEmits<{
     ready: [ready: boolean];
@@ -52,6 +55,10 @@ async function start() {
             props.display,
         );
         renderer.updateBubbles(props.bubbles ?? []);
+        renderer.updateCosmetics(
+            props.table ?? 'classic',
+            props.effect ?? null,
+        );
         emit('ready', true);
     } catch {
         if (!mounted || current !== generation) return;
@@ -60,6 +67,14 @@ async function start() {
     }
 }
 watch(() => props.interactive, start);
+watch(
+    () => [props.table, props.effect],
+    () =>
+        renderer?.updateCosmetics(
+            props.table ?? 'classic',
+            props.effect ?? null,
+        ),
+);
 defineExpose({ resetView: () => renderer?.resetView() });
 watch(
     () => props.bubbles,

@@ -2,6 +2,9 @@ import type { CreatorCatalog, CreatorRecipe } from './creator';
 import type { Character } from './chanting';
 
 export interface EquippedCosmetics {
+    table?: string;
+    banishment?: string;
+    celebration?: string;
     title: string;
     frame: string;
     accent: string;
@@ -10,6 +13,9 @@ export interface EquippedCosmetics {
     creator?: CreatorRecipe | null;
 }
 export interface PublicCustomization {
+    table?: string;
+    banishment?: string;
+    celebration?: string;
     creator?: CreatorRecipe | null;
     level: number;
     title: string;
@@ -47,7 +53,25 @@ export interface StoreItem {
     owned: boolean;
     affordable: boolean;
 }
+export interface StoreBundle {
+    id: string;
+    name: string;
+    description: string;
+    amount: number;
+    currency: 'eur';
+    owned: boolean;
+    available: boolean;
+    cosmetics: { category: string; id: string; name: string }[];
+}
+export type CheckoutStatus =
+    | 'pending'
+    | 'paid'
+    | 'refunded'
+    | 'disputed'
+    | 'expired'
+    | 'failed';
 export interface StoreData {
+    bundles?: StoreBundle[];
     currency: 'Crowns';
     balance: number;
     lifetime_earned: number;
@@ -124,6 +148,9 @@ export interface ProgressionData {
         earned_at: string | null;
     }[];
     cosmetics: {
+        tables?: Cosmetic[];
+        banishments?: Cosmetic[];
+        celebrations?: Cosmetic[];
         titles: Cosmetic[];
         frames: Cosmetic[];
         accents: Cosmetic[];
@@ -132,6 +159,9 @@ export interface ProgressionData {
     recent_rewards: MatchReward[];
 }
 export const cosmeticAccents: Record<string, string> = {
+    founder_gold: '#ddbd70',
+    lunar_violet: '#b3a0dd',
+    harvest_amber: '#e0a85f',
     sea: '#a8bd9d',
     storm: '#7eabb9',
     clay: '#c69b88',
@@ -142,6 +172,9 @@ export const cosmeticAccents: Record<string, string> = {
     patina: '#6faeaa',
 };
 export const cosmeticBackgrounds: Record<string, string> = {
+    founders_hall: 'linear-gradient(145deg, #dfca91, #7f7047 52%, #263c31)',
+    moonlit_coven: 'linear-gradient(145deg, #c4b6ea, #645785 52%, #272741)',
+    harvest_glow: 'linear-gradient(145deg, #f0cc8e, #a5713b 52%, #483525)',
     plain: '#263831',
     harbor: 'linear-gradient(145deg, #c0cebf, #526f73 52%, #213c42)',
     dusk: 'linear-gradient(145deg, #aa859b, #55516b 52%, #252b40)',

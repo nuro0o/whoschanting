@@ -32,14 +32,60 @@ Match credits and purchases use the same locked profile row as progression and c
 
 Keep product IDs stable and retain definitions for previously sold cosmetics so owners can continue to equip them. A future rotating storefront should separate whether an item is offered from whether an owner can use it.
 
-## Optional paid additions
+## Paid bundles and shared table cosmetics
 
-The page labels microtransactions, cosmetic season passes, and a supporter subscription as **Coming later**. There is no paid checkout, recurring billing, paid currency, or active premium pass in this release. The existing quarterly progression track remains available to everyone.
+The store also offers three permanent, one-time bundles through Stripe Checkout:
 
-Future payment integration should grant cosmetic entitlements from verified payment events, with its own unique transaction references and refund handling. A season pass can add an optional cosmetic reward track while keeping the existing free track. Any subscription benefits should remain cosmetic. Purchases must never improve roles, abilities, matchmaking, win chances, XP gain, or Crown earnings.
+| Bundle           | Price    | Cosmetics                                                                                                       |
+| ---------------- | -------- | --------------------------------------------------------------------------------------------------------------- |
+| Founder's Pack   | EUR 7.99 | Founder title and frame, gold accent, hall backdrop, oak table, Gilded Vortex banishment, Crownfall celebration |
+| Moonlit Coven    | EUR 4.99 | Violet accent, moonlit backdrop and table, Lunar Rift banishment, Moonrise celebration                          |
+| Harvest Festival | EUR 4.99 | Amber accent, harvest backdrop and table, Ember Spiral banishment, Lantern Festival celebration                 |
+
+Each collection has a real Three.js preview. Wardrobe selections are independent: mix a table from one bundle with effects from another. The host's equipped table is snapshotted at match start; later wardrobe changes apply on the next gathering. Banishment uses the voted-out player's effect. At victory, the server chooses uniformly once among all winning-faction players, including eliminated winners, and persists that player's equipped celebration. Default effects remain free. A final vote queues the banishment before the victory celebration. Polls and reconnects do not replay historical effects. Reduced-motion settings use static compositions; a WebGL failure leaves the game and text announcements usable.
+
+Bundles do not grant Crowns, XP, roles, abilities, improved matchmaking or win chances. The current Crown catalog, earning rates and quarterly free progression track remain available. Subscriptions, paid Crown top-ups and season passes are not implemented.
+
+## Stripe configuration
+
+Set the following server environment values, also listed in `.env.example`:
+
+```dotenv
+STRIPE_SECRET_KEY=your_account_secret_key
+STRIPE_WEBHOOK_SECRET=your_whoschanting_endpoint_signing_secret
+STRIPE_PRICE_FOUNDERS_PACK=price_...
+STRIPE_PRICE_MOONLIT_COVEN=price_...
+STRIPE_PRICE_HARVEST_FESTIVAL=price_...
+STRIPE_AUTOMATIC_TAX=false
+```
+
+Create separate active **one-time EUR Prices** for 799, 499 and 499 cents. These must match `config/payments.php`; checkout checks Stripe's price, currency and billing type before creating a session. Configure tax behavior on those Prices and enable `STRIPE_AUTOMATIC_TAX=true` if Stripe Tax is configured for the account. Stripe Checkout displays the final total. Set `APP_URL` to the correct public HTTPS origin for redirects. The browser receives neither secret keys nor Price IDs. A bundle's purchase button stays unavailable until its Price ID, account key and webhook secret are configured; previews remain available.
+
+Register a dedicated event destination at `https://YOUR_GAME_DOMAIN/stripe/webhook` for:
+
+- `checkout.session.completed`
+- `checkout.session.async_payment_succeeded`
+- `checkout.session.async_payment_failed`
+- `checkout.session.expired`
+- `charge.refunded`
+- `charge.dispute.created`
+
+Use this endpoint's own `whsec_...` signing secret, not Geniousverse's endpoint secret. For local testing, forward those events with Stripe CLI to `http://127.0.0.1:8000/stripe/webhook`, use the CLI's signing secret and test-mode keys/Prices. Complete a test Checkout payment and verify one bundle unlock, retry delivery, delayed confirmation and a full refund before enabling live purchases. See [Stripe fulfillment](https://docs.stripe.com/checkout/fulfillment) and [webhook signing](https://docs.stripe.com/webhooks).
+
+When reusing the Geniousverse Stripe account, deploy the compatibility guard added to `apps/GeniousverseApp/app/Http/Controllers/Billing/StripeBillingWebhookController.php` in the adjacent Geniousverse repository. It verifies the signature and then ignores events tagged `metadata.source_app=whoschanting`, so the existing subscription handler does not reject game checkouts. The game similarly ignores unrelated checkout events. The two applications keep separate users, orders and webhook endpoints; there is no shared subscription or login integration. No Stripe dashboard settings are changed by this implementation. The existing account key can be reused, but each endpoint needs its own signing secret.
+
+## Payment lifecycle
+
+`POST /account/store/checkout` accepts only a bundle ID. A durable UUID order snapshots its Price, amount, currency, cosmetics and exact Checkout parameters. Requests retry with the same Stripe idempotency key; an open session is reused, a processing payment blocks another payment for that bundle, and owned bundles cannot be purchased again. Orders without a recorded session older than 23 hours require support verification instead of risking reuse beyond Stripe's idempotency retention window.
+
+The success redirect does not grant ownership. Signed events and the authenticated `GET /account/store/status?session_id=...` endpoint retrieve the Stripe session and verify its order metadata, payment status, line item and price. Status reads are scoped to the current verified account. The store polls briefly and offers manual refresh for delayed payments. Repeated events preserve one ownership grant and its original paid timestamp.
+
+`paid_orders` contains the entitlement source and payment references; only orders with status `paid` unlock their snapshot cosmetics. Full refunds and disputes revoke those entitlements, and late completion events cannot restore them. Partial refunds preserve the bundle. Dispute resolution currently requires support review; a won dispute does not automatically restore the order. Refunds also sanitize saved paid selections on the next profile read or room appearance snapshot. Active matches retain their original cosmetic snapshots. Retired bundles retain previously purchased cosmetics; keep their renderer definitions and cosmetic IDs stable.
 
 ## Deployment and checks
 
-Run `php artisan migrate`, rebuild with `npm run build`, and restart long-running game and queue workers. New installations apply the store migration with the other migrations. The crown cooldown migration adds nullable state to player profiles. Run migrations before starting the updated workers. There is no new scheduler task or environment secret.
+Run `php artisan migrate`, rebuild with `npm run build`, refresh cached configuration and restart long-running game and queue workers. The paid-order migration must run before the updated profile/store or game code is served. There is no new scheduler task. Configure Stripe as above to enable payments.
 
 Feature coverage in `CosmeticStoreTest`, `ProgressionTest`, `CrownCooldownTest`, and `RoomNetworkTest` checks eligibility, real match awards, retries, rollback, insufficient funds, server pricing, account isolation, permanent ownership, wardrobe validation, and account deletion. The standard SQLite feature suite checks transaction behavior and retry semantics; it does not prove production MySQL row-lock behavior.
+
+`StripeCheckoutTest` covers payment verification, ownership, shared-account isolation, duplicates, pending payments, full/partial refunds, disputes and retired bundles using mocked Stripe responses. `MatchCosmeticsTest` runs a match through start, final vote, victory, all viewers and rematch. JavaScript tests cover event deduplication, ordering, bounded Three.js resources and reduced motion. Browser checks use actual Vue components and WebGL with fixture APIs; they do not replace a Stripe test-mode payment.

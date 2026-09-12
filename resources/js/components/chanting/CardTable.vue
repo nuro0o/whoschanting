@@ -17,7 +17,11 @@ import {
 } from '@/lib/chanting';
 import CharacterPortrait from './CharacterPortrait.vue';
 import RitualTableScene from './RitualTableScene.vue';
-import { ritualSceneState } from '@/lib/ritualSceneState';
+import {
+    createCosmeticEventStream,
+    ritualSceneState,
+    type RitualCosmeticEvent,
+} from '@/lib/ritualSceneState';
 import type { RitualTableDisplay } from '@/lib/ritualSceneState';
 import { createTableChat, type TableChatBubble } from '@/lib/tableChat';
 
@@ -41,12 +45,53 @@ const props = defineProps<{
     canSelect: boolean;
     eligibleTargetIds?: string[];
     hauntedSeatId?: string | null;
+    matchId?: string | null;
+    cosmetics?: RoomState['cosmetics'];
 }>();
 const emit = defineEmits<{ select: [id: string]; inspect: [id: string] }>();
 const scene = ref<InstanceType<typeof RitualTableScene>>();
 const projectedSeats = ref<{ left: string; top: string }[]>([]);
 const sceneReady = ref(false);
 const sceneUnavailable = ref(false);
+const cosmeticStream = createCosmeticEventStream();
+const activeEffect = ref<RitualCosmeticEvent | null>(null);
+const effectQueue: RitualCosmeticEvent[] = [];
+let effectTimer: ReturnType<typeof setTimeout> | undefined;
+let effectMatch: string | null | undefined;
+function nextEffect() {
+    activeEffect.value = effectQueue.shift() ?? null;
+    if (activeEffect.value) effectTimer = setTimeout(nextEffect, 3400);
+}
+watch(
+    () => [props.cosmetics, props.matchId],
+    () => {
+        if (effectMatch !== props.matchId) {
+            effectMatch = props.matchId;
+            clearTimeout(effectTimer);
+            effectQueue.length = 0;
+            activeEffect.value = null;
+        }
+        effectQueue.push(
+            ...cosmeticStream.consume(
+                props.matchId ?? null,
+                props.cosmetics?.events ?? [],
+                props.serverTime ?? '',
+            ),
+        );
+        if (!activeEffect.value) nextEffect();
+    },
+    { immediate: true },
+);
+const effectCaption = computed(() => {
+    const event = activeEffect.value;
+    if (!event) return '';
+    const player =
+        props.players.find((player) => player.id === event.player_id)?.name ??
+        'A villager';
+    return event.kind === 'banishment'
+        ? `${player} was banished by the village.`
+        : `${player} brings the winning side’s celebration.`;
+});
 const chat = createTableChat();
 const chatBubbles = ref<TableChatBubble[]>([]);
 let chatExpiry: ReturnType<typeof setTimeout> | undefined;
@@ -180,6 +225,7 @@ watch(
     },
 );
 onBeforeUnmount(() => {
+    clearTimeout(effectTimer);
     clearTimeout(chatExpiry);
     document.removeEventListener('visibilitychange', expireChat);
     timers.forEach(clearTimeout);
@@ -212,8 +258,12 @@ onBeforeUnmount(() => {
             The 3D table could not load. Try refreshing the page. You can still
             use the player controls and chat.
         </p>
+        <p class="table-effect-caption" role="status" aria-live="polite">
+            {{ effectCaption }}
+        </p>
         <div
             class="card-table"
+            :data-table="cosmetics?.table ?? 'classic'"
             :class="{
                 'is-night': phase === 'night',
                 'is-small': players.length <= 4,
@@ -243,6 +293,8 @@ onBeforeUnmount(() => {
                 :seats="sceneSeats"
                 :display="display"
                 :bubbles="chatBubbles"
+                :table="cosmetics?.table ?? 'classic'"
+                :effect="activeEffect"
                 @positions="projectedSeats = $event"
                 @ready="sceneReady = $event"
                 @unavailable="unavailable"
@@ -553,6 +605,13 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
+.table-effect-caption {
+    min-height: 1.5em;
+    margin: 4px 18px 0;
+    color: #ead49b;
+    font-size: 13px;
+    text-align: center;
+}
 .player-inspection {
     margin: 16px 20px;
 }

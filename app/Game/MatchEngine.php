@@ -345,6 +345,7 @@ class MatchEngine
                 'mission' => null, 'awards' => [], 'messages' => [], 'log' => ['The village gathers again.'], 'cult_banished' => false]);
             unset($s['match_id'], $s['match_rules'], $s['started_at'], $s['finished_at'], $s['rounds'], $s['missed_actions'], $s['chaos_event'], $s['match_rewards']);
             unset($s['claims'], $s['responses'], $s['predictions'], $s['feedback'], $s['discussion_extension']);
+            unset($s['cosmetic_table'], $s['cosmetic_events']);
             $this->phase($room, $s, 'lobby');
 
             return;
@@ -374,6 +375,8 @@ class MatchEngine
             $s['mission'] = $count <= config('game.small_gathering_max_players')
                 ? config('game.small_gathering_mission') : $missions[array_rand($missions)];
             $s['match_id'] = (string) Str::uuid();
+            $s['cosmetic_table'] = MatchCosmetics::choice($s['players'][$s['host_id']] ?? [], 'table');
+            $s['cosmetic_events'] = [];
             $s['match_rules'] = ['version' => config('game.rules_version'), 'player_count' => $count,
                 'seconds' => $this->modes->phaseSeconds($count), 'roster' => $s['roster'] ?? 'classic', 'mode_setup' => $setup];
             if ($setup['mode'] === 'paranoia') {
@@ -829,6 +832,7 @@ class MatchEngine
         if (count($top) === 1 && $top[0] !== 'abstain') {
             $id = $top[0];
             $banished = $id;
+            MatchCosmetics::banish($s, $id);
             $s['players'][$id]['alive'] = false;
             $s['players'][$id]['curse'] = null;
             $s['cult_banished'] = $s['players'][$id]['alignment'] === 'cult';
@@ -866,6 +870,7 @@ class MatchEngine
             }
             unset($player);
             $s['finished_at'] = now()->toISOString();
+            MatchCosmetics::celebrate($s);
             $this->archive($room, $s);
             $this->phase($room, $s, 'finished');
             $s['log'][] = $s['win_reason'];
@@ -975,6 +980,7 @@ class MatchEngine
             'roster' => $s['roster'] ?? 'classic',
             'mode_setup' => $setup, 'mode_preview' => $preview, 'chaos_event' => $s['chaos_event'] ?? null,
             'server_time' => now()->toISOString(), 'host_id' => $s['host_id'],
+            'cosmetics' => MatchCosmetics::view($s),
             'table' => $this->table->view($s, $id),
             'ritual' => ['tokens' => $s['tokens'], 'threshold' => $s['threshold'], 'level' => $this->curses->level($s['tokens'], $s['threshold']),
                 'final_vote' => $s['threshold'] > 0 && $s['tokens'] >= $s['threshold'] && in_array($s['phase'], ['discussion', 'last_words', 'voting'], true)],

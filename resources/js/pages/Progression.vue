@@ -12,6 +12,14 @@ import {
 } from '@lucide/vue';
 import { computed, reactive, ref } from 'vue';
 import CharacterPortrait from '@/components/chanting/CharacterPortrait.vue';
+import CosmeticScenePreview from '@/components/chanting/CosmeticScenePreview.vue';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog';
 import SealedCharacter from '@/components/chanting/SealedCharacter.vue';
 import CreatorMirror from '@/components/chanting/CreatorMirror.vue';
 import {
@@ -70,6 +78,9 @@ const availableCharacters = computed(
 const draft = reactive({
     ...data.value.profile.equipped,
     background: data.value.profile.equipped.background ?? 'plain',
+    table: data.value.profile.equipped.table ?? 'classic',
+    banishment: data.value.profile.equipped.banishment ?? 'classic',
+    celebration: data.value.profile.equipped.celebration ?? 'classic',
     creator: data.value.profile.equipped.creator
         ? { ...data.value.profile.equipped.creator }
         : null,
@@ -77,6 +88,7 @@ const draft = reactive({
 const pending = ref(false);
 const error = ref('');
 const saved = ref(false);
+const tablePreviewOpen = ref(false);
 const previewElement = ref<HTMLElement | null>(null);
 const tab = ref<'wardrobe' | 'achievements' | 'season'>('wardrobe');
 const tabs = [
@@ -89,7 +101,10 @@ const changed = computed(() =>
         (key) =>
             JSON.stringify(draft[key as keyof typeof draft] ?? null) !==
             JSON.stringify(
-                data.value.profile.equipped[key as keyof typeof draft] ?? null,
+                data.value.profile.equipped[key as keyof typeof draft] ??
+                    (['table', 'banishment', 'celebration'].includes(key)
+                        ? 'classic'
+                        : null),
             ),
     ),
 );
@@ -137,7 +152,23 @@ const groups = [
     { field: 'background', catalog: 'backgrounds', name: 'Portrait backdrop' },
     { field: 'frame', catalog: 'frames', name: 'Portrait frame' },
     { field: 'title', catalog: 'titles', name: 'Your title' },
+    { field: 'table', catalog: 'tables', name: 'Your gathering table' },
+    { field: 'banishment', catalog: 'banishments', name: 'Your farewell' },
+    {
+        field: 'celebration',
+        catalog: 'celebrations',
+        name: 'Your victory celebration',
+    },
 ] as const;
+const cosmeticHelp: Record<string, string> = {
+    background:
+        'A colored mat around your portrait, keeping the original artwork intact.',
+    table: 'Everyone enjoys your table when you host. Your saved look joins your next gathering.',
+    banishment:
+        'A short 3D farewell when the village votes you out. It never reveals your allegiance.',
+    celebration:
+        'At the end of a match, one winner is chosen at random and their celebration plays for everyone. Banished winners are included.',
+};
 const previewCharacter = computed(
     () => draft.character ?? characters.value[0]?.id ?? 'fisherman',
 );
@@ -150,6 +181,9 @@ const characterName = computed(() =>
 function revert() {
     if (pending.value) return;
     Object.assign(draft, data.value.profile.equipped, {
+        table: data.value.profile.equipped.table ?? 'classic',
+        banishment: data.value.profile.equipped.banishment ?? 'classic',
+        celebration: data.value.profile.equipped.celebration ?? 'classic',
         creator: data.value.profile.equipped.creator
             ? { ...data.value.profile.equipped.creator }
             : null,
@@ -196,6 +230,11 @@ async function save() {
         );
         data.value = result.progression;
         Object.assign(draft, result.progression.profile.equipped, {
+            table: result.progression.profile.equipped.table ?? 'classic',
+            banishment:
+                result.progression.profile.equipped.banishment ?? 'classic',
+            celebration:
+                result.progression.profile.equipped.celebration ?? 'classic',
             creator: result.progression.profile.equipped.creator
                 ? { ...result.progression.profile.equipped.creator }
                 : null,
@@ -672,11 +711,10 @@ function moveTab(event: KeyboardEvent, index: number) {
                     >
                         <legend>{{ group.name }}</legend>
                         <p
-                            v-if="group.field === 'background'"
+                            v-if="cosmeticHelp[group.field]"
                             class="wardrobe-help"
                         >
-                            A colored mat around your portrait, keeping the
-                            original artwork intact.
+                            {{ cosmeticHelp[group.field] }}
                         </p>
                         <div
                             class="wardrobe-options"
@@ -748,6 +786,24 @@ function moveTab(event: KeyboardEvent, index: number) {
                             /></label>
                         </div>
                     </fieldset>
+                    <div
+                        v-if="data.cosmetics.tables?.length"
+                        class="wardrobe-table-preview"
+                    >
+                        <div>
+                            <p class="account-kicker">
+                                Bring your gathering to life
+                            </p>
+                            <p>
+                                Try your selected table, farewell and victory
+                                celebration together before saving.
+                            </p>
+                        </div>
+                        <button type="button" @click="tablePreviewOpen = true">
+                            <Sparkles :size="15" aria-hidden="true" /> Preview
+                            your table
+                        </button>
+                    </div>
                     <p v-if="error" class="wardrobe-error" role="alert">
                         {{ error }}
                     </p>
@@ -1020,10 +1076,59 @@ function moveTab(event: KeyboardEvent, index: number) {
                 </p>
             </div>
         </aside>
+        <Dialog v-model:open="tablePreviewOpen">
+            <DialogContent class="account-theme wardrobe-scene-dialog">
+                <DialogHeader
+                    ><DialogTitle>Your gathering, in your style.</DialogTitle
+                    ><DialogDescription
+                        >Preview your selected cosmetics. Close this preview and
+                        save your wardrobe to wear them.</DialogDescription
+                    ></DialogHeader
+                >
+                <CosmeticScenePreview
+                    v-if="tablePreviewOpen"
+                    :table="draft.table"
+                    :banishment="draft.banishment"
+                    :celebration="draft.celebration"
+                />
+            </DialogContent>
+        </Dialog>
     </div>
 </template>
 
 <style scoped>
+:global(.account-theme.wardrobe-scene-dialog) {
+    max-width: min(660px, calc(100vw - 2rem));
+    max-height: calc(100dvh - 2rem);
+    overflow-y: auto;
+}
+.wardrobe-table-preview {
+    padding: 20px;
+    background: var(--account-deep);
+    border: 1px solid var(--account-line);
+    margin-bottom: 24px;
+}
+.wardrobe-table-preview div > p:last-child {
+    color: var(--account-muted);
+    font-size: 12px;
+    line-height: 1.8;
+    margin: 7px 0 12px;
+}
+.wardrobe-table-preview button {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 12px;
+    cursor: pointer;
+    text-decoration: underline;
+    text-underline-offset: 4px;
+    color: var(--account-green);
+    padding-block: 7px;
+}
+.wardrobe-table-preview button:focus-visible {
+    outline: 2px solid var(--account-green);
+    outline-offset: 4px;
+}
 .reputation-store-link {
     display: flex;
     align-items: center;

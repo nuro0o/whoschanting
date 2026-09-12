@@ -3,6 +3,7 @@ import type { CreatorRecipe } from './creator';
 import type { ChaosEvent, ModeSetup } from './gameModes';
 import type { MatchReward, PublicCustomization } from './progression';
 import type { TableChatMessage } from './tableChat';
+import type { RitualCosmeticEvent } from './ritualSceneState';
 
 export class RoomError extends Error {
     constructor(
@@ -226,6 +227,7 @@ export interface Curse {
     challenge: CurseChallenge | null;
 }
 export interface RoomState {
+    cosmetics?: { table: string; events: RitualCosmeticEvent[] };
     visibility: 'private' | 'public';
     pin_required?: boolean;
     table?: {

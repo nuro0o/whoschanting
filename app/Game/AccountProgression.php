@@ -103,7 +103,8 @@ class AccountProgression
     private function defaults(): array
     {
         return ['xp' => 0, 'coins' => 0, 'coins_earned' => 0, 'matches' => 0, 'wins' => 0, 'town_wins' => 0, 'cult_wins' => 0, 'roles_played' => [], 'achievements' => [],
-            'customization' => ['title' => 'newcomer', 'frame' => 'plain', 'accent' => 'sea', 'background' => 'plain', 'character' => null, 'creator' => null]];
+            'customization' => ['title' => 'newcomer', 'frame' => 'plain', 'accent' => 'sea', 'background' => 'plain',
+                'table' => 'classic', 'banishment' => 'classic', 'celebration' => 'classic', 'character' => null, 'creator' => null]];
     }
 
     private function lockProfile(int $userId): PlayerProfile
@@ -236,6 +237,7 @@ class AccountProgression
         $level = $this->level($profile['xp']);
         $characters = $this->characterCatalog($userId);
         $equipped = array_replace($this->defaults()['customization'], $profile['customization']);
+        $equipped = (new PaidCosmetics)->sanitize($userId, $equipped, $this->defaults()['customization']);
         $equipped['creator'] = config('character_creator.enabled') ? $this->creator->saved($equipped['creator'], $level) : null;
         if ($equipped['character'] !== null && ! (collect($characters)->firstWhere('id', $equipped['character'])['unlocked'] ?? false)) {
             $equipped['character'] = null;
@@ -333,7 +335,7 @@ class AccountProgression
                 'requirement' => $unlocked ? 'Owned from the village store' : $item['price'].' Crowns in the profile store'];
         }
 
-        return $catalog;
+        return (new PaidCosmetics)->catalog($userId, $catalog);
     }
 
     /** @param array<string, mixed> $input
@@ -350,9 +352,11 @@ class AccountProgression
             $catalog = $this->catalog($this->level($profile->xp), $profile->achievements,
                 (int) (PlayerSeason::where('user_id', $userId)->max('xp') ?? 0), $userId);
             $equipped = array_replace($this->defaults()['customization'], $profile->customization);
-            foreach (['title' => 'titles', 'frame' => 'frames', 'accent' => 'accents', 'background' => 'backgrounds'] as $field => $category) {
-                // Older clients omit backgrounds; keep the player's saved choice.
-                $value = $field === 'background' && ! array_key_exists($field, $input) ? $equipped[$field] : ($input[$field] ?? null);
+            $equipped = (new PaidCosmetics)->sanitize($userId, $equipped, $this->defaults()['customization']);
+            foreach (['title' => 'titles', 'frame' => 'frames', 'accent' => 'accents', 'background' => 'backgrounds',
+                'table' => 'tables', 'banishment' => 'banishments', 'celebration' => 'celebrations'] as $field => $category) {
+                // Older clients omit additional categories; keep the saved choice.
+                $value = ! in_array($field, ['title', 'frame', 'accent'], true) && ! array_key_exists($field, $input) ? $equipped[$field] : ($input[$field] ?? null);
                 $item = collect($catalog[$category])->firstWhere('id', $value);
                 if ($item === null || ! $item['unlocked']) {
                     throw ValidationException::withMessages([$field => 'Choose an unlocked '.$field.'.']);
@@ -418,6 +422,7 @@ class AccountProgression
     {
         $profile = PlayerProfile::find($userId);
         $equipped = array_replace($this->defaults()['customization'], $profile->customization ?? []);
+        $equipped = (new PaidCosmetics)->sanitize($userId, $equipped, $this->defaults()['customization']);
         $titleName = 'Newcomer';
         foreach (config('progression.cosmetics.titles') as $title) {
             if ($title['id'] === $equipped['title']) {
@@ -430,8 +435,15 @@ class AccountProgression
             }
         }
 
+        foreach ((new PaidCosmetics)->ownedCosmetics($userId) as $item) {
+            if ($item['category'] === 'titles' && $item['id'] === $equipped['title']) {
+                $titleName = $item['name'];
+            }
+        }
+
         $appearance = ['level' => $this->level($profile->xp ?? 0), 'title' => $equipped['title'], 'title_name' => $titleName,
-            'frame' => $equipped['frame'], 'accent' => $equipped['accent'], 'background' => $equipped['background']];
+            'frame' => $equipped['frame'], 'accent' => $equipped['accent'], 'background' => $equipped['background'],
+            'table' => $equipped['table'], 'banishment' => $equipped['banishment'], 'celebration' => $equipped['celebration']];
         if ($character === 'custom') {
             $recipe = $this->creator->saved($equipped['creator'], $appearance['level']);
             if ($recipe !== null) {

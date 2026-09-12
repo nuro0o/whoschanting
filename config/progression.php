@@ -41,6 +41,15 @@ return [
         'season_regular' => ['name' => 'A season in the village', 'description' => 'Participate in 10 completed matches in one season.', 'stat' => 'season_matches', 'target' => 10],
     ],
     'cosmetics' => [
+        'tables' => [
+            ['id' => 'classic', 'name' => 'Village table', 'level' => 1],
+        ],
+        'banishments' => [
+            ['id' => 'classic', 'name' => 'Village farewell', 'level' => 1],
+        ],
+        'celebrations' => [
+            ['id' => 'classic', 'name' => 'Village celebration', 'level' => 1],
+        ],
         'titles' => [
             ['id' => 'newcomer', 'name' => 'Newcomer', 'level' => 1],
             ['id' => 'watchful', 'name' => 'The Watchful', 'level' => 3],
