@@ -20,13 +20,13 @@ const index = computed(() =>
     Math.max(0, characterIds.indexOf(props.character)),
 );
 const portraitImages: Record<string, string> = {
-    tidecaller: '/assets/chanting/unlocks/tidecaller.png',
-    cartographer: '/assets/chanting/unlocks/cartographer.png',
-    maskmaker: '/assets/chanting/unlocks/maskmaker.png',
-    drowned_regent: '/assets/chanting/unlocks/drowned_regent.png',
-    seasonal_warden: '/assets/chanting/unlocks/seasonal_warden.png',
-    seasonal_cultist: '/assets/chanting/unlocks/seasonal_cultist.png',
-    seasonal_oathkeeper: '/assets/chanting/unlocks/seasonal_oathkeeper.png',
+    tidecaller: '/assets/chanting/unlocks/tidecaller-illustrated.png',
+    cartographer: '/assets/chanting/unlocks/cartographer-illustrated.png',
+    maskmaker: '/assets/chanting/unlocks/maskmaker-illustrated.png',
+    drowned_regent: '/assets/chanting/unlocks/drowned_regent-illustrated.png',
+    seasonal_warden: '/assets/chanting/unlocks/seasonal_warden-illustrated.png',
+    seasonal_cultist: '/assets/chanting/unlocks/seasonal_cultist-illustrated.png',
+    seasonal_oathkeeper: '/assets/chanting/unlocks/seasonal_oathkeeper-illustrated.png',
 };
 const portraitImage = computed(() => portraitImages[props.character]);
 const label = computed(() =>

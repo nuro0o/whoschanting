@@ -11,6 +11,8 @@ Route::get('/', [GameController::class, 'home'])->middleware(EnsureVerifiedAccou
 Route::inertia('/tutorial', 'Tutorial')->middleware(PrivateGameResponse::class)->name('tutorial');
 
 Route::middleware([PrivateGameResponse::class, EnsureVerifiedAccount::class])->group(function (): void {
+    Route::get('/rooms', [GameController::class, 'browser'])->name('rooms.browser');
+    Route::get('/rooms/public', [GameController::class, 'publicRooms'])->middleware('throttle:game-browser');
     Route::post('/rooms', [GameController::class, 'create'])->middleware('throttle:10,1')->block();
     Route::post('/rooms/join', [GameController::class, 'join'])->middleware(['throttle:20,1', 'throttle:game-join'])->block();
     Route::get('/rooms/{code}', [GameController::class, 'show'])->name('game');

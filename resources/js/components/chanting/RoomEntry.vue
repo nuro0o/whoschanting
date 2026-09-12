@@ -4,6 +4,7 @@ import { usePage } from '@inertiajs/vue3';
 import {
     ArrowRight,
     ChevronRight,
+    Globe,
     KeyRound,
     LoaderCircle,
     Plus,
@@ -76,6 +77,7 @@ const selectedCharacterName = computed(() =>
 );
 const code = ref(props.initialCode ?? '');
 const createPin = ref('');
+const visibility = ref<'private' | 'public'>('private');
 const joinPin = ref('');
 const pin = computed({
     get: () => (mode.value === 'create' ? createPin.value : joinPin.value),
@@ -103,7 +105,10 @@ async function enter() {
                 ...(signedIn.value ? { character: character.value } : {}),
                 ...(mode.value === 'join'
                     ? { code: code.value.trim().toUpperCase() }
-                    : { setup: modeSubmission(setup.value) }),
+                    : {
+                          setup: modeSubmission(setup.value),
+                          visibility: visibility.value,
+                      }),
             },
         );
         window.location.assign(`/rooms/${encodeURIComponent(data.code)}`);
@@ -159,6 +164,10 @@ async function enter() {
                 <KeyRound :size="16" /> Join friends
             </button>
         </div>
+        <a v-if="!initialCode" href="/rooms" class="entry-browser-link">
+            <Globe :size="16" aria-hidden="true" /> Room browser
+            <ArrowRight :size="15" aria-hidden="true" />
+        </a>
         <form class="entry-form" @submit.prevent="enter">
             <label for="player-name">What should the village call you?</label>
             <input
@@ -185,6 +194,47 @@ async function enter() {
                     :disabled="pending || !!initialCode"
                 />
             </template>
+            <fieldset
+                v-if="mode === 'create'"
+                class="room-visibility"
+                :disabled="pending"
+                aria-describedby="room-visibility-help"
+            >
+                <legend>Room visibility</legend>
+                <div class="visibility-options">
+                    <label :class="{ selected: visibility === 'private' }">
+                        <input
+                            v-model="visibility"
+                            type="radio"
+                            name="visibility"
+                            value="private"
+                        />
+                        <span
+                            ><strong>Private</strong
+                            ><small>Invite your friends</small></span
+                        >
+                    </label>
+                    <label :class="{ selected: visibility === 'public' }">
+                        <input
+                            v-model="visibility"
+                            type="radio"
+                            name="visibility"
+                            value="public"
+                        />
+                        <span
+                            ><strong>Public</strong
+                            ><small>Meet new suspects</small></span
+                        >
+                    </label>
+                </div>
+                <p id="room-visibility-help" class="pin-help">
+                    {{
+                        visibility === 'public'
+                            ? 'Listed in the room browser, even with a PIN. Anyone can find your room.'
+                            : 'Hidden from the room browser. Share your room code or invite link to bring friends.'
+                    }}
+                </p>
+            </fieldset>
             <label for="lobby-pin">{{
                 mode === 'create'
                     ? 'Lobby PIN (optional)'
@@ -311,7 +361,7 @@ async function enter() {
             <p class="entry-note">
                 {{
                     signedIn
-                        ? 'Private rooms. Familiar faces. Unfamiliar motives.'
+                        ? 'Find your people. Keep them guessing.'
                         : 'Play as a guest. Bring friends. Keep secrets.'
                 }}
             </p>
@@ -350,6 +400,67 @@ async function enter() {
 </template>
 
 <style scoped>
+.entry-browser-link {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 12px;
+    color: var(--account-green, var(--green));
+    font-size: 13px;
+    text-underline-offset: 4px;
+}
+.room-visibility {
+    min-width: 0;
+    margin: 4px 0 0;
+    padding: 0;
+    border: 0;
+}
+.room-visibility legend {
+    margin-bottom: 8px;
+    font-size: 13px;
+}
+.visibility-options {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    margin-bottom: 8px;
+}
+.entry-form .visibility-options label {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    margin: 0;
+    padding: 11px 10px;
+    border: 1px solid var(--account-line, var(--line));
+    border-radius: 4px;
+    cursor: pointer;
+}
+.entry-form .visibility-options label.selected {
+    border-color: var(--account-green, var(--green));
+    background: #bdcd9c0b;
+}
+.entry-form .visibility-options input {
+    width: 16px;
+    height: 16px;
+    padding: 0;
+    margin: 0;
+    flex-shrink: 0;
+    accent-color: var(--account-green, var(--green));
+}
+.visibility-options span {
+    display: grid;
+    gap: 2px;
+}
+.visibility-options strong {
+    color: var(--account-text, var(--cream));
+    font-size: 13px;
+    font-weight: 500;
+}
+.visibility-options small {
+    color: var(--account-muted, var(--muted));
+    font-size: 11px;
+}
 .pin-help {
     margin: 0 0 8px;
     color: var(--account-muted, var(--muted));

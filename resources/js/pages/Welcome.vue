@@ -5,7 +5,7 @@ import RoomEntry from '@/components/chanting/RoomEntry.vue';
 import RoleGuide from '@/components/chanting/RoleGuide.vue';
 import VillageScene from '@/components/chanting/VillageScene.vue';
 import GameGlossary from '@/components/chanting/GameGlossary.vue';
-import CharacterPortrait from '@/components/chanting/CharacterPortrait.vue';
+import CharacterCarousel from '@/components/chanting/CharacterCarousel.vue';
 import { defaultCharacters, type Character } from '@/lib/chanting';
 import '../../css/chanting.css';
 import '../../css/tutorial-invitation.css';
@@ -31,7 +31,7 @@ withDefaults(
     <Head title="Trust your friends. Mostly."
         ><meta
             name="description"
-            content="A private-room social deduction game. Gather your friends, uncover the cult, and save a very suspicious little village."
+            content="A social deduction game with public and private rooms. Gather your suspects, uncover the cult, and save a very suspicious little village."
     /></Head>
     <div class="chanting home-page">
         <header class="site-header">
@@ -40,6 +40,7 @@ withDefaults(
                 chanting<span class="brand-question">?</span></a
             >
             <nav aria-label="Main navigation">
+                <a href="/rooms" class="quiet-link">Room browser</a>
                 <a href="#roles" class="quiet-link">Roles</a>
                 <a href="/tutorial" class="quiet-link">Practice solo</a>
                 <a href="#how-to-play" class="quiet-link"
@@ -111,25 +112,7 @@ withDefaults(
                     >WELCOME TO THE END OF THE WORLD. MAYBE.</span
                 >
             </section>
-            <section class="character-parade" aria-labelledby="character-title">
-                <div>
-                    <p class="eyebrow">A FAMILIAR FACE. AN UNFAMILIAR ALIBI.</p>
-                    <h2 id="character-title">Meet your <em>neighbors.</em></h2>
-                    <p>
-                        Pick a face you love when you sign in. Guests get a
-                        surprise.<br />Every character can have any role. Trust
-                        nobody’s wardrobe.
-                    </p>
-                </div>
-                <ul>
-                    <li v-for="character in characters" :key="character.id">
-                        <CharacterPortrait
-                            :character="character.id"
-                            decorative
-                        /><span>{{ character.name }}</span>
-                    </li>
-                </ul>
-            </section>
+            <CharacterCarousel :characters="characters" />
             <RoleGuide
                 id="roles"
                 class="home-roles"
@@ -162,8 +145,9 @@ withDefaults(
                         </div>
                         <h3>Invite the usual suspects.</h3>
                         <p>
-                            Create a private room and share the code. Everyone
-                            gets a secret role. Some get a much darker agenda.
+                            Create a room and share the code, or find a public
+                            gathering. Everyone gets a secret role. Some get a
+                            much darker agenda.
                         </p>
                     </article>
                     <article>
@@ -306,7 +290,7 @@ withDefaults(
         <footer class="site-footer">
             <span><Eye :size="16" /> who’s chanting?</span>
             <p>Made for friends. Not necessarily for friendships.</p>
-            <span class="footer-edition">PRIVATE ROOMS · FIRST EDITION</span>
+            <span class="footer-edition">PUBLIC &amp; PRIVATE ROOMS</span>
         </footer>
     </div>
 </template>

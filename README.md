@@ -1,6 +1,14 @@
 # Who’s Chanting?
 
-A private-room social deduction game built with Laravel 13, Vue 3, TypeScript, Reverb + Echo, MySQL, and a responsive village card table. No account is required: guests use an encrypted browser session, while verified accounts can keep their seat and progression across devices.
+A social deduction game with public and private rooms, built with Laravel 13, Vue 3, TypeScript, Reverb + Echo, MySQL, and a responsive village card table. No account is required: guests use an encrypted browser session, while verified accounts can keep their seat and progression across devices.
+
+## Room browser
+
+Open `/rooms`, or choose **Room browser** from the home page or dashboard, to find public gatherings. When creating a room, choose **Private** (the default) to keep it out of the browser, or **Public** to list it. Visibility and the optional PIN are independent: public rooms with a PIN still appear, marked **PIN required**, and new players must enter the correct PIN to join. Private rooms remain accessible through their code or invite link. Existing rooms remain private.
+
+The browser lists waiting lobbies, newest first, in pages of 24. Each summary shows the host's moderated name, mode, occupied seats, capacity, and whether a PIN is required. Full rooms remain visible with joining disabled. Matches disappear when they start and return when the host begins a public rematch. Rematches keep the original visibility and PIN. Joining always rechecks the room's current capacity, phase, and PIN.
+
+The directory exposes only public summaries, never chat, account or session identifiers, dealt roles, or PIN hashes. Browsing requires no seat or account; signed-in accounts retain the game's email-verification requirement. No migration or `.env` change is required. Rebuild frontend assets and restart long-running application processes when deploying.
 
 ## Text moderation
 

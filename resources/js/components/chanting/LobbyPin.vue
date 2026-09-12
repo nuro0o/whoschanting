@@ -45,6 +45,16 @@ async function save(remove = false) {
         class="lobby-pin"
         aria-label="Lobby access"
     >
+        <p class="lobby-visibility">
+            <strong>{{
+                state.visibility === 'public' ? 'Public room' : 'Private room'
+            }}</strong>
+            {{
+                state.visibility === 'public'
+                    ? ' · Listed in the room browser, even with a PIN.'
+                    : ' · Hidden from the room browser.'
+            }}
+        </p>
         <strong>{{
             state.pin_required ? 'PIN required to join' : 'No lobby PIN'
         }}</strong>

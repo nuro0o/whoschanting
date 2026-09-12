@@ -33,13 +33,14 @@ class MatchEngine
     }
 
     /** @param array<string, mixed> $setup */
-    public function create(string $identity, string $name, ?string $character = null, array $setup = [], ?int $accountId = null, #[\SensitiveParameter] ?string $pin = null): GameRoom
+    public function create(string $identity, string $name, ?string $character = null, array $setup = [], ?int $accountId = null, #[\SensitiveParameter] ?string $pin = null, string $visibility = 'private'): GameRoom
     {
+        $this->ensure(in_array($visibility, ['private', 'public'], true), 'Choose a public or private room.');
         $setup = $this->modes->normalize($setup);
         $name = $this->profanity->mask(trim($name));
         $pinHash = LobbyPin::hash($pin);
 
-        return DB::transaction(function () use ($identity, $name, $character, $setup, $accountId, $pinHash): GameRoom {
+        return DB::transaction(function () use ($identity, $name, $character, $setup, $accountId, $pinHash, $visibility): GameRoom {
             $id = (string) Str::uuid();
             do {
                 $code = strtoupper(Str::random(6));
@@ -48,6 +49,7 @@ class MatchEngine
             return GameRoom::create(['code' => $code, 'state' => [
                 'phase' => 'lobby', 'phase_id' => 1, 'revision' => 1, 'day' => 0,
                 'pin_hash' => $pinHash,
+                'visibility' => $visibility,
                 'mode_setup' => $setup, 'roster' => $setup['classic_variant'],
                 'host_id' => $id, 'players' => [$id => $this->seat($id, $identity, $name, $character, $accountId)],
                 'tokens' => 0, 'threshold' => 0, 'mission' => null, 'winner' => null,
@@ -858,6 +860,7 @@ class MatchEngine
         return [
             'id' => $room->id, 'code' => $room->code, 'match_id' => $s['match_id'] ?? null,
             'pin_required' => isset($s['pin_hash']),
+            'visibility' => $s['visibility'] ?? 'private',
             'phase' => $s['phase'], 'phase_id' => $s['phase_id'],
             'revision' => $s['revision'], 'day' => $s['day'], 'deadline' => $room->deadline?->toISOString(),
             'roster' => $s['roster'] ?? 'classic',

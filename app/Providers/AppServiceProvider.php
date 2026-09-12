@@ -32,6 +32,7 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         $this->configureDefaults();
+        RateLimiter::for('game-browser', fn (Request $request): Limit => Limit::perMinute(60)->by($request->ip() ?? 'unknown'));
         RateLimiter::for('game-join', function (Request $request): Limit {
             $code = $request->input('code');
 

@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Game\AccountProgression;
 use App\Game\MatchEngine;
 use App\Game\MusicLibrary;
+use App\Game\RoomBrowser;
 use App\Game\WhisperLibrary;
 use App\Models\GameRoom;
 use Illuminate\Http\JsonResponse;
@@ -23,6 +24,18 @@ class GameController extends Controller
     public function home(Request $request): Response
     {
         return Inertia::render('Welcome', ['rules' => $this->engine->rules(), ...$this->characterProps($request)]);
+    }
+
+    public function browser(): Response
+    {
+        return Inertia::render('RoomBrowser');
+    }
+
+    public function publicRooms(Request $request, RoomBrowser $browser): JsonResponse
+    {
+        $data = $request->validate(['page' => ['sometimes', 'integer', 'min:1', 'max:1000']]);
+
+        return response()->json($browser->listing((int) ($data['page'] ?? 1)));
     }
 
     public function dashboard(Request $request): Response
@@ -53,8 +66,8 @@ class GameController extends Controller
 
     public function create(Request $request): JsonResponse
     {
-        $data = $request->validate(['name' => ['required', 'string', 'min:2', 'max:24'], 'pin' => $this->pinRules(), 'character' => $this->characterRules($request), ...$this->modeRules()]);
-        $room = $this->engine->create($this->identity($request), $data['name'], $this->selectedCharacter($request, $data), $data['setup'] ?? [], $request->user()?->id, $data['pin'] ?? null);
+        $data = $request->validate(['name' => ['required', 'string', 'min:2', 'max:24'], 'visibility' => ['sometimes', 'string', 'in:private,public'], 'pin' => $this->pinRules(), 'character' => $this->characterRules($request), ...$this->modeRules()]);
+        $room = $this->engine->create($this->identity($request), $data['name'], $this->selectedCharacter($request, $data), $data['setup'] ?? [], $request->user()?->id, $data['pin'] ?? null, $data['visibility'] ?? 'private');
         $this->rememberCharacter($request, $data);
 
         return response()->json(['code' => $room->code], 201);

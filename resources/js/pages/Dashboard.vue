@@ -85,6 +85,10 @@ const membershipDate = computed(() => {
                         <p class="account-kicker">01 / Tonight’s company</p>
                         <h2 id="gather-title">Gather the usual suspects.</h2>
                     </div>
+                    <Link href="/rooms" class="ledger-browser-link"
+                        >Room browser
+                        <ArrowUpRight :size="16" aria-hidden="true"
+                    /></Link>
                     <span class="ledger-player-count"
                         ><Users :size="15" /> {{ rules.min_players }}–{{
                             rules.max_players
@@ -192,3 +196,17 @@ const membershipDate = computed(() => {
         </section>
     </div>
 </template>
+
+<style scoped>
+.ledger-section-heading {
+    flex-wrap: wrap;
+}
+.ledger-browser-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--account-green);
+    font-size: 13px;
+    text-underline-offset: 4px;
+}
+</style>
