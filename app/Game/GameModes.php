@@ -28,6 +28,9 @@ class GameModes
         $mode = $input['mode'] ?? 'classic';
         $classic = $input['classic_variant'] ?? 'classic';
         $chaos = $input['chaos_variant'] ?? 'wildcards';
+        $fae = $input['fae_court'] ?? false;
+        $this->ensure(is_bool($fae), 'Choose whether to enable the Fae Court.');
+        $this->ensure(! $fae || $mode === 'classic', 'The Fae Court currently supports Classic and Classic Illusions.');
         $this->ensure(in_array($mode, ['classic', 'hard', 'chaos', 'paranoia', 'custom'], true), 'Choose a valid mode.');
         $this->ensure(in_array($classic, ['classic', 'illusions'], true), 'Choose a valid Classic variant.');
         $this->ensure(in_array($chaos, ['wildcards', 'maelstrom'], true), 'Choose a valid Chaos variant.');
@@ -37,6 +40,7 @@ class GameModes
             $this->ensure(is_array($selected), 'Choose roles and their counts.');
             foreach ($selected as $role => $count) {
                 $this->ensure(isset(config('game.role_alignments')[$role]), 'Choose a known role.');
+                $this->ensure($role !== 'fae_broker', 'Enable the Fae Court expansion in Classic to include the Broker.');
                 $this->ensure(is_int($count) && $count >= 0 && $count <= config('game.max_players'), 'Role counts must be whole numbers between 0 and '.config('game.max_players').'.');
                 if ($count > 0) {
                     $roles[$role] = $count;
@@ -49,7 +53,7 @@ class GameModes
             ksort($roles);
         }
 
-        return ['mode' => $mode, 'classic_variant' => $classic, 'chaos_variant' => $chaos, 'roles' => $roles];
+        return ['mode' => $mode, 'classic_variant' => $classic, 'chaos_variant' => $chaos, 'roles' => $roles, 'fae_court' => $fae];
     }
 
     /** @param array<string, mixed> $state
@@ -65,6 +69,16 @@ class GameModes
      */
     public function roster(array $setup, int $count): array
     {
+        if ($setup['fae_court'] ?? false) {
+            $this->ensure($setup['mode'] === 'classic' && $count >= config('fae.min_players'), 'The Fae Court needs at least '.config('fae.min_players').' players in Classic.');
+            $roles = $this->roster([...$setup, 'fae_court' => false], $count);
+            // One randomly dealt Fae seat replaces a Townsperson, never the Oracle.
+            $index = array_search('townsperson', $roles, true);
+            $this->ensure($index !== false, 'This roster has no Townsperson seat for the Fae Court.');
+            $roles[$index] = 'fae_broker';
+
+            return array_values($roles);
+        }
         $this->ensure($count >= config('game.min_players') && $count <= config('game.max_players'), 'Gather between '.config('game.min_players').' and '.config('game.max_players').' players.');
         if ($setup['mode'] === 'custom') {
             $this->ensure(array_sum($setup['roles']) === $count, 'Custom setup requires exactly '.array_sum($setup['roles']).' players. Adjust the roles or invite the remaining players.');

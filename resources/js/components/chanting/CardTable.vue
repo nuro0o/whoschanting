@@ -201,6 +201,7 @@ const caption = computed(() =>
               lobby: 'A place for every alibi.',
               reveal: 'Your secret awaits in your private role card.',
               night: 'Cards down. Secrets kept.',
+              bargains: 'A gift. A promise. A secret.',
               discussion: 'Stories on the table.',
               last_words: 'The accused have the floor.',
               voting: 'One choice. Sealed until the count.',
@@ -240,11 +241,16 @@ onBeforeUnmount(() => {
             'large-gathering': players.length > 10,
         }"
         :data-phase="phase"
+        :data-table="cosmetics?.table ?? 'classic'"
         :data-winner="winner"
         aria-label="The village card table"
     >
         <div class="table-topline">
-            <span class="eyebrow">THE VILLAGE TABLE</span>
+            <span class="eyebrow">{{
+                cosmetics?.table === 'harvest'
+                    ? 'THE HARVEST TABLE'
+                    : 'THE VILLAGE TABLE'
+            }}</span>
             <button
                 v-if="sceneReady"
                 type="button"
@@ -271,6 +277,11 @@ onBeforeUnmount(() => {
                 'is-haunted': !!hauntedSeatId,
             }"
         >
+            <div
+                v-if="!sceneReady && cosmetics?.table === 'harvest'"
+                class="harvest-table-fallback"
+                aria-hidden="true"
+            ></div>
             <div
                 v-if="display"
                 :class="
@@ -605,6 +616,47 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
+.table-panel[data-table='harvest'] {
+    border-color: #a7754955;
+    background: radial-gradient(ellipse at 50% 38%, #78503530, #211f1b 76%);
+    box-shadow:
+        0 12px 36px #0b080630,
+        inset 0 1px #e7bd8514;
+}
+.table-panel[data-table='harvest'] .eyebrow {
+    color: #d2af7d;
+    letter-spacing: 0.17em;
+}
+.table-panel[data-table='harvest'] .table-reset {
+    color: #dac4a5;
+    border-color: #b68b5b60;
+}
+.table-panel[data-table='harvest'] .table-clock {
+    background: #30221c;
+    border-color: #bd915d;
+}
+.harvest-table-fallback {
+    position: absolute;
+    inset: 18% 7%;
+    z-index: -1;
+    border: 7px solid #5c3e2a;
+    border-radius: 38%;
+    background:
+        linear-gradient(
+            0deg,
+            transparent 36%,
+            #bea16b 36% 37%,
+            #743a2e 37% 63%,
+            #bea16b 63% 64%,
+            transparent 64%
+        ),
+        repeating-linear-gradient(0deg, #ffffff05 0 1px, transparent 1px 5px),
+        repeating-linear-gradient(0deg, #513c2e 0 35px, #2f241c 35px 37px);
+    box-shadow:
+        0 3px 0 #b0804d,
+        0 12px 0 #302018,
+        0 22px 30px #100d0980;
+}
 .table-effect-caption {
     min-height: 1.5em;
     margin: 4px 18px 0;

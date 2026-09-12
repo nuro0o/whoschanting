@@ -15,10 +15,12 @@ const props = withDefaults(
     defineProps<{
         modelValue: ModeSetup;
         disabled?: boolean;
+        faeAvailable?: boolean;
+        faeMinPlayers?: number;
         minPlayers?: number;
         maxPlayers?: number;
     }>(),
-    { minPlayers: 3, maxPlayers: 15 },
+    { minPlayers: 3, maxPlayers: 15, faeMinPlayers: 7 },
 );
 const emit = defineEmits<{ 'update:modelValue': [value: ModeSetup] }>();
 const id = useId();
@@ -63,6 +65,7 @@ const sides = [
     { id: 'cult', name: t('modeSelector.cult'), ids: cultRoleIds },
 ];
 function update(change: Partial<ModeSetup>) {
+    if (change.mode && change.mode !== 'classic') change.fae_court = false;
     if (change.mode === 'custom' && !Object.keys(props.modelValue.roles).length)
         change.roles = defaultModeSetup().roles;
     emit('update:modelValue', { ...props.modelValue, ...change });
@@ -118,6 +121,42 @@ function invalidCount(role: string): boolean {
             </label>
         </div>
         <div class="mode-detail" aria-live="polite">
+            <div
+                v-if="modelValue.mode === 'classic'"
+                class="fae-expansion-choice"
+            >
+                <label :for="`${id}-fae`">
+                    <input
+                        :id="`${id}-fae`"
+                        type="checkbox"
+                        :checked="modelValue.fae_court ?? false"
+                        :disabled="!faeAvailable && !modelValue.fae_court"
+                        @change="
+                            update({
+                                fae_court: ($event.target as HTMLInputElement)
+                                    .checked,
+                            })
+                        "
+                    />
+                    The Fae Court · paid room expansion
+                </label>
+                <p>
+                    One owner at the table unlocks anonymous bargains and shared
+                    victories for everyone. {{ faeMinPlayers }}–{{ maxPlayers }}
+                    players; one Townsperson becomes the randomly dealt Fae
+                    Broker.
+                </p>
+                <p v-if="!faeAvailable">
+                    An owner can join first, then the host can enable the
+                    expansion here.
+                    <a
+                        href="/settings/profile#store"
+                        target="_blank"
+                        rel="noopener"
+                        >View the Fae Court in the store</a
+                    >.
+                </p>
+            </div>
             <template v-if="modelValue.mode === 'classic'">
                 <p class="mode-kicker">
                     {{ t('modeSelector.classic.eyebrow') }}
@@ -322,6 +361,29 @@ function invalidCount(role: string): boolean {
 </template>
 
 <style scoped>
+.fae-expansion-choice {
+    border: 1px solid #778d6a88;
+    padding: 16px;
+    margin-bottom: 20px;
+}
+.fae-expansion-choice label {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-weight: 600;
+}
+.fae-expansion-choice input {
+    width: 18px;
+    height: 18px;
+}
+.fae-expansion-choice p {
+    margin-top: 10px;
+    line-height: 1.7;
+    font-size: 13px;
+}
+.fae-expansion-choice a {
+    text-decoration: underline;
+}
 .mode-selector {
     min-width: 0;
     margin: 0;

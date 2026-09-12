@@ -28,6 +28,8 @@ class StripeCheckout
             throw ValidationException::withMessages(['bundle_id' => 'This bundle is not available for checkout yet.']);
         }
 
+        $this->assertRepurchaseAllowed($user->id, $bundleId);
+
         // Reconcile existing sessions before allowing another payment for the same bundle.
         $pending = PaidOrder::where('user_id', $user->id)->where('bundle_id', $bundleId)->where('status', 'pending')->first();
         if ($pending?->stripe_session_id !== null) {
@@ -36,8 +38,14 @@ class StripeCheckout
             $pending->refresh();
             if ($pending->status === 'pending') {
                 if (($session['status'] ?? null) === 'open') {
-                    if (($pending->legal_acceptance['terms_version'] ?? null) !== config('legal.version')) {
-                        $pending->update(['legal_acceptance' => $this->acceptance()]);
+                    if (($pending->legal_acceptance['terms_version'] ?? null) !== config('legal.version')
+                        || ($pending->legal_acceptance['purchase_policy_version'] ?? null) !== PurchasePolicy::VERSION) {
+                        DB::transaction(function () use ($pending): void {
+                            $locked = PaidOrder::whereKey($pending->id)->lockForUpdate()->firstOrFail();
+                            if ($locked->status === 'pending') {
+                                $locked->update(['legal_acceptance' => $this->acceptance()]);
+                            }
+                        });
                     }
 
                     return $this->checkoutUrl($session);
@@ -55,16 +63,18 @@ class StripeCheckout
         // Persist the immutable order before contacting Stripe. A timeout retries the exact same request/key.
         $order = DB::transaction(function () use ($user, $bundle, $bundleId): PaidOrder {
             User::whereKey($user->id)->lockForUpdate()->firstOrFail();
+            $this->assertRepurchaseAllowed($user->id, $bundleId);
             if (PaidOrder::where('user_id', $user->id)->where('bundle_id', $bundleId)->where('status', 'paid')->exists()) {
-                throw ValidationException::withMessages(['bundle_id' => 'You already own this bundle. Equip it in your wardrobe.']);
+                throw ValidationException::withMessages(['bundle_id' => 'You already own this purchase.']);
             }
-            $existing = PaidOrder::where('user_id', $user->id)->where('bundle_id', $bundleId)->where('status', 'pending')->first();
+            $existing = PaidOrder::where('user_id', $user->id)->where('bundle_id', $bundleId)->where('status', 'pending')->lockForUpdate()->first();
             if ($existing !== null) {
                 if ($existing->created_at->lt(now()->subHours(23))) {
                     throw ValidationException::withMessages(['bundle_id' => 'Your earlier checkout needs verification. Please contact support before trying again.']);
                 }
 
-                if (($existing->legal_acceptance['terms_version'] ?? null) !== config('legal.version')) {
+                if (($existing->legal_acceptance['terms_version'] ?? null) !== config('legal.version')
+                    || ($existing->legal_acceptance['purchase_policy_version'] ?? null) !== PurchasePolicy::VERSION) {
                     $existing->update(['legal_acceptance' => $this->acceptance()]);
                 }
 
@@ -75,7 +85,7 @@ class StripeCheckout
 
             return PaidOrder::create(['id' => $id, 'user_id' => $user->id, 'bundle_id' => $bundleId,
                 'price_id' => $bundle['price_id'], 'amount' => $bundle['amount'], 'currency' => $bundle['currency'],
-                'cosmetics' => $bundle['cosmetics'], 'status' => 'pending',
+                'cosmetics' => $bundle['cosmetics'], 'bundle_name' => $bundle['name'], 'status' => 'pending',
                 'legal_acceptance' => $this->acceptance(),
                 'checkout_parameters' => [
                     'mode' => 'payment', 'client_reference_id' => $id, 'customer_email' => $user->email,
@@ -85,7 +95,7 @@ class StripeCheckout
                     'expires_at' => now()->addHour()->timestamp,
                     'success_url' => route('profile.edit').'?checkout=success&session_id={CHECKOUT_SESSION_ID}#store',
                     'cancel_url' => route('profile.edit').'?checkout=cancelled#store',
-                    'custom_text' => ['submit' => ['message' => 'One-time cosmetic purchase. Terms: '.url('/terms').'. Privacy: '.url('/privacy').'. Refunds and withdrawal: '.url('/refunds').'. Statutory withdrawal rights remain.']],
+                    'custom_text' => ['submit' => ['message' => 'One-time digital content. Immediate supply with your express consent; withdrawal exception explained at checkout. Additional 14-day refunds for purchases used in at most two games. Faulty-content rights remain. Terms: '.url('/terms').'. Privacy: '.url('/privacy').'. Refunds: '.url('/refunds').'.']],
                 ],
             ]);
         });
@@ -105,7 +115,17 @@ class StripeCheckout
     {
         return ['terms_version' => config('legal.version'), 'accepted_at' => now()->toISOString(),
             'terms_url' => url('/terms'), 'privacy_url' => url('/privacy'), 'refunds_url' => url('/refunds'),
+            'purchase_policy_version' => PurchasePolicy::VERSION, 'purchase_policy_text' => PurchasePolicy::POLICY,
+            'digital_content_consent' => true, 'digital_content_consent_text' => PurchasePolicy::CONSENT,
+            // Acknowledgment is evidence, not a finding that withdrawal has already been lost.
             'withdrawal_waived' => false];
+    }
+
+    private function assertRepurchaseAllowed(int $userId, string $bundleId): void
+    {
+        if ((new PurchasePolicy)->needsRepurchaseReview($userId, $bundleId)) {
+            throw ValidationException::withMessages(['bundle_id' => 'This pack has been refunded more than once. Contact '.config('legal.support_email').' before buying it again. Existing refund and consumer rights are unaffected.']);
+        }
     }
 
     /** @param array<string,mixed> $session */
@@ -176,10 +196,14 @@ class StripeCheckout
                 }
                 $order->status = 'paid';
                 $order->paid_at ??= now()->toImmutable();
+                if (is_int($session['amount_total'] ?? null) && $session['amount_total'] >= 0) {
+                    $order->total_amount ??= $session['amount_total'];
+                }
             } elseif ($order->status === 'pending' && ($session['status'] ?? null) === 'expired') {
                 $order->status = 'expired';
             }
             $order->save();
+            (new PurchaseReceipts)->queue($order);
         });
     }
 

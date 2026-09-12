@@ -20,6 +20,11 @@ use Illuminate\Database\Eloquent\Model;
  * @property string|null $stripe_payment_intent_id
  * @property CarbonImmutable|null $paid_at
  * @property CarbonImmutable $created_at
+ * @property string|null $bundle_name
+ * @property int|null $total_amount
+ * @property array<string,mixed>|null $receipt_payload
+ * @property CarbonImmutable|null $receipt_queued_at
+ * @property CarbonImmutable|null $receipt_sent_at
  */
 class PaidOrder extends Model
 {
@@ -33,6 +38,7 @@ class PaidOrder extends Model
     protected function casts(): array
     {
         return ['amount' => 'integer', 'cosmetics' => 'array', 'checkout_parameters' => 'array', 'legal_acceptance' => 'array',
-            'paid_at' => 'immutable_datetime', 'created_at' => 'immutable_datetime'];
+            'paid_at' => 'immutable_datetime', 'created_at' => 'immutable_datetime', 'total_amount' => 'integer',
+            'receipt_payload' => 'array', 'receipt_queued_at' => 'immutable_datetime', 'receipt_sent_at' => 'immutable_datetime'];
     }
 }

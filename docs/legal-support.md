@@ -19,6 +19,8 @@ Document content and shared metadata live in `app/Support/LegalDocuments.php` an
 
 ## Withdrawal requests
 
+Paid checkout now also requires a separate digital-content acknowledgment. Purchase history, receipt delivery, match-use evidence and the additional 14-day, two-game refund policy are described in [purchase history](purchase-history.md). Update the terms version and its separate `updated_at` date when changing contractual terms.
+
 The public form collects the name, purchase email, purchase reference, and optional message. It presents the declaration for review before the visitor confirms. A UUID protects identical retries; the server fixes the declaration and receipt timestamp. The latest receipt reference and timestamp survive refresh in the same browser session. The form does not approve refunds or modify purchases. Support must review and process valid refunds through Stripe; the existing signed refund webhook updates cosmetic ownership.
 
 Two plain-text acknowledgments are queued: one to support, with the customer as Reply-To, and one to the customer. Both include the submitted declaration, purchase reference, receipt reference, and timestamp. No emails are sent synchronously during the request. Queue insertion and the request marker share a database transaction, so an ordinary retry does not enqueue duplicates.

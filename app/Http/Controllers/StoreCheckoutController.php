@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Game\AccountProgression;
+use App\Game\PurchasePolicy;
 use App\Game\StripeCheckout;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -15,7 +16,9 @@ class StoreCheckoutController extends Controller
     public function checkout(Request $request, StripeCheckout $stripe): JsonResponse
     {
         $input = $request->validate(['bundle_id' => ['required', 'string', 'max:80'],
-            'terms' => ['required', 'accepted'], 'terms_version' => ['required', Rule::in([config('legal.version')])]]);
+            'terms' => ['required', 'accepted'], 'terms_version' => ['required', Rule::in([config('legal.version')])],
+            'digital_content_consent' => ['required', 'accepted'],
+            'purchase_policy_version' => ['required', Rule::in([PurchasePolicy::VERSION])]]);
         try {
             return response()->json(['url' => $stripe->checkout($request->user(), $input['bundle_id'])]);
         } catch (ValidationException $exception) {

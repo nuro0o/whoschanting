@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Game\AccountProgression;
 use App\Game\PaidCosmetics;
+use App\Game\PurchasePolicy;
 use App\Models\PaidOrder;
 use App\Models\PlayerProfile;
 use App\Models\User;
@@ -58,7 +59,7 @@ class StripeCheckoutTest extends TestCase
     {
         $this->actingAs($user ?? User::factory()->create())->postJson('/account/store/checkout', [
             'bundle_id' => 'founders-pack', 'price_id' => 'price_fake', 'amount' => 1, 'user_id' => 999,
-            'terms' => true, 'terms_version' => config('legal.version'),
+            'terms' => true, 'terms_version' => config('legal.version'), 'digital_content_consent' => true, 'purchase_policy_version' => PurchasePolicy::VERSION,
         ])->assertOk()->assertJsonPath('url', 'https://checkout.stripe.com/c/pay/test');
         $order = PaidOrder::firstOrFail();
         $this->stripeIntent = ['id' => 'pi_founder', 'status' => 'succeeded', 'metadata' => $order->checkout_parameters['metadata'],
@@ -85,11 +86,11 @@ class StripeCheckoutTest extends TestCase
 
     public function test_checkout_requires_verified_account_valid_bundle_and_complete_configuration(): void
     {
-        $this->postJson('/account/store/checkout', ['bundle_id' => 'founders-pack', 'terms' => true, 'terms_version' => config('legal.version')])->assertUnauthorized();
-        $this->actingAs(User::factory()->unverified()->create())->postJson('/account/store/checkout', ['bundle_id' => 'founders-pack', 'terms' => true, 'terms_version' => config('legal.version')])->assertForbidden();
+        $this->postJson('/account/store/checkout', ['bundle_id' => 'founders-pack', 'terms' => true, 'terms_version' => config('legal.version'), 'digital_content_consent' => true, 'purchase_policy_version' => PurchasePolicy::VERSION])->assertUnauthorized();
+        $this->actingAs(User::factory()->unverified()->create())->postJson('/account/store/checkout', ['bundle_id' => 'founders-pack', 'terms' => true, 'terms_version' => config('legal.version'), 'digital_content_consent' => true, 'purchase_policy_version' => PurchasePolicy::VERSION])->assertForbidden();
         $this->actingAs(User::factory()->create())->postJson('/account/store/checkout', ['bundle_id' => 'unknown'])->assertUnprocessable();
         config(['payments.webhook_secret' => null]);
-        $this->postJson('/account/store/checkout', ['bundle_id' => 'founders-pack', 'terms' => true, 'terms_version' => config('legal.version')])->assertUnprocessable();
+        $this->postJson('/account/store/checkout', ['bundle_id' => 'founders-pack', 'terms' => true, 'terms_version' => config('legal.version'), 'digital_content_consent' => true, 'purchase_policy_version' => PurchasePolicy::VERSION])->assertUnprocessable();
         $this->assertDatabaseCount('paid_orders', 0);
         Http::assertNothingSent();
     }
@@ -119,6 +120,10 @@ class StripeCheckoutTest extends TestCase
         $this->webhook()->assertOk();
         $this->webhook()->assertOk();
         $this->assertSame('paid', $order->fresh()->status);
+        $this->assertNotNull($order->fresh()->receipt_queued_at);
+        $this->assertNull($order->fresh()->receipt_sent_at);
+        $this->assertDatabaseCount('jobs', 1);
+        $this->assertSame(799, $order->fresh()->total_amount);
         $this->assertCount(7, (new PaidCosmetics)->ownedCosmetics($order->user_id));
         $this->postJson('/account/customization', ['title' => 'founder', 'frame' => 'founder', 'accent' => 'founder_gold',
             'background' => 'founders_hall', 'table' => 'founders_oak', 'banishment' => 'gilded_vortex', 'celebration' => 'crownfall'])
@@ -128,7 +133,7 @@ class StripeCheckoutTest extends TestCase
         $this->assertSame('crownfall', $appearance['celebration']);
         $this->assertArrayNotHasKey('user_id', $appearance);
         $this->assertSame(0, PlayerProfile::findOrFail($order->user_id)->coins);
-        $this->postJson('/account/store/checkout', ['bundle_id' => 'founders-pack', 'terms' => true, 'terms_version' => config('legal.version')])->assertUnprocessable();
+        $this->postJson('/account/store/checkout', ['bundle_id' => 'founders-pack', 'terms' => true, 'terms_version' => config('legal.version'), 'digital_content_consent' => true, 'purchase_policy_version' => PurchasePolicy::VERSION])->assertUnprocessable();
         $this->assertDatabaseCount('paid_orders', 1);
     }
 
@@ -139,7 +144,7 @@ class StripeCheckoutTest extends TestCase
         $this->stripeSession['payment_intent']['status'] = 'processing';
         $this->webhook()->assertOk();
         $this->assertSame('pending', $order->fresh()->status);
-        $this->postJson('/account/store/checkout', ['bundle_id' => 'founders-pack', 'terms' => true, 'terms_version' => config('legal.version')])->assertUnprocessable();
+        $this->postJson('/account/store/checkout', ['bundle_id' => 'founders-pack', 'terms' => true, 'terms_version' => config('legal.version'), 'digital_content_consent' => true, 'purchase_policy_version' => PurchasePolicy::VERSION])->assertUnprocessable();
         $this->stripeSession['payment_status'] = 'paid';
         $this->stripeSession['payment_intent']['status'] = 'succeeded';
         $this->webhook('checkout.session.async_payment_succeeded')->assertOk();
@@ -185,7 +190,7 @@ class StripeCheckoutTest extends TestCase
         $this->stripeSession['status'] = 'open';
         $this->stripeSession['url'] = 'https://checkout.stripe.com/c/pay/existing';
         $this->stripeSession['payment_intent'] = null;
-        $this->postJson('/account/store/checkout', ['bundle_id' => 'founders-pack', 'terms' => true, 'terms_version' => config('legal.version')])->assertOk()
+        $this->postJson('/account/store/checkout', ['bundle_id' => 'founders-pack', 'terms' => true, 'terms_version' => config('legal.version'), 'digital_content_consent' => true, 'purchase_policy_version' => PurchasePolicy::VERSION])->assertOk()
             ->assertJsonPath('url', 'https://checkout.stripe.com/c/pay/existing');
         $this->assertDatabaseCount('paid_orders', 1);
         $this->assertCount(1, Http::recorded(fn (Request $request): bool => $request->method() === 'POST'));
@@ -253,7 +258,7 @@ class StripeCheckoutTest extends TestCase
     public function test_stripe_price_mismatch_disables_checkout_before_creating_an_order(): void
     {
         $this->stripePriceAmount = 1;
-        $this->actingAs(User::factory()->create())->postJson('/account/store/checkout', ['bundle_id' => 'founders-pack', 'terms' => true, 'terms_version' => config('legal.version')])
+        $this->actingAs(User::factory()->create())->postJson('/account/store/checkout', ['bundle_id' => 'founders-pack', 'terms' => true, 'terms_version' => config('legal.version'), 'digital_content_consent' => true, 'purchase_policy_version' => PurchasePolicy::VERSION])
             ->assertUnprocessable()->assertJsonValidationErrors('bundle_id');
         $this->assertDatabaseCount('paid_orders', 0);
     }
@@ -262,13 +267,13 @@ class StripeCheckoutTest extends TestCase
     {
         $this->failCheckout = true;
         $user = User::factory()->create();
-        $this->actingAs($user)->postJson('/account/store/checkout', ['bundle_id' => 'founders-pack', 'terms' => true, 'terms_version' => config('legal.version')])->assertStatus(503);
+        $this->actingAs($user)->postJson('/account/store/checkout', ['bundle_id' => 'founders-pack', 'terms' => true, 'terms_version' => config('legal.version'), 'digital_content_consent' => true, 'purchase_policy_version' => PurchasePolicy::VERSION])->assertStatus(503);
         $order = PaidOrder::firstOrFail();
         $this->assertNull($order->stripe_session_id);
         $parameters = $order->checkout_parameters;
         $this->failCheckout = false;
         $user->update(['email' => 'changed@example.test']);
-        $this->postJson('/account/store/checkout', ['bundle_id' => 'founders-pack', 'terms' => true, 'terms_version' => config('legal.version')])->assertOk();
+        $this->postJson('/account/store/checkout', ['bundle_id' => 'founders-pack', 'terms' => true, 'terms_version' => config('legal.version'), 'digital_content_consent' => true, 'purchase_policy_version' => PurchasePolicy::VERSION])->assertOk();
         $this->assertDatabaseCount('paid_orders', 1);
         $this->assertSame($parameters, $order->fresh()->checkout_parameters);
         $requests = Http::recorded(fn (Request $request): bool => $request->method() === 'POST')->values();

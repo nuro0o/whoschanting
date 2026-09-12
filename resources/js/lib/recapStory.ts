@@ -144,10 +144,11 @@ export function buildRecapStory(
         steps.push({
             id: 'ending',
             label: 'The ending',
-            title:
-                recap.winner === 'town'
-                    ? 'The village prevailed'
-                    : 'The cult prevailed',
+            title: recap.winners?.includes('fae')
+                ? `${recap.winner === 'town' ? 'Town' : 'Cult'} and the Fae Court share victory`
+                : recap.winner === 'town'
+                  ? 'The village prevailed'
+                  : 'The cult prevailed',
             body:
                 recap.win_reason || 'The match ended in victory for this team.',
             details: [],

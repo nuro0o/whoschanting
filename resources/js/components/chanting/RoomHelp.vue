@@ -14,6 +14,8 @@ const nextAction = computed(() => {
         return 'Review the table and match recap in Play. The host can choose Play again.';
     if (phase === 'lobby')
         return 'Use Invite friends in Play to share this room. Everyone chooses Ready; the host then chooses Start game.';
+    if (phase === 'bargains')
+        return 'Check the Fae Court panel in Play. Reveal your private bargains and accept or decline before the timer ends. Curses pause during this window; unanswered offers expire.';
     if (!me.alive)
         return 'You are watching until the next match. Read public events and chat in the meantime.';
     if (me.curse?.type === 'puzzle' || me.curse?.type === 'mist')
@@ -76,6 +78,26 @@ const nextAction = computed(() => {
                 ...state.rules.cult_roles_min_players,
             }"
         />
+        <section v-if="state.mode_setup?.fae_court" class="help-answer">
+            <h3>How does the Fae Court win?</h3>
+            <p>
+                One owner shares the expansion with everyone. A randomly dealt
+                Fae Broker replaces one Townsperson. Its anonymous night offers
+                arrive after night actions resolve. Recipients can accept a gift
+                and then break the promise; only fulfilled promises earn seals.
+                Refusals and missing responses earn nothing. Each different
+                partner can earn one seal.
+            </p>
+            <p>
+                The Court needs {{ state.fae?.goal ?? 3 }} seals across at least
+                {{ state.fae?.minimum_rounds ?? 2 }} rounds, including a partner
+                on the eventual winning side. Fae victory is decided when Town
+                or Cult wins, even if the Broker or partner was banished.
+                Completing bargains never ends a match. A living Fae prevents
+                the one-Town/one-Cult final-pair shortcut; eliminating all Town
+                or all Cult still ends the match.
+            </p>
+        </section>
         <section class="help-answer">
             <h3>Where are my ability results?</h3>
             <p>

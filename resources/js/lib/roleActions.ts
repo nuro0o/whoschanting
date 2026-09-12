@@ -88,6 +88,15 @@ export function eligibleTargets(
     return state.players.filter(
         (player) =>
             player.alive !== deadTarget &&
+            !(
+                night &&
+                state.me.role === 'fae_broker' &&
+                state.fae?.bargains.some(
+                    (bargain) =>
+                        bargain.recipient_id === player.id &&
+                        bargain.status === 'fulfilled',
+                )
+            ) &&
             (player.id !== state.me.id || canCurseSelf) &&
             !(
                 state.phase === 'night' &&
@@ -102,6 +111,8 @@ export function nightActionLabel(
     useAbility: boolean,
     target: string | null,
 ): string {
+    if (state.me.role === 'fae_broker')
+        return target ? 'Seal the anonymous offer' : 'Keep watch tonight';
     if (
         target === state.me.id &&
         ['veilweaver', 'acolyte'].includes(state.me.role ?? '')

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Head, Link } from '@inertiajs/vue3';
+import { Head, Link, usePage } from '@inertiajs/vue3';
 import { ArrowLeft, ArrowRight, Check, Eye, Mail } from '@lucide/vue';
 import { computed, nextTick, reactive, ref, watch } from 'vue';
 import LegalLinks from '@/components/LegalLinks.vue';
@@ -28,6 +28,25 @@ const step = ref<'details' | 'review'>('details');
 const pending = ref(false);
 const error = ref('');
 const receipt = ref<SupportReceipt | null>(props.supportRequest ?? null);
+const page = usePage();
+const orderEdited = ref(false);
+watch(
+    () => [page.url, receipt.value],
+    () => {
+        if (
+            props.document.id !== 'refunds' ||
+            receipt.value ||
+            orderEdited.value ||
+            form.order_reference
+        )
+            return;
+        const order = new URLSearchParams(
+            page.url.split('?')[1]?.split('#')[0],
+        ).get('order');
+        if (order) form.order_reference = order.slice(0, 255);
+    },
+    { immediate: true },
+);
 const reviewHeading = ref<HTMLElement>();
 const detailsHeading = ref<HTMLElement>();
 const receiptHeading = ref<HTMLElement>();
@@ -88,6 +107,7 @@ async function newRequest() {
     });
     requestId = undefined;
     confirmedPayload = undefined;
+    orderEdited.value = false;
     step.value = 'details';
     error.value = '';
     await nextTick();
@@ -363,6 +383,7 @@ async function submit() {
                                     >Order or payment reference<input
                                         id="withdrawal-order"
                                         v-model="form.order_reference"
+                                        @input="orderEdited = true"
                                         name="order_reference"
                                         maxlength="255"
                                         required

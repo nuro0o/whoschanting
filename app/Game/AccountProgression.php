@@ -177,7 +177,8 @@ class AccountProgression
             $finishedAt = CarbonImmutable::parse($match->finished_at);
             $season = $this->season($finishedAt);
             $seasonRecord = PlayerSeason::firstOrCreate(['user_id' => $userId, 'season_id' => $season['id']]);
-            $won = $state['players'][$seatId]['alignment'] === $state['winner'];
+            $alignment = $state['players'][$seatId]['alignment'];
+            $won = in_array($alignment, $state['winners'] ?? [$state['winner']], true);
             $xp = (int) config('progression.match_xp') + ($won ? (int) config('progression.win_xp') : 0)
                 + ($night + $votes === $opportunities ? (int) config('progression.attendance_xp') : 0);
             $before = $this->level($profile->xp);
@@ -187,8 +188,8 @@ class AccountProgression
             $coins = $crownCooldown === null ? (new CosmeticStore)->rewardLocked($profile, $match->id, $won, $match->player_count) : 0;
             $profile->matches++;
             $profile->wins += (int) $won;
-            if ($won) {
-                $field = $state['winner'] === 'town' ? 'town_wins' : 'cult_wins';
+            if ($won && in_array($alignment, ['town', 'cult'], true)) {
+                $field = $alignment === 'town' ? 'town_wins' : 'cult_wins';
                 $profile->$field++;
             }
             $profile->roles_played = array_values(array_unique([...$profile->roles_played, $state['players'][$seatId]['role']]));

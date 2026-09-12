@@ -54,6 +54,7 @@ export interface StoreItem {
     affordable: boolean;
 }
 export interface StoreBundle {
+    kind?: 'faction';
     id: string;
     name: string;
     description: string;

@@ -18,10 +18,6 @@ export function createTableCosmetics(scene: THREE.Scene) {
         metalness: 0.7,
         roughness: 0.3,
     });
-    const copper = new THREE.MeshStandardMaterial({
-        color: 0xcd7938,
-        metalness: 0.45,
-    });
     const glow = new THREE.MeshStandardMaterial({
         color: 0xf5ce7a,
         emissive: 0xc68b37,
@@ -32,16 +28,13 @@ export function createTableCosmetics(scene: THREE.Scene) {
         color: 0x425c58,
         transparent: true,
     });
-    [gold, silver, copper, glow, shadow].forEach((material) =>
-        materials.add(material),
-    );
+    [gold, silver, glow, shadow].forEach((material) => materials.add(material));
     function geometry<T extends THREE.BufferGeometry>(value: T): T {
         geometries.add(value);
         return value;
     }
     const ring = geometry(new THREE.TorusGeometry(0.35, 0.045, 6, 32));
     const jewel = geometry(new THREE.OctahedronGeometry(0.12));
-    const leaf = geometry(new THREE.SphereGeometry(0.15, 8, 6));
     const moon = geometry(
         new THREE.TorusGeometry(0.42, 0.075, 8, 40, Math.PI * 1.45),
     );
@@ -66,7 +59,7 @@ export function createTableCosmetics(scene: THREE.Scene) {
         parent.add(object);
         return object;
     }
-    // Actual inlaid crowns, silver crescents, or copper leaves around the rim.
+    // Inlaid crowns and silver crescents. Harvest owns a complete table scene.
     const motifs = Array.from({ length: 12 }, (_, i) => {
         const group = new THREE.Group();
         const angle = (i / 12) * Math.PI * 2;
@@ -86,15 +79,7 @@ export function createTableCosmetics(scene: THREE.Scene) {
             point.position.set((j - 1) * 0.23, 0.25, 0);
         }
         const crescent = mesh(moon, silver, group);
-        const leaves = new THREE.Group();
-        group.add(leaves);
-        for (let j = 0; j < 3; j++) {
-            const sprig = mesh(leaf, copper, leaves);
-            sprig.scale.set(0.5, 1.5, 0.22);
-            sprig.rotation.z = (j - 1) * 0.65;
-            sprig.position.x = (j - 1) * 0.18;
-        }
-        return { crown, crescent, leaves };
+        return { crown, crescent };
     });
     const halo = mesh(ring, glow, effect);
     halo.rotation.x = -Math.PI / 2;
@@ -113,10 +98,9 @@ export function createTableCosmetics(scene: THREE.Scene) {
 
     return {
         table(id: string) {
-            motifs.forEach(({ crown, crescent, leaves }) => {
+            motifs.forEach(({ crown, crescent }) => {
                 crown.visible = id === 'founders_oak';
                 crescent.visible = id === 'moonlit';
-                leaves.visible = id === 'harvest';
             });
             return id === 'moonlit'
                 ? 0x7e8dad

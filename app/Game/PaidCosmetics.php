@@ -18,7 +18,7 @@ class PaidCosmetics
         $owned = PaidOrder::where('user_id', $userId)->where('status', 'paid')->pluck('bundle_id')->all();
 
         return array_map(fn (array $bundle): array => [
-            ...array_intersect_key($bundle, array_flip(['id', 'name', 'description', 'amount', 'currency', 'cosmetics'])),
+            ...array_intersect_key($bundle, array_flip(['id', 'kind', 'name', 'description', 'amount', 'currency', 'cosmetics'])),
             'owned' => in_array($bundle['id'], $owned, true),
             'available' => filled(config('payments.secret_key')) && filled(config('payments.webhook_secret')) && filled($bundle['price_id']),
         ], $this->bundles());

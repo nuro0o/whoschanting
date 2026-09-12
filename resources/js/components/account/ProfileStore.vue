@@ -63,9 +63,16 @@ const consentBundle = computed(() =>
     bundles.value.find((bundle) => bundle.id === consentBundleId.value),
 );
 const termsAccepted = ref(false);
+const digitalContentAccepted = ref(false);
+const digitalContentConsent = computed(
+    () =>
+        page.props.legal?.purchase_consent_text ??
+        'I request immediate access to this digital content and expressly consent to supply beginning during the 14-day withdrawal period. I acknowledge that my statutory right of withdrawal is lost once supply begins, subject to the required purchase confirmation. The store additionally offers refunds within 14 days for purchases used in no more than two distinct games. My rights for faulty or undelivered content are unaffected.',
+);
 const consentError = ref('');
 const consentErrorElement = ref<HTMLElement>();
 let consentVersion = '';
+let purchasePolicyVersion = '';
 function chooseBundle(bundle: StoreBundle) {
     if (
         checkoutBundleId.value ||
@@ -76,16 +83,20 @@ function chooseBundle(bundle: StoreBundle) {
     )
         return;
     termsAccepted.value = false;
+    digitalContentAccepted.value = false;
     consentError.value = '';
     consentVersion = page.props.legal?.version ?? '';
+    purchasePolicyVersion = page.props.legal?.purchase_policy_version ?? '';
     consentBundleId.value = bundle.id;
 }
 function closeConsent(open: boolean) {
     if (open || checkoutBundleId.value) return;
     consentBundleId.value = null;
     termsAccepted.value = false;
+    digitalContentAccepted.value = false;
     consentError.value = '';
     consentVersion = '';
+    purchasePolicyVersion = '';
 }
 let sessionId = '';
 let paymentTimer: ReturnType<typeof setTimeout> | undefined;
@@ -117,6 +128,7 @@ async function checkout(bundle: StoreBundle) {
         !bundle.available ||
         bundle.owned ||
         !termsAccepted.value ||
+        !digitalContentAccepted.value ||
         consentBundleId.value !== bundle.id
     )
         return;
@@ -130,6 +142,8 @@ async function checkout(bundle: StoreBundle) {
                 bundle_id: bundle.id,
                 terms: true,
                 terms_version: consentVersion,
+                digital_content_consent: true,
+                purchase_policy_version: purchasePolicyVersion,
             },
         );
         const destination = new URL(result.url);
@@ -167,7 +181,7 @@ async function checkPayment(manual = false) {
         const messages: Record<CheckoutStatus, string> = {
             pending:
                 'Your payment is being confirmed. Your collection will update here as soon as it is ready.',
-            paid: 'Payment confirmed. Your bundle is yours to keep — open your wardrobe to equip it.',
+            paid: 'Payment confirmed. Your purchase is unlocked below. Equip cosmetics in your wardrobe or enable your faction expansion in a room lobby.',
             refunded:
                 'This payment has been refunded. Your collection now shows your current unlocks.',
             disputed:
@@ -317,6 +331,12 @@ function transactionName(itemId: string | null) {
         </header>
 
         <template v-if="store">
+            <div class="store-purchase-history">
+                <Link href="/account/purchases" class="account-text-link"
+                    >Your purchases, receipts &amp; refund options
+                    <ArrowRight :size="14" aria-hidden="true"
+                /></Link>
+            </div>
             <section
                 v-if="bundles.length"
                 class="premium-collection"
@@ -332,8 +352,8 @@ function transactionName(itemId: string | null) {
                         </h3>
                     </div>
                     <p>
-                        One payment. Yours to keep.<br />Every gameplay feature
-                        stays free.
+                        One payment. Yours to keep.<br />Faction expansions are
+                        shared with your whole room.
                     </p>
                 </header>
                 <div
@@ -380,7 +400,22 @@ function transactionName(itemId: string | null) {
                             { 'is-owned': bundle.owned },
                         ]"
                     >
-                        <div class="premium-art">
+                        <div
+                            v-if="bundle.kind === 'faction'"
+                            class="premium-art fae-store-art"
+                        >
+                            <span class="premium-edition"
+                                >The first faction expansion</span
+                            >
+                            <span class="fae-store-sigil" aria-hidden="true"
+                                >❧</span
+                            >
+                            <strong>Every gift<br />has a promise.</strong>
+                            <span class="premium-art-caption"
+                                >One owner. A whole room of possibilities.</span
+                            >
+                        </div>
+                        <div v-else class="premium-art">
                             <span class="premium-edition">{{
                                 bundle.id === 'founders-pack'
                                     ? 'The founding collection'
@@ -415,7 +450,11 @@ function transactionName(itemId: string | null) {
                         </div>
                         <div class="premium-copy">
                             <p class="account-kicker">
-                                Permanent cosmetic bundle
+                                {{
+                                    bundle.kind === 'faction'
+                                        ? 'Permanent faction expansion'
+                                        : 'Permanent cosmetic bundle'
+                                }}
                                 <span v-if="bundle.owned"> · Owned</span>
                             </p>
                             <h4>{{ bundle.name }}</h4>
@@ -423,6 +462,7 @@ function transactionName(itemId: string | null) {
                                 {{ bundle.description }}
                             </p>
                             <ul
+                                v-if="bundle.kind !== 'faction'"
                                 class="premium-contents"
                                 :aria-label="`${bundle.name} contents`"
                             >
@@ -439,7 +479,26 @@ function transactionName(itemId: string | null) {
                                     >
                                 </li>
                             </ul>
+                            <ul v-else class="premium-contents">
+                                <li>
+                                    <Check :size="12" />One secret Fae Broker in
+                                    Classic or Illusions
+                                </li>
+                                <li>
+                                    <Check :size="12" />Three anonymous bargains
+                                    to offer at night
+                                </li>
+                                <li>
+                                    <Check :size="12" />Shared victory with Town
+                                    or Cult
+                                </li>
+                                <li>
+                                    <Check :size="12" />7–15 players · guests
+                                    can play every role
+                                </li>
+                            </ul>
                             <button
+                                v-if="bundle.kind !== 'faction'"
                                 type="button"
                                 class="premium-preview-button"
                                 @click="previewBundle = bundle"
@@ -454,9 +513,18 @@ function transactionName(itemId: string | null) {
                                 </div>
                                 <Link
                                     v-if="bundle.owned"
-                                    href="/progression"
+                                    :href="
+                                        bundle.kind === 'faction'
+                                            ? '/rooms'
+                                            : '/progression'
+                                    "
                                     class="store-equip"
-                                    >Equip <ArrowRight :size="14" /></Link
+                                    >{{
+                                        bundle.kind === 'faction'
+                                            ? 'Play with friends'
+                                            : 'Equip'
+                                    }}
+                                    <ArrowRight :size="14" /></Link
                                 ><Button
                                     v-else
                                     :disabled="
@@ -470,7 +538,9 @@ function transactionName(itemId: string | null) {
                                         checkoutBundleId === bundle.id
                                             ? 'Opening checkout…'
                                             : bundle.available
-                                              ? 'Get the bundle'
+                                              ? bundle.kind === 'faction'
+                                                  ? 'Unlock the Court'
+                                                  : 'Get the bundle'
                                               : 'Coming soon'
                                     }}<ExternalLink
                                         v-if="
@@ -716,9 +786,8 @@ function transactionName(itemId: string | null) {
                             </div>
                         </dl>
                         <p class="store-consent-copy">
-                            Your digital cosmetics unlock when payment is
-                            confirmed. Your statutory withdrawal and refund
-                            rights remain. Read our
+                            Your digital purchase unlocks when payment is
+                            confirmed. Read our
                             <a href="/refunds" target="_blank" rel="noopener"
                                 >Refunds policy<span class="sr-only">
                                     (opens in a new tab)</span
@@ -742,6 +811,24 @@ function transactionName(itemId: string | null) {
                                 for this purchase.</span
                             ></label
                         >
+                        <label
+                            class="store-consent-label store-digital-consent"
+                            for="store-digital-consent"
+                            ><input
+                                id="store-digital-consent"
+                                v-model="digitalContentAccepted"
+                                name="digital_content_consent"
+                                type="checkbox"
+                                required
+                                :disabled="!!checkoutBundleId"
+                            /><span>{{ digitalContentConsent }}</span></label
+                        >
+                        <p class="store-consent-copy">
+                            Trying a preview, equipping a cosmetic or joining a
+                            lobby does not count as match use. Repeated refunded
+                            purchases may need support review before buying
+                            again.
+                        </p>
                         <p class="store-consent-copy">
                             Our
                             <a href="/privacy" target="_blank" rel="noopener"
@@ -776,6 +863,7 @@ function transactionName(itemId: string | null) {
                                 :disabled="
                                     !!checkoutBundleId ||
                                     !termsAccepted ||
+                                    !digitalContentAccepted ||
                                     !consentBundle.available ||
                                     consentBundle.owned
                                 "
@@ -889,6 +977,26 @@ function transactionName(itemId: string | null) {
 </template>
 
 <style scoped>
+.fae-store-art {
+    background: #203d34;
+    color: #eee5c7;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: 22px;
+}
+.fae-store-sigil {
+    font-size: 110px;
+    line-height: 1;
+    color: #b9c99c;
+}
+.fae-store-art > strong {
+    font-family: Georgia, serif;
+    font-size: 32px;
+    font-weight: 400;
+    line-height: 1.2;
+}
 :global(.account-theme.store-consent-dialog) {
     max-width: min(560px, calc(100vw - 2rem));
     max-height: calc(100dvh - 2rem);
@@ -914,6 +1022,16 @@ function transactionName(itemId: string | null) {
     flex-shrink: 0;
     margin-top: 4px;
     accent-color: var(--account-green);
+}
+.store-digital-consent {
+    margin-top: 20px;
+    font-size: 12px;
+}
+.store-purchase-history {
+    display: flex;
+    justify-content: flex-end;
+    padding-top: 17px;
+    font-size: 12px;
 }
 .store-consent-dialog a {
     text-decoration: underline;

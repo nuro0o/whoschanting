@@ -35,5 +35,9 @@ return [
                 ['category' => 'banishments', 'id' => 'ember_spiral', 'name' => 'Ember spiral'],
                 ['category' => 'celebrations', 'id' => 'lantern_festival', 'name' => 'Lantern festival'],
             ]],
+        ['id' => 'fae-court', 'kind' => 'faction', 'name' => 'The Fae Court',
+            'description' => 'Secret bargains, uncertain loyalties and shared victories. One owner unlocks the faction for everyone in a Classic room of 7–15 players. Anyone can be dealt the Fae role.',
+            'amount' => (int) env('FAE_COURT_PRICE_CENTS', 299), 'currency' => 'eur', 'price_id' => env('STRIPE_PRICE_FAE_COURT'),
+            'cosmetics' => []],
     ],
 ];

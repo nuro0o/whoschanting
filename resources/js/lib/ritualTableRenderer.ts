@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { createTableCosmetics } from './ritualCosmetics';
+import { createHarvestTable } from './harvestTable';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import {
     poseRimTentacle,
@@ -53,6 +54,8 @@ export function createRitualTable(
     });
     const scene = new THREE.Scene();
     let cosmetics: ReturnType<typeof createTableCosmetics> | undefined;
+    let harvest: ReturnType<typeof createHarvestTable> | undefined;
+    let tableTheme = 'classic';
     const geometries = new Set<THREE.BufferGeometry>();
     const materials = new Set<THREE.Material>();
     const textures = new Set<THREE.Texture>();
@@ -177,6 +180,7 @@ export function createRitualTable(
         controls.removeEventListener('change', cameraChanged);
         controls.dispose();
         cosmetics?.dispose();
+        harvest?.dispose();
         geometries.forEach((geometry) => geometry.dispose());
         materials.forEach((material) => material.dispose());
         textures.forEach((texture) => texture.dispose());
@@ -620,11 +624,11 @@ export function createRitualTable(
         let displayKey = '';
         function drawDial() {
             if (!display) return;
-            const nextKey = JSON.stringify(display);
+            const nextKey = `${tableTheme}:${JSON.stringify(display)}`;
             if (nextKey === displayKey) return;
             displayKey = nextKey;
             const ink = dialInk!;
-            ink.fillStyle = '#132526';
+            ink.fillStyle = tableTheme === 'harvest' ? '#30221c' : '#132526';
             ink.fillRect(0, 0, 1024, 1024);
             ink.strokeStyle = '#a99665';
             ink.lineWidth = 3;
@@ -663,7 +667,7 @@ export function createRitualTable(
             ink.moveTo(360, 672);
             ink.lineTo(664, 672);
             ink.stroke();
-            ink.fillStyle = '#c2d0b6';
+            ink.fillStyle = tableTheme === 'harvest' ? '#d8bea0' : '#c2d0b6';
             ink.font = '600 62px Georgia, serif';
             ink.fillText(display.detail.toUpperCase(), 512, 755, 690);
             dialTexture.needsUpdate = true;
@@ -876,6 +880,7 @@ export function createRitualTable(
             dial.rotation.y = azimuth;
             const blend = motion.matches ? 1 : 1 - Math.exp(-delta * 2);
             darkness += ((state.night ? 1 : 0) - darkness) * blend;
+            if (tableTheme === 'harvest') harvest?.update(darkness);
             emergence += (state.emergence - emergence) * blend;
             warm.intensity = 3.5 - darkness * 1.9;
             edge.intensity = 2.1 + darkness * 0.8;
@@ -997,6 +1002,26 @@ export function createRitualTable(
             updateCosmetics(table, event) {
                 if (disposed || !cosmetics) return;
                 wood.color.setHex(cosmetics.table(table));
+                if (table !== tableTheme) {
+                    tableTheme = table;
+                    const autumn = table === 'harvest';
+                    if (autumn && !harvest) {
+                        try {
+                            harvest = createHarvestTable(scene);
+                        } catch {
+                            dispose();
+                            failed();
+                            return;
+                        }
+                    }
+                    if (harvest) harvest.root.visible = autumn;
+                    oval.visible = !autumn;
+                    brass.color.setHex(autumn ? 0xb78148 : 0x91815a);
+                    black.color.setHex(autumn ? 0x30221c : 0x111f20);
+                    warm.color.setHex(autumn ? 0xffc48e : 0xffd39a);
+                    edge.color.setHex(autumn ? 0xc9bc9c : 0x8bced0);
+                    ambient.color.setHex(autumn ? 0xf0dcc3 : 0xc6ded0);
+                }
                 cosmetics.play(event, seats);
                 schedule();
             },

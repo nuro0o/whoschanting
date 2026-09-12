@@ -30,6 +30,9 @@ import {
 import RoomEntry from '@/components/chanting/RoomEntry.vue';
 import RoomSessionControls from '@/components/chanting/RoomSessionControls.vue';
 import ModeSelector from '@/components/chanting/ModeSelector.vue';
+import FaeOffer from '@/components/chanting/FaeOffer.vue';
+import FaeCourtPanel from '@/components/chanting/FaeCourtPanel.vue';
+import type { BargainKind } from '@/lib/faeCourt';
 import {
     chaosEvents,
     copyModeSetup,
@@ -178,6 +181,24 @@ const pending = ref(false);
 const disconnected = ref(false);
 const live = ref(false);
 const target = ref<string | null>(null);
+const bargainKind = ref<BargainKind>('thorn');
+const promiseTarget = ref<string | null>(null);
+watch(
+    () => state.value?.phase_id,
+    () => {
+        promiseTarget.value = null;
+        bargainKind.value = 'thorn';
+    },
+);
+const invalidBargain = computed(
+    () =>
+        state.value?.phase === 'night' &&
+        state.value.me.role === 'fae_broker' &&
+        !!target.value &&
+        ((bargainKind.value !== 'voice' &&
+            (!promiseTarget.value || promiseTarget.value === target.value)) ||
+            state.value.me.curse?.type === 'misdirection'),
+);
 const inspectedPlayerId = ref<string | null>(null);
 const useAbility = ref(false);
 const forgedAlignment = ref<'town' | 'cult'>('cult');
@@ -316,6 +337,7 @@ const dockDisabled = computed(
         pending.value ||
         disconnected.value ||
         seconds.value === 0 ||
+        invalidBargain.value ||
         puzzleCursed.value ||
         mistCursed.value ||
         (state.value?.phase === 'reveal' && !roleRead.value) ||
@@ -325,6 +347,8 @@ const dockDisabled = computed(
 );
 const dockTitle = computed(() => {
     if (spectator.value) return 'Watching from the shore';
+    if (state.value?.phase === 'bargains')
+        return 'Check your private bargain above';
     if (puzzleCursed.value || mistCursed.value)
         return 'Clear your curse to act';
     if (disconnected.value) return 'Reconnecting to the village';
@@ -351,6 +375,15 @@ async function confirmDock() {
         await act('night', {
             target: target.value,
             use_ability: useAbility.value,
+            ...(state.value.me.role === 'fae_broker' && target.value
+                ? {
+                      bargain_kind: bargainKind.value,
+                      promise_target:
+                          bargainKind.value === 'voice'
+                              ? null
+                              : promiseTarget.value,
+                  }
+                : {}),
             ...(useAbility.value && state.value.me.role === 'counterfeiter'
                 ? { forged_alignment: forgedAlignment.value }
                 : {}),
@@ -411,6 +444,7 @@ const phaseLabel = computed(() =>
                 lobby: 'Lobby',
                 reveal: 'Read your role',
                 night: 'Night actions',
+                bargains: 'Private bargains',
                 discussion: 'Discussion',
                 last_words: 'Last Words',
                 voting: 'Voting',
@@ -485,6 +519,10 @@ let disposed = false;
 let echo: Echo<'reverb'> | undefined;
 
 const phaseInfo = {
+    bargains: [
+        'A whisper at the threshold.',
+        'Check your private bargains. Accept or decline before discussion begins.',
+    ],
     lobby: [
         'The usual suspects.',
         'Gather your friends. There’s something strange in the sea tonight.',
@@ -554,7 +592,12 @@ const lobbyRoster = computed(() => {
         .map(([role]) => role);
     return {
         cultists,
-        townspeople: count - cultists - 1 - townRoles.length,
+        townspeople:
+            count -
+            cultists -
+            1 -
+            townRoles.length -
+            (state.value.mode_setup?.fae_court ? 1 : 0),
         townRoles,
         cultRoles: Object.entries(
             state.value.rules.cult_roles_min_players ?? {},
@@ -607,6 +650,7 @@ const tableDisplay = computed(() => {
                       lobby: 'Lobby',
                       reveal: 'Role reveal',
                       night: 'Night',
+                      bargains: 'Private bargains',
                       discussion: 'Discussion',
                       last_words: 'Last Words',
                       voting: 'Voting',
@@ -667,11 +711,13 @@ const canChooseNightTarget = computed(
 const puzzleCursed = computed(
     () =>
         state.value?.phase !== 'finished' &&
+        state.value?.phase !== 'bargains' &&
         state.value?.me.curse?.type === 'puzzle',
 );
 const mistCursed = computed(
     () =>
         state.value?.phase !== 'finished' &&
+        state.value?.phase !== 'bargains' &&
         state.value?.me.curse?.type === 'mist',
 );
 const canSelectSeat = computed(
@@ -720,6 +766,10 @@ const turnBlocker = computed(() => {
     if (!state.value?.me.alive || state.value.me.submitted) return '';
     if (disconnected.value)
         return 'Reconnecting to the village. Please wait before confirming.';
+    if (invalidBargain.value && revealed.value)
+        return state.value.me.curse?.type === 'misdirection'
+            ? 'Break Misdirection before offering, or choose Keep watch.'
+            : 'Choose who your bargain partner must vote for or accuse.';
     if (['night', 'voting'].includes(state.value.phase)) {
         if (puzzleCursed.value)
             return 'Break your Soul Bind in Play to unlock your action. The timer keeps running.';
@@ -1501,6 +1551,14 @@ onBeforeUnmount(() => {
                         </RoomBriefing>
                     </template>
                     <template #actions>
+                        <FaeCourtPanel
+                            v-if="state.phase !== 'finished'"
+                            :state="state"
+                            :revealed="privateVisible"
+                            :disabled="pending || disconnected || seconds === 0"
+                            @reveal="revealed = true"
+                            @respond="(fields) => act('fae_response', fields)"
+                        />
                         <div
                             v-if="
                                 showPrivateTools ||
@@ -1620,6 +1678,14 @@ onBeforeUnmount(() => {
                                     "
                                     class="game-panel action-panel"
                                 >
+                                    <FaeOffer
+                                        v-if="state.me.role === 'fae_broker'"
+                                        v-model:target="target"
+                                        v-model:kind="bargainKind"
+                                        v-model:promise="promiseTarget"
+                                        :state="state"
+                                        :disabled="pending || disconnected"
+                                    />
                                     <p>
                                         {{
                                             state.me.role === 'oracle'
@@ -1632,6 +1698,7 @@ onBeforeUnmount(() => {
                                                     limitedAbility ||
                                                     [
                                                         'exorcist',
+                                                        'fae_broker',
                                                         'oathkeeper',
                                                     ].includes(
                                                         state.me.role ?? '',
@@ -2210,6 +2277,7 @@ onBeforeUnmount(() => {
                     v-if="
                         state.me.curse &&
                         state.me.alive &&
+                        state.phase !== 'bargains' &&
                         state.phase !== 'finished'
                     "
                     :curse="state.me.curse"
@@ -2502,6 +2570,12 @@ onBeforeUnmount(() => {
                                     :disabled="pending || disconnected"
                                     :min-players="state.rules.min_players"
                                     :max-players="state.rules.max_players"
+                                    :fae-available="
+                                        state.expansions?.fae_court.available
+                                    "
+                                    :fae-min-players="
+                                        state.expansions?.fae_court.min_players
+                                    "
                                 />
                                 <p class="small-help">
                                     Applying settings clears everyone’s ready

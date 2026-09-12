@@ -13,6 +13,12 @@ const visible = ref(false);
 let timeout: ReturnType<typeof setTimeout> | undefined;
 const announcement = computed(() => {
     switch (props.phase) {
+        case 'bargains':
+            return {
+                title: 'A whisper from the Court',
+                detail: 'Check your private bargains before discussion.',
+                icon: Sparkles,
+            };
         case 'night':
             return {
                 title: 'Night falls',

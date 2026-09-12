@@ -2,7 +2,9 @@
 
 namespace App\Http\Controllers;
 
+use App\Game\PurchasePolicy;
 use App\Mail\WithdrawalAcknowledgment;
+use App\Models\PaidOrder;
 use App\Models\WithdrawalRequest;
 use App\Support\LegalDocuments;
 use Illuminate\Http\JsonResponse;
@@ -47,7 +49,15 @@ class LegalController extends Controller
                 $details = ['reference' => $record->id, 'received_at' => $record->created_at->utc()->toISOString(),
                     'name' => $record->name, 'email' => $record->email, 'order_reference' => $record->order_reference,
                     'declaration' => $record->declaration, 'message' => $record->message];
-                Mail::to(config('legal.support_email'))->queue(new WithdrawalAcknowledgment($details, true));
+                $order = PaidOrder::where(function ($query) use ($record): void {
+                    $query->whereKey($record->order_reference)->orWhere('stripe_session_id', $record->order_reference)
+                        ->orWhere('stripe_payment_intent_id', $record->order_reference);
+                })->first();
+                $supportDetails = $details;
+                if ($order !== null && strcasecmp((string) ($order->checkout_parameters['customer_email'] ?? ''), $record->email) === 0) {
+                    $supportDetails['purchase_review'] = json_encode((new PurchasePolicy)->review($order), JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR);
+                }
+                Mail::to(config('legal.support_email'))->queue(new WithdrawalAcknowledgment($supportDetails, true));
                 Mail::to($record->email)->queue(new WithdrawalAcknowledgment($details));
                 $record->setAttribute('acknowledgment_queued_at', now())->save();
             }

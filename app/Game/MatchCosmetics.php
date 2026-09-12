@@ -39,7 +39,7 @@ class MatchCosmetics
             }
         }
         // Every member of the winning faction gets exactly one entry, alive or dead.
-        $winners = array_keys(array_filter($state['players'], fn (array $player): bool => ($player['alignment'] ?? null) === $state['winner']));
+        $winners = array_keys(array_filter($state['players'], fn (array $player): bool => in_array($player['alignment'] ?? null, $state['winners'] ?? [$state['winner']], true)));
         if ($winners !== []) {
             self::append($state, 'celebration', $winners[random_int(0, count($winners) - 1)]);
         }
@@ -48,6 +48,9 @@ class MatchCosmetics
     /** @param array<string, mixed> $state */
     private static function append(array &$state, string $kind, string $playerId): void
     {
+        if (self::choice($state['players'][$playerId], $kind) !== 'classic') {
+            (new PaidPackUsage)->record($state, $playerId, $kind);
+        }
         $state['cosmetic_events'][] = [
             'id' => (string) Str::uuid(), 'kind' => $kind, 'player_id' => $playerId,
             'effect' => self::choice($state['players'][$playerId], $kind),

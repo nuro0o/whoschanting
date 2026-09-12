@@ -14,6 +14,13 @@ withDefaults(
 const headingId = useId();
 const allegiances = [
     {
+        id: 'fae',
+        name: 'The Fae Court',
+        purpose:
+            'Paid room expansion · one owner shares it with the room. Fulfill secret bargains to share a victory with Town or Cult.',
+        roles: ['fae_broker'],
+    },
+    {
         id: 'town',
         name: t('roleGuide.town.name'),
         purpose: t('roleGuide.town.purpose'),

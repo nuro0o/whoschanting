@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { bargains, bargainPromise } from '@/lib/faeCourt';
 import {
     ArrowRight,
     ChevronDown,
@@ -111,7 +112,9 @@ function actionDescription(action: RecapNightAction) {
     if (action.role === 'dreamweaver' && action.used_ability)
         return `Sent a disruption to ${name(action.target_id)} instead of chanting. The ability was spent.`;
     if (action.role === 'oracle') {
-        return `Investigated ${name(action.target_id)}. Read as ${action.apparent_alignment === 'cult' ? 'cult' : 'town'}.`;
+        return action.target_id
+            ? `Investigated ${name(action.target_id)}. Read as ${action.apparent_alignment ?? 'unknown'}.`
+            : 'Kept watch.';
     }
     if (action.role === 'warden') {
         if (!action.target_id) return 'Skipped protection.';
@@ -148,6 +151,8 @@ function actionDescription(action: RecapNightAction) {
                   : '';
         return [chant, veil, curse].filter(Boolean).join(' ');
     }
+    if (action.role === 'fae_broker' && action.target_id)
+        return `Sent an anonymous bargain to ${name(action.target_id)}. See the Court’s bargain record for the promise and outcome.`;
     return 'Kept watch.';
 }
 </script>
@@ -161,6 +166,40 @@ function actionDescription(action: RecapNightAction) {
             <h2 id="recap-title">What really happened</h2>
             <span>Every secret, revealed</span>
         </div>
+        <section v-if="recap.fae" class="table-step">
+            <h3>
+                {{
+                    recap.winners?.includes('fae')
+                        ? 'The Fae Court shares victory'
+                        : 'The Fae Court did not fulfill its victory conditions'
+                }}
+            </h3>
+            <p>
+                {{ recap.fae.seals }} / {{ recap.fae.goal }} seals. The Court
+                needed different partners across at least
+                {{ recap.fae.minimum_rounds }} rounds, including a partner on
+                the winning side.
+            </p>
+            <ol>
+                <li v-for="bargain in recap.fae.bargains" :key="bargain.id">
+                    <strong
+                        >Day {{ bargain.day }} ·
+                        {{ bargains[bargain.kind].name }} ·
+                        {{ bargain.status }}</strong
+                    >
+                    <p>
+                        {{ name(bargain.sender_id ?? null) }} offered
+                        {{ name(bargain.recipient_id) }} a bargain.
+                        {{
+                            bargainPromise(
+                                bargain.kind,
+                                name(bargain.promise_target),
+                            )
+                        }}
+                    </p>
+                </li>
+            </ol>
+        </section>
         <div
             v-if="currentStep"
             class="table-step"

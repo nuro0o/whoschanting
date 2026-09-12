@@ -3,6 +3,7 @@ export interface RitualSceneInput {
         | 'lobby'
         | 'reveal'
         | 'night'
+        | 'bargains'
         | 'discussion'
         | 'last_words'
         | 'voting'
@@ -29,7 +30,7 @@ export function ritualSceneState(input: RitualSceneInput) {
         progress,
         night:
             !calmed &&
-            (input.phase === 'night' ||
+            (['night', 'bargains'].includes(input.phase) ||
                 summoned ||
                 (progress === 1 &&
                     ['discussion', 'last_words', 'voting'].includes(

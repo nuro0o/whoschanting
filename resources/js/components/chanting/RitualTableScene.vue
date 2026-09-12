@@ -59,6 +59,7 @@ async function start() {
             props.table ?? 'classic',
             props.effect ?? null,
         );
+        if (!mounted || current !== generation || !renderer) return;
         emit('ready', true);
     } catch {
         if (!mounted || current !== generation) return;

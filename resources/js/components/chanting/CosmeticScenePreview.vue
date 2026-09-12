@@ -188,6 +188,17 @@ button:disabled {
     background: #20283b;
 }
 [data-table='harvest'] {
-    background: #382f24;
+    border-color: #ae815955;
+    background: radial-gradient(ellipse at 50% 30%, #66442d55, #24211d 75%);
+}
+[data-table='harvest'] figcaption {
+    border-color: #ae815944;
+}
+[data-table='harvest'] button {
+    background: #4c352a;
+    border-color: #b4895d88;
+}
+[data-table='harvest'] button:hover {
+    background: #624432;
 }
 </style>

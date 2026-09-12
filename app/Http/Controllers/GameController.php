@@ -102,7 +102,11 @@ class GameController extends Controller
     public function action(Request $request, string $code): JsonResponse
     {
         $data = $request->validate([
-            'type' => ['required', 'string', 'in:ready,start,night,vote,chat,rematch,character,discussion_ready,solve_curse,roster,exorcise,oath,configure_mode,claim,discussion_response,prediction,transfer_host,remove_player,extend_discussion,feedback,accuse,defend,set_pin'],
+            'type' => ['required', 'string', 'in:ready,start,night,vote,chat,rematch,character,discussion_ready,solve_curse,roster,exorcise,oath,configure_mode,claim,discussion_response,prediction,transfer_host,remove_player,extend_discussion,feedback,accuse,defend,set_pin,fae_response'],
+            'bargain_kind' => ['nullable', 'string', 'in:thorn,voice,lantern'],
+            'promise_target' => ['nullable', 'uuid'],
+            'bargain_id' => ['required_if:type,fae_response', 'uuid'],
+            'accept' => ['required_if:type,fae_response', 'boolean'],
             'pin' => ['present_if:type,set_pin', ...$this->pinRules()],
             'phase_id' => ['required', 'integer', 'min:1'],
             'client_id' => ['sometimes', 'uuid'],
@@ -145,7 +149,8 @@ class GameController extends Controller
     private function modeRules(): array
     {
         return [
-            'setup' => ['sometimes', 'array:mode,classic_variant,chaos_variant,roles'],
+            'setup' => ['sometimes', 'array:mode,classic_variant,chaos_variant,roles,fae_court'],
+            'setup.fae_court' => ['sometimes', 'boolean'],
             'setup.mode' => ['sometimes', 'string', 'in:classic,hard,chaos,paranoia,custom'],
             'setup.classic_variant' => ['sometimes', 'string', 'in:classic,illusions'],
             'setup.chaos_variant' => ['sometimes', 'string', 'in:wildcards,maelstrom'],

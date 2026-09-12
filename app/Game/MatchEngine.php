@@ -56,6 +56,7 @@ class MatchEngine
                 'win_reason' => null, 'actions' => [], 'awards' => [], 'messages' => [],
                 'log' => ['A new gathering takes shape.'], 'cult_banished' => false,
             ];
+            $this->ensure(! ($setup['fae_court'] ?? false) || FaeCourt::available($state), 'The Fae Court needs one seated player who owns the expansion. Enable it after an owner joins.');
 
             return GameRoom::create(['code' => $code, 'state' => $state]);
         });
@@ -291,6 +292,7 @@ class MatchEngine
                 $setup = $a['setup'];
             }
             $s['mode_setup'] = $this->modes->normalize($setup);
+            $this->ensure(! $s['mode_setup']['fae_court'] || FaeCourt::available($s), 'The Fae Court needs one seated player who owns the expansion.');
             $s['roster'] = $s['mode_setup']['classic_variant'];
             foreach ($s['players'] as &$player) {
                 $player['ready'] = false;
@@ -300,6 +302,12 @@ class MatchEngine
             return;
         }
         $selectedCurse = $a['curse_type'] ?? null;
+        if ($type === 'fae_response') {
+            FaeCourt::respond($s, $id, $a);
+
+            return;
+        }
+        $this->ensure($type === 'night' || (! isset($a['bargain_kind']) && ! isset($a['promise_target'])), 'Bargains are offered at night.');
         if ($selectedCurse !== null) {
             $this->ensure($type === 'night' && in_array($p['role'], ['veilweaver', 'acolyte'], true) && ($a['target'] ?? null) !== null, 'Only a cultist cursing a target can choose a curse.');
             $this->ensure(in_array($selectedCurse, $this->curses->availableTypes($s['tokens'], $s['threshold']), true), 'Choose an unlocked curse. Misdirection unlocks at ritual level 3.');
@@ -338,14 +346,15 @@ class MatchEngine
             $s['players'] = array_filter($s['players'], fn (array $player): bool => ($player['in_room'] ?? true));
             foreach ($s['players'] as &$player) {
                 $player = array_replace($player, ['ready' => false, 'alive' => true, 'role' => null, 'alignment' => null, 'results' => [], 'curse' => null, 'curse_notice' => null, 'missed_phases' => 0, 'afk' => false, 'afk_prompt_deadline' => null]);
-                unset($player['last_protection'], $player['ability_used'], $player['haunting'], $player['oath'], $player['oath_protection_day'], $player['elimination_reason']);
+                unset($player['last_protection'], $player['ability_used'], $player['haunting'], $player['oath'], $player['oath_protection_day'], $player['elimination_reason'], $player['fae_protection_day']);
             }
             unset($player);
             $s = array_replace($s, ['day' => 0, 'tokens' => 0, 'threshold' => 0, 'winner' => null, 'win_reason' => null,
                 'mission' => null, 'awards' => [], 'messages' => [], 'log' => ['The village gathers again.'], 'cult_banished' => false]);
             unset($s['match_id'], $s['match_rules'], $s['started_at'], $s['finished_at'], $s['rounds'], $s['missed_actions'], $s['chaos_event'], $s['match_rewards']);
             unset($s['claims'], $s['responses'], $s['predictions'], $s['feedback'], $s['discussion_extension']);
-            unset($s['cosmetic_table'], $s['cosmetic_events']);
+            unset($s['cosmetic_table'], $s['cosmetic_events'], $s['paid_cosmetic_orders']);
+            unset($s['fae'], $s['winners']);
             $this->phase($room, $s, 'lobby');
 
             return;
@@ -359,6 +368,7 @@ class MatchEngine
             shuffle($ids);
             $setup = $this->modes->setup($s);
             $roster = $this->modes->roster($setup, $count);
+            FaeCourt::start($s);
             foreach ($ids as $index => $pid) {
                 if (isset($s['players'][$pid]['user_id'])) {
                     $appearance = $this->progression->appearance($s['players'][$pid]['user_id'], $s['players'][$pid]['character'] ?? null);
@@ -379,10 +389,15 @@ class MatchEngine
             $s['cosmetic_events'] = [];
             $s['match_rules'] = ['version' => config('game.rules_version'), 'player_count' => $count,
                 'seconds' => $this->modes->phaseSeconds($count), 'roster' => $s['roster'] ?? 'classic', 'mode_setup' => $setup];
+            if (isset($s['fae'])) {
+                $s['match_rules']['seconds']['bargains'] = $s['fae']['rules']['bargain_seconds'];
+                $s['match_rules']['version'] .= '-fae-v1';
+            }
             if ($setup['mode'] === 'paranoia') {
                 $s['match_rules']['paranoia_preview'] = $this->modes->preview($setup, $count);
             }
             $s['started_at'] = now()->toISOString();
+            (new PaidPackUsage)->start($s);
             $s['rounds'] = [];
             $s['missed_actions'] = ['night' => 0, 'vote' => 0];
             $this->phase($room, $s, 'reveal');
@@ -453,10 +468,12 @@ class MatchEngine
             $this->ensure($target === null, 'Readiness does not target another player.');
         } elseif ($type === 'night') {
             $this->ensure($s['phase'] === 'night', 'Night has ended.');
+            FaeCourt::validateOffer($s, $id, $a);
+            $this->ensure($p['role'] !== 'fae_broker' || $target === null || ($p['curse']['type'] ?? null) !== 'misdirection', 'Break Misdirection before offering a bargain, or keep watch.');
             $this->ensure($p['role'] !== 'lamplighter' || $target !== null, 'Choose someone to watch.');
             $this->ensure($p['role'] !== 'tracker' || $target !== null, 'Choose someone to track.');
             $this->ensure(! $useAbility || in_array($p['role'], ['bellkeeper', 'herbalist'], true) || $target !== null, 'Choose a target for your ability.');
-            $canTarget = in_array($p['role'], ['oracle', 'veilweaver', 'acolyte', 'warden', 'lamplighter', 'tracker']) || ($useAbility && in_array($p['role'], ['medium', 'dreamweaver', 'phantasm', 'counterfeiter', 'vigilante']));
+            $canTarget = in_array($p['role'], ['fae_broker', 'oracle', 'veilweaver', 'acolyte', 'warden', 'lamplighter', 'tracker']) || ($useAbility && in_array($p['role'], ['medium', 'dreamweaver', 'phantasm', 'counterfeiter', 'vigilante']));
             $this->ensure($canTarget || $target === null, 'Your chosen action does not target another player.');
             $this->ensure($target === null || $target !== $this->previousProtection($p, $s['day']), 'You cannot protect the same player on consecutive nights.');
         } elseif ($type === 'vote') {
@@ -486,6 +503,7 @@ class MatchEngine
         $s['actions'][$id] = ['type' => $type, 'target' => $target, 'chosen_target' => $chosenTarget, 'use_ability' => $useAbility,
             'misdirection_source_id' => $misdirectionSource,
             'forged_alignment' => $forgedAlignment,
+            'bargain_kind' => $a['bargain_kind'] ?? null, 'promise_target' => $a['promise_target'] ?? null,
             'curse_type' => $type === 'night' && in_array($p['role'], ['veilweaver', 'acolyte'], true) && $target !== null ? ($selectedCurse ?? 'puzzle') : null];
         $this->advanceIfComplete($room, $s);
     }
@@ -524,11 +542,15 @@ class MatchEngine
             case 'night':
                 $this->resolveNight($s);
                 if (! $this->victory($room, $s)) {
-                    $this->phase($room, $s, 'discussion');
+                    $this->phase($room, $s, isset($s['fae']) ? 'bargains' : 'discussion');
                     if ($s['tokens'] >= $s['threshold']) {
                         $s['log'][] = 'The ritual is complete. The cult is preparing to summon. One final discussion and vote remain: banish every remaining cultist or the cult wins.';
                     }
                 }
+                break;
+            case 'bargains':
+                FaeCourt::expire($s);
+                $this->phase($room, $s, 'discussion');
                 break;
             case 'discussion':
                 $record = $s['rounds'][$s['day']]['last_words'] ?? null;
@@ -597,7 +619,7 @@ class MatchEngine
         $hiddenVisitors = [];
         $forgeries = [];
         foreach ($s['players'] as $pid => $player) {
-            if (($player['oath_protection_day'] ?? null) === $s['day'] || ($s['chaos_event'] ?? null) === 'sanctuary') {
+            if (($player['oath_protection_day'] ?? null) === $s['day'] || ($player['fae_protection_day'] ?? null) === $s['day'] || ($s['chaos_event'] ?? null) === 'sanctuary') {
                 $protected[$pid] = true;
             }
             if (($s['chaos_event'] ?? null) === 'eclipse') {
@@ -793,6 +815,7 @@ class MatchEngine
                 ? ' left the village with guilt after shooting someone who was not a cultist.'
                 : ' was shot by a vigilante during the night.');
         }
+        FaeCourt::deliver($s, $effective, $hiddenVisitors);
     }
 
     /** @param array<string, mixed> $s */
@@ -842,6 +865,7 @@ class MatchEngine
         }
         $s['rounds'][$s['day']]['day'] = $s['day'];
         $s['rounds'][$s['day']]['vote'] = ['ballots' => $ballots, 'banished_id' => $banished];
+        FaeCourt::settle($s);
     }
 
     /** @param array<string, mixed> $s */
@@ -849,13 +873,14 @@ class MatchEngine
     {
         $cult = count(array_filter($s['players'], fn (array $p): bool => $p['alive'] && $p['alignment'] === 'cult'));
         $town = count(array_filter($s['players'], fn (array $p): bool => $p['alive'] && $p['alignment'] === 'town'));
+        $fae = count(array_filter($s['players'], fn (array $p): bool => $p['alive'] && $p['alignment'] === 'fae'));
         // A full ritual grants one last vote. Banishment resolves before this check,
         // so removing the final cultist still takes precedence over the summoning.
         $summoned = $afterVote && $s['tokens'] >= $s['threshold'];
         if ($cult === 0) {
             $s['winner'] = 'town';
             $s['win_reason'] = 'No cultists remain. The village sees another sunrise.';
-        } elseif ($summoned || $town === 0 || ($cult === 1 && $town === 1)) {
+        } elseif ($summoned || $town === 0 || ($cult === 1 && $town === 1 && $fae === 0)) {
             $s['winner'] = 'cult';
             $s['win_reason'] = match (true) {
                 $town === 0 => 'No townspeople remain to stop the summoning.',
@@ -864,6 +889,7 @@ class MatchEngine
             };
         }
         if ($s['winner'] !== null) {
+            FaeCourt::finish($s);
             foreach ($s['players'] as &$player) {
                 $player['curse'] = null;
                 $player['curse_notice'] = null;
@@ -942,6 +968,10 @@ class MatchEngine
         $me = $s['players'][$id];
         $setup = $this->modes->setup($s);
         $preview = $s['match_rules']['paranoia_preview'] ?? $this->modes->preview($setup, count($s['players']));
+        $faeAvailable = $s['phase'] === 'lobby' ? FaeCourt::available($s) : isset($s['fae']);
+        if ($s['phase'] === 'lobby' && ($setup['fae_court'] ?? false) && ! $faeAvailable) {
+            $preview['error'] = 'An owner of the Fae Court must be seated before this match can start.';
+        }
         if ($s['phase'] !== 'lobby') {
             $preview['roles'] = $setup['mode'] === 'paranoia' && $s['phase'] !== 'finished'
                 ? null : array_count_values(array_filter(array_column($s['players'], 'role'), 'is_string'));
@@ -981,10 +1011,13 @@ class MatchEngine
             'mode_setup' => $setup, 'mode_preview' => $preview, 'chaos_event' => $s['chaos_event'] ?? null,
             'server_time' => now()->toISOString(), 'host_id' => $s['host_id'],
             'cosmetics' => MatchCosmetics::view($s),
+            'expansions' => ['fae_court' => ['available' => $faeAvailable, 'min_players' => config('fae.min_players')]],
+            'fae' => FaeCourt::view($s, $id),
             'table' => $this->table->view($s, $id),
             'ritual' => ['tokens' => $s['tokens'], 'threshold' => $s['threshold'], 'level' => $this->curses->level($s['tokens'], $s['threshold']),
                 'final_vote' => $s['threshold'] > 0 && $s['tokens'] >= $s['threshold'] && in_array($s['phase'], ['discussion', 'last_words', 'voting'], true)],
             'winner' => $s['winner'], 'win_reason' => $s['win_reason'], 'players' => $players,
+            'winners' => $s['phase'] === 'finished' ? ($s['winners'] ?? [$s['winner']]) : [],
             'me' => array_replace(array_intersect_key($me, array_flip(['id', 'name', 'alive', 'role', 'alignment', 'results'])), [
                 'character' => $this->character($me),
                 'afk' => $me['afk'] ?? false,
@@ -1001,6 +1034,7 @@ class MatchEngine
                 'ability_used' => $this->abilityUsed($me),
                 'haunting' => $s['phase'] === 'discussion' ? ($me['haunting'] ?? null) : null,
                 'oath_protected' => $s['phase'] === 'night' && ($me['oath_protection_day'] ?? null) === $s['day'],
+                'fae_protected' => $s['phase'] === 'night' && ($me['fae_protection_day'] ?? null) === $s['day'],
                 'mission' => $me['alignment'] === 'cult' ? $s['mission'] : null,
                 'allies' => $allies, 'submitted' => isset($s['actions'][$id]),
             ]),
@@ -1026,6 +1060,8 @@ class MatchEngine
     {
         return ['rules_version' => $s['match_rules']['version'] ?? 'legacy',
             'winner' => $s['winner'], 'win_reason' => $s['win_reason'],
+            'winners' => $s['winners'] ?? [$s['winner']],
+            'fae' => isset($s['fae']) ? FaeCourt::view([...$s, 'phase' => 'finished'], $s['host_id']) : null,
             'claims' => $s['claims'] ?? [], 'responses' => $s['responses'] ?? [],
             'predictions' => $this->table->predictionResults($s),
             'mode_setup' => $s['match_rules']['mode_setup'] ?? $this->modes->setup($s),

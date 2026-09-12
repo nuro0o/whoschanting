@@ -26,6 +26,10 @@ export function actionConsequence(
         );
     }
     const role = state.me.role;
+    if (role === 'fae_broker')
+        return choice.target
+            ? `Offer an anonymous bargain to ${name}. They can accept or decline after night actions resolve.`
+            : 'Keep watch without offering a bargain tonight.';
     let action =
         state.me.alignment === 'cult'
             ? 'Chant for the ritual, subject to your mission.'

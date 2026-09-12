@@ -2,6 +2,8 @@
 
 namespace App\Support;
 
+use App\Game\PurchasePolicy;
+
 class LegalDocuments
 {
     /** @return array<string,mixed> */
@@ -12,6 +14,8 @@ class LegalDocuments
             'operator_name' => config('legal.operator_name'), 'business_address' => config('legal.business_address'),
             'registration_number' => config('legal.registration_number'),
             'minimum_age' => filled(config('legal.minimum_age')) ? (int) config('legal.minimum_age') : null,
+            'purchase_policy_version' => PurchasePolicy::VERSION,
+            'purchase_consent_text' => PurchasePolicy::CONSENT,
         ];
     }
 
@@ -46,7 +50,7 @@ class LegalDocuments
                         'bullets' => [
                             'Accounts: name, email address, password hash, verification and security settings, and optional passkey or two-factor authentication records.',
                             'Gameplay: guest or account identifiers, player names, room membership, connection activity, chat, roles, actions, votes, claims, defenses, predictions, feedback and match recaps. Profiles also record progression, achievements, Crowns and cosmetic choices.',
-                            'Purchases: account email, bundle, price, currency, payment status, Stripe payment references, purchase timestamps and the version and time of accepted terms. Stripe collects payment details on its checkout page; this application does not collect or store full card numbers or card security codes.',
+                            'Purchases: account email, bundle, price, currency, payment status, Stripe payment references, purchase timestamps, accepted terms and digital-content consent, and a saved purchase confirmation. We record which paid cosmetics are used in each match, the match reference and first-use time, and delivery of the confirmation email. These records help deliver purchases and review refund requests and repeated refunded purchases. Stripe collects payment details on its checkout page; this application does not collect or store full card numbers or card security codes.',
                             'Support: the contact details and information you send us. The withdrawal form records your name, email, order reference, optional message, declaration and submission time.',
                             'Service security: session identifiers, IP addresses, browser information and diagnostic records used to keep accounts and the game working and to limit abuse.',
                         ]],
@@ -99,14 +103,16 @@ class LegalDocuments
                         'Do not exploit bugs, automate Crown farming, interfere with the service, bypass access controls or manipulate payments.',
                         'Only submit names, messages and other content you have the right to use. You allow us to store and display it as needed to operate the game, provide recaps and address abuse.',
                     ]],
-                    ['id' => 'purchases', 'title' => 'Cosmetic purchases and Crowns', 'paragraphs' => [
+                    ['id' => 'purchases', 'title' => 'Digital purchases and Crowns', 'paragraphs' => [
                         'Core gameplay is free. Optional bundles are one-time purchases; they do not start a subscription. Check the bundle contents, currency and final total, including applicable tax, before paying through Stripe. The purchase is confirmed when payment succeeds; delivery may wait for payment confirmation.',
                         'Cosmetics do not improve roles, abilities, matchmaking, XP or Crown earnings. You receive permission to use the purchased cosmetics with your account. They are not transferable, redeemable for cash or an investment. Crowns are earned in-game currency with no cash value or withdrawal option.',
+                        'Paid faction expansions add optional match rules. One eligible owner at the table unlocks the expansion for everyone in that room, including guests; added roles are assigned randomly. Sharing access with a room does not transfer ownership. Started matches retain their rules if the owner disconnects or the purchase is later refunded; future matches require a current owner.',
                         'Permanent cosmetics have no season expiry or recurring charge. Their use depends on the game continuing to operate and your account remaining eligible. This does not promise that the service will operate forever, and it does not remove any remedy you have if paid content is not supplied as agreed.',
                         'A full refund can remove the corresponding cosmetic entitlement. A payment dispute can suspend it while the purchase is reviewed. Contact support if this affects you incorrectly.',
                     ]],
                     ['id' => 'withdrawal', 'title' => 'Withdrawal and faulty purchases', 'paragraphs' => [
-                        'We do not ask you to waive statutory withdrawal rights when buying cosmetics. Immediate unlocking does not, by itself, remove those rights. If EU consumer withdrawal rules apply, you can generally withdraw within 14 days of entering the purchase contract, without giving a reason.',
+                        'For paid digital content, checkout asks for your express consent to immediate supply during the withdrawal period and your acknowledgment that the statutory withdrawal right is lost once supply begins, subject to the legally required confirmation. We include this acknowledgment in your purchase confirmation. Use alone, or acceptance of these terms alone, is not a valid waiver. If the exception does not apply, applicable statutory withdrawal rights remain.',
+                        PurchasePolicy::POLICY,
                         'You also retain applicable rights if digital content is missing, faulty or does not match what was promised. These rights can apply beyond a withdrawal period. Our refunds page explains how to submit a request.',
                     ], 'links' => [['label' => 'Refunds and cancellation', 'href' => '/refunds']]],
                     ['id' => 'availability', 'title' => 'Availability, changes and enforcement', 'paragraphs' => [
@@ -127,9 +133,12 @@ class LegalDocuments
                 'title' => 'Refunds and cancellation', 'summary' => 'Request help with a purchase or notify us that you want to withdraw. No account login is needed.',
                 'sections' => [
                     ['id' => 'withdrawal-right', 'title' => 'Your right to withdraw', 'paragraphs' => [
-                        'If EU consumer withdrawal rules apply to your purchase, you can generally withdraw within 14 days of entering the contract, without giving a reason. We do not collect a waiver of this right for immediate cosmetic delivery. Rights required by your local law continue to apply.',
+                        'If EU consumer withdrawal rules apply, you generally have 14 days from entering the contract to withdraw without giving a reason. For paid digital content, the right can end when supply begins only with your prior express consent, acknowledgment of losing the right, and the required purchase confirmation. Buying, equipping or using content does not by itself establish that all these requirements were met. Rights required by your local law continue to apply.',
                         'Use the form below or email a clear withdrawal statement before the applicable deadline. Give your name, checkout email and a reference that helps identify the purchase. A reason is not required. You may use the wording: “I notify you that I withdraw from my purchase of [bundle], ordered on [date], under reference [reference].”',
                     ]],
+                    ['id' => 'unused-packs', 'title' => 'Our additional two-game refund policy', 'paragraphs' => [PurchasePolicy::POLICY,
+                        'Your Purchases page shows the first recorded use, distinct games used and refund guidance. A refund request is not automatically rejected because a usage record exists. Support checks the purchase, applicable terms and confirmation, and can correct a mistaken usage record. Existing purchases retain their original terms.'],
+                        'links' => [['label' => 'View your purchases', 'href' => '/account/purchases']]],
                     ['id' => 'purchase-help', 'title' => 'Missing, faulty or duplicate purchases', 'paragraphs' => [
                         "For a missing unlock, duplicate charge, unauthorised purchase or faulty content, email {$email}. Include the bundle, checkout email and receipt reference. Do not send card numbers or security codes.",
                         'A failed or cancelled checkout does not unlock a bundle. A delayed payment can still be processing; check the store’s payment status before trying again. Your rights concerning faulty digital content are separate from withdrawal rights.',
@@ -144,6 +153,6 @@ class LegalDocuments
         ];
         abort_unless(isset($documents[$id]), 404);
 
-        return ['id' => $id, 'updated_at' => config('legal.version'), ...$documents[$id]];
+        return ['id' => $id, 'updated_at' => config('legal.updated_at'), ...$documents[$id]];
     }
 }

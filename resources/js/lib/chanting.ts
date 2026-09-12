@@ -1,4 +1,5 @@
 import { t } from '../i18n/index.ts';
+import type { FaeState } from './faeCourt';
 import type { CreatorRecipe } from './creator';
 import type { ChaosEvent, ModeSetup } from './gameModes';
 import type { MatchReward, PublicCustomization } from './progression';
@@ -160,6 +161,8 @@ export interface LastWordsRecord {
     defenses: { player_id: string; body: string }[];
 }
 export interface MatchRecapData {
+    winners?: string[];
+    fae?: FaeState | null;
     claims?: PublicClaim[];
     responses?: DiscussionResponse[];
     predictions?: PredictionResult[];
@@ -227,6 +230,9 @@ export interface Curse {
     challenge: CurseChallenge | null;
 }
 export interface RoomState {
+    expansions?: { fae_court: { available: boolean; min_players: number } };
+    fae?: FaeState | null;
+    winners?: string[];
     cosmetics?: { table: string; events: RitualCosmeticEvent[] };
     visibility: 'private' | 'public';
     pin_required?: boolean;
@@ -256,6 +262,7 @@ export interface RoomState {
         | 'lobby'
         | 'reveal'
         | 'night'
+        | 'bargains'
         | 'discussion'
         | 'last_words'
         | 'voting'
@@ -290,7 +297,7 @@ export interface RoomState {
         alive: boolean;
         character: string;
         role: string | null;
-        alignment: 'cult' | 'town' | null;
+        alignment: 'cult' | 'town' | 'fae' | null;
         mission: { id: string; name: string; description: string } | null;
         allies: { id: string; name: string; role: string }[];
         results: PrivateNightResult[];
@@ -298,6 +305,7 @@ export interface RoomState {
         ability_used?: boolean;
         haunting?: { day: number; seat_id: string } | null;
         oath_protected?: boolean;
+        fae_protected?: boolean;
         submitted: boolean;
         curse: Curse | null;
         curse_notice: string | null;
@@ -399,6 +407,13 @@ export const roles: Record<
     string,
     { name: string; subtitle: string; description: string; symbol: string }
 > = {
+    fae_broker: {
+        name: 'The Fae Broker',
+        subtitle: 'Fae Court · keeper of secret bargains',
+        symbol: '❧',
+        description:
+            'Blend in by day. Each night, anonymously offer one living player a gift for a voting or accusation promise. They accept or decline after night actions resolve. Earn seals from different fulfilled partners to share Town or Cult victory. An ordinary Oracle reading identifies you as Fae; a veil makes you appear Cult and a forgery can make you appear Town or Cult. Break Misdirection before offering, or keep watch.',
+    },
     vigilante: {
         name: t('roles.vigilante.name'),
         subtitle: t('roles.vigilante.subtitle'),

@@ -5,6 +5,8 @@ export interface LegalSettings {
     registration_number: string | null;
     minimum_age: number | null;
     version: string;
+    purchase_consent_text?: string;
+    purchase_policy_version?: string;
 }
 export interface LegalDocument {
     id: 'contact' | 'privacy' | 'terms' | 'refunds';

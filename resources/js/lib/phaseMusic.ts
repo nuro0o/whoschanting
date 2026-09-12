@@ -31,7 +31,11 @@ export class PhaseMusic {
     update(phase: RoomState['phase'], volume: number, active: boolean): void {
         if (this.disposed) return;
         const period =
-            phase === 'finished' ? null : phase === 'night' ? 'night' : 'day';
+            phase === 'finished'
+                ? null
+                : ['night', 'bargains'].includes(phase)
+                  ? 'night'
+                  : 'day';
         const allowed = active && volume > 0 && period !== null;
         if (allowed && !this.allowed) this.blocked = false;
         this.allowed = allowed;

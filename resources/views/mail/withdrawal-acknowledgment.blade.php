@@ -20,3 +20,8 @@ This confirms receipt of the request, not that a refund has already been issued.
 
 Support: {{ config('legal.support_email') }}
 Refunds and cancellation: {{ url('/refunds') }}
+
+@if ($forSupport && isset($details['purchase_review']))
+Private purchase review for support:
+{{ $details['purchase_review'] }}
+@endif

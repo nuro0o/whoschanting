@@ -23,9 +23,11 @@ const step = computed(() => {
         ];
     if (phase === 'finished')
         return [
-            props.state.winner === 'cult'
-                ? 'The cult prevails.'
-                : 'The town prevails.',
+            props.state.winners?.includes('fae')
+                ? `${props.state.winner === 'cult' ? 'The Cult' : 'The Town'} and Fae Court share victory.`
+                : props.state.winner === 'cult'
+                  ? 'The cult prevails.'
+                  : 'The town prevails.',
             props.state.win_reason ||
                 'Every role is now face-up around the table.',
         ];
@@ -37,6 +39,11 @@ const step = computed(() => {
                 : phase === 'voting'
                   ? 'The living are deciding who to banish. The result arrives shortly.'
                   : 'Follow the chat and public events until the next match.',
+        ];
+    if (phase === 'bargains')
+        return [
+            'Private bargains',
+            'Check the Fae Court panel below. Offers and responses stay secret; discussion begins when the timer ends.',
         ];
     if (phase === 'last_words')
         return [

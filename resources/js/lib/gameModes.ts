@@ -1,5 +1,6 @@
 import { t } from '../i18n/index.ts';
 export interface ModeSetup {
+    fae_court?: boolean;
     mode: 'classic' | 'hard' | 'chaos' | 'paranoia' | 'custom';
     classic_variant: 'classic' | 'illusions';
     chaos_variant: 'wildcards' | 'maelstrom';
@@ -81,6 +82,8 @@ export function modeName(
     roster?: 'classic' | 'illusions',
 ): string {
     const current = copyModeSetup(setup, roster);
+    if (current.fae_court)
+        return `${current.classic_variant === 'illusions' ? t('gameModes.names.illusions') : t('gameModes.names.classic')} · Fae Court`;
     if (current.mode === 'classic')
         return current.classic_variant === 'illusions'
             ? t('gameModes.names.illusions')

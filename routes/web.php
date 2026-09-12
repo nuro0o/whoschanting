@@ -3,6 +3,7 @@
 use App\Http\Controllers\GameController;
 use App\Http\Controllers\LegalController;
 use App\Http\Controllers\ProgressionController;
+use App\Http\Controllers\PurchaseController;
 use App\Http\Controllers\StoreCheckoutController;
 use App\Http\Middleware\EnsureVerifiedAccount;
 use App\Http\Middleware\PrivateGameResponse;
@@ -15,6 +16,7 @@ foreach (['contact', 'privacy', 'terms', 'refunds'] as $document) {
         ->middleware(PrivateGameResponse::class)->name($document);
 }
 Route::post('/refunds', [LegalController::class, 'withdraw'])->middleware([PrivateGameResponse::class, 'throttle:5,1'])->name('refunds.submit');
+Route::get('/account/purchases', [PurchaseController::class, 'index'])->middleware(['auth', PrivateGameResponse::class])->name('account.purchases');
 
 Route::inertia('/tutorial', 'Tutorial')->middleware(PrivateGameResponse::class)->name('tutorial');
 
