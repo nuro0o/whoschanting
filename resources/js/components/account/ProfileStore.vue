@@ -41,8 +41,12 @@ import {
 import { send } from '@/routes/verification';
 
 const props = defineProps<{ progression: ProgressionData | null }>();
+const emit = defineEmits<{
+    'progression-updated': [progression: ProgressionData | null];
+}>();
 const page = usePage();
 const data = ref(props.progression);
+watch(data, (value) => emit('progression-updated', value));
 watch(
     () => props.progression,
     (value) => {
@@ -309,7 +313,7 @@ function transactionName(itemId: string | null) {
                     <ShoppingBag :size="14" aria-hidden="true" /> The village
                     store
                 </p>
-                <h2 id="store-title">A little more <em>you.</em></h2>
+                <h2 id="store-title">The village <em>store.</em></h2>
                 <p>
                     Earn your Crowns at the table. Collect keepsakes, or support
                     the village with a look your whole gathering can enjoy.

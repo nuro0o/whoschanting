@@ -197,6 +197,9 @@ function actionDescription(action: RecapNightAction) {
                             )
                         }}
                     </p>
+                    <p v-if="bargain.kind === 'voice' && bargain.gift_target">
+                        Ballot offered: {{ name(bargain.gift_target) }}.
+                    </p>
                 </li>
             </ol>
         </section>

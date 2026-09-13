@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Head, Link, usePage } from '@inertiajs/vue3';
+import { Head, Link, router, usePage } from '@inertiajs/vue3';
 import {
     ArrowRight,
     Check,
@@ -11,6 +11,7 @@ import {
     Waves,
 } from '@lucide/vue';
 import { computed, reactive, ref } from 'vue';
+import { useAccountLocation } from '@/composables/useAccountLocation';
 import CharacterPortrait from '@/components/chanting/CharacterPortrait.vue';
 import CosmeticScenePreview from '@/components/chanting/CosmeticScenePreview.vue';
 import {
@@ -90,7 +91,25 @@ const error = ref('');
 const saved = ref(false);
 const tablePreviewOpen = ref(false);
 const previewElement = ref<HTMLElement | null>(null);
-const tab = ref<'wardrobe' | 'achievements' | 'season'>('wardrobe');
+const location = useAccountLocation();
+type ProgressionTab = 'wardrobe' | 'achievements' | 'season';
+const tab = computed<ProgressionTab>(() => {
+    const requested = location.value.searchParams.get('tab');
+    return requested === 'achievements' || requested === 'season'
+        ? requested
+        : 'wardrobe';
+});
+function selectTab(next: ProgressionTab) {
+    if (tab.value === next) return;
+    const url = new URL(location.value);
+    url.searchParams.set('tab', next);
+    url.hash = '';
+    router.push({
+        url: `${url.pathname}${url.search}`,
+        preserveState: true,
+        preserveScroll: true,
+    });
+}
 const tabs = [
     { id: 'wardrobe', name: 'Wardrobe' },
     { id: 'achievements', name: 'Achievements' },
@@ -258,18 +277,19 @@ function moveTab(event: KeyboardEvent, index: number) {
     else if (event.key === 'End') next = tabs.length - 1;
     else return;
     event.preventDefault();
-    tab.value = tabs[next].id;
-    document.getElementById(`progression-tab-${tab.value}`)?.focus();
+    selectTab(tabs[next].id);
+    document.getElementById(`progression-tab-${tabs[next].id}`)?.focus();
 }
 </script>
 
 <template>
-    <Head title="Your reputation" />
+    <Head :title="tab === 'wardrobe' ? 'Your wardrobe' : 'Your progression'" />
     <div class="reputation-page">
         <header class="account-page-heading">
             <div>
                 <p class="account-kicker">
-                    The village ledger <span>/</span> Progression
+                    The village ledger <span>/</span>
+                    {{ tab === 'wardrobe' ? 'Wardrobe' : 'Progression' }}
                 </p>
                 <h1>Make a name. <em>Keep a secret.</em></h1>
             </div>
@@ -398,6 +418,7 @@ function moveTab(event: KeyboardEvent, index: number) {
             /></span>
         </Link>
         <nav
+            id="progression-sections"
             class="reputation-tabs"
             role="tablist"
             aria-label="Progression sections"
@@ -411,7 +432,7 @@ function moveTab(event: KeyboardEvent, index: number) {
                 :aria-selected="tab === item.id"
                 :aria-controls="`progression-panel-${item.id}`"
                 :tabindex="tab === item.id ? 0 : -1"
-                @click="tab = item.id"
+                @click="selectTab(item.id)"
                 @keydown="moveTab($event, index)"
             >
                 {{ item.name

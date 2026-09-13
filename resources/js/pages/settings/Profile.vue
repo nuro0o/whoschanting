@@ -1,10 +1,11 @@
 ﻿<script setup lang="ts">
 import { Form, Head, Link, usePage } from '@inertiajs/vue3';
 import { ArrowRight, Check, Mail, Waves } from '@lucide/vue';
-import { computed } from 'vue';
+import { computed, ref, watch } from 'vue';
 import ProfileController from '@/actions/App/Http/Controllers/Settings/ProfileController';
 import RegistrySection from '@/components/account/RegistrySection.vue';
 import ProfileStore from '@/components/account/ProfileStore.vue';
+import ProgressionSummary from '@/components/chanting/ProgressionSummary.vue';
 import DeleteUser from '@/components/DeleteUser.vue';
 import InputError from '@/components/InputError.vue';
 import { Button } from '@/components/ui/button';
@@ -13,7 +14,14 @@ import { Label } from '@/components/ui/label';
 import { send } from '@/routes/verification';
 import type { ProgressionData } from '@/lib/progression';
 
-defineProps<{ progression: ProgressionData | null }>();
+const props = defineProps<{ progression: ProgressionData | null }>();
+const currentProgression = ref(props.progression);
+watch(
+    () => props.progression,
+    (value) => {
+        currentProgression.value = value;
+    },
+);
 
 const page = usePage();
 const user = computed(() => page.props.auth.user);
@@ -31,6 +39,7 @@ const membershipDate = computed(() => {
 <template>
     <Head title="Your resident record" />
     <article class="resident-record">
+        <ProgressionSummary :progression="currentProgression" />
         <header class="resident-identity">
             <div class="resident-identity-copy">
                 <p class="account-kicker">
@@ -79,7 +88,10 @@ const membershipDate = computed(() => {
             </figure>
         </header>
 
-        <ProfileStore :progression="progression" />
+        <ProfileStore
+            :progression="progression"
+            @progression-updated="currentProgression = $event"
+        />
 
         <RegistrySection
             number="I"

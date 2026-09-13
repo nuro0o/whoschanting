@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import CreatedCharacter from './CreatedCharacter.vue';
+import FounderPortraitFrame from './FounderPortraitFrame.vue';
+import PremiumPortraitBackdrop from './PremiumPortraitBackdrop.vue';
 import type { CreatorRecipe } from '@/lib/creator';
 import {
     characterIds,
@@ -42,6 +44,15 @@ const backdrop = computed(() =>
     props.background && props.background !== 'plain'
         ? cosmeticBackgrounds[props.background]
         : undefined,
+);
+const premiumBackdrop = computed(() =>
+    [
+        'founders_hall',
+        'moonlit_coven',
+        'harvest_glow',
+        'moonlit',
+        'wildwood',
+    ].includes(props.background ?? ''),
 );
 const artwork = computed(() => {
     if (props.character === 'custom')
@@ -95,6 +106,10 @@ const artwork = computed(() => {
                 : {}),
         }"
     >
+        <PremiumPortraitBackdrop
+            v-if="premiumBackdrop"
+            :background="background!"
+        />
         <CreatedCharacter
             v-if="character === 'custom'"
             :recipe="creator"
@@ -105,29 +120,16 @@ const artwork = computed(() => {
             class="portrait-artwork"
             :style="artwork"
         ></span>
+        <FounderPortraitFrame v-if="frame === 'founder'" />
     </span>
 </template>
 <style scoped>
 .character-portrait.portrait-frame-founder {
-    outline: 3px double #ddbd70;
-    outline-offset: 3px;
+    container-type: inline-size;
+    border-color: #ecd28b;
     box-shadow:
-        0 0 0 7px #33483c,
-        0 0 0 8px #aa8a43;
-}
-.portrait-frame-founder::after {
-    content: '♛';
-    position: absolute;
-    z-index: 1;
-    top: -15px;
-    left: 50%;
-    transform: translateX(-50%);
-    font:
-        17px Georgia,
-        serif;
-    line-height: 1;
-    color: #f1d795;
-    text-shadow: 0 1px 3px #18271e;
+        0 5px 10px #07161180,
+        inset 0 0 0 1px #463719;
 }
 .character-portrait.portrait-frame-copper {
     outline: 2px solid #b58561;
@@ -161,6 +163,10 @@ const artwork = computed(() => {
     border-color: #f1c49f;
     outline: 2px solid #f1c49f;
     outline-offset: 3px;
+}
+:global(.table-seat.is-me .character-portrait.portrait-frame-founder),
+:global(.table-seat.is-selected .character-portrait.portrait-frame-founder) {
+    outline-offset: 7px;
 }
 .created-with-backdrop {
     inset: 8%;

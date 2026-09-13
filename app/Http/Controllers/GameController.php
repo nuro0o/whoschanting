@@ -105,6 +105,7 @@ class GameController extends Controller
             'type' => ['required', 'string', 'in:ready,start,night,vote,chat,rematch,character,discussion_ready,solve_curse,roster,exorcise,oath,configure_mode,claim,discussion_response,prediction,transfer_host,remove_player,extend_discussion,feedback,accuse,defend,set_pin,fae_response'],
             'bargain_kind' => ['nullable', 'string', 'in:thorn,voice,lantern'],
             'promise_target' => ['nullable', 'uuid'],
+            'gift_target' => ['nullable', 'uuid'],
             'bargain_id' => ['required_if:type,fae_response', 'uuid'],
             'accept' => ['required_if:type,fae_response', 'boolean'],
             'pin' => ['present_if:type,set_pin', ...$this->pinRules()],

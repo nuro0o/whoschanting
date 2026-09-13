@@ -107,6 +107,7 @@ export interface RecapNightAction {
 export type PrivateNightResult = { day: number; target: string } & (
     | { kind?: 'alignment'; alignment: string }
     | { kind: 'visits'; visited: boolean }
+    | { kind: 'ballot'; submitted: boolean; voted_for: string | null }
     | { kind: 'tracking'; visited_target: string | null }
     | { kind: 'herbs' }
     | { kind: 'shot'; guilty: boolean }

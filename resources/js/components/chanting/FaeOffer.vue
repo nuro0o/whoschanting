@@ -6,6 +6,7 @@ const props = defineProps<{ state: RoomState; disabled: boolean }>();
 const target = defineModel<string | null>('target', { required: true });
 const kind = defineModel<BargainKind>('kind', { required: true });
 const promise = defineModel<string | null>('promise', { required: true });
+const gift = defineModel<string | null>('gift', { required: true });
 const id = useId();
 const recipients = computed(() =>
     props.state.players.filter(
@@ -31,6 +32,8 @@ watch([kind, target], () => {
         !target.value
     )
         promise.value = null;
+    if (kind.value !== 'voice' || gift.value === target.value || !target.value)
+        gift.value = null;
 });
 </script>
 
@@ -65,6 +68,19 @@ watch([kind, target], () => {
                 </option>
             </select>
             <p><strong>Your gift:</strong> {{ bargains[kind].gift }}</p>
+            <template v-if="kind === 'voice'">
+                <label :for="`${id}-gift`">Whose ballot will they learn?</label>
+                <select :id="`${id}-gift`" v-model="gift">
+                    <option :value="null" disabled>Choose a player</option>
+                    <option
+                        v-for="player in promises"
+                        :key="player.id"
+                        :value="player.id"
+                    >
+                        {{ player.name }}
+                    </option>
+                </select>
+            </template>
             <template v-if="kind !== 'voice'">
                 <label :for="`${id}-promise`"
                     >Who must they

@@ -6,6 +6,7 @@ export interface FaeBargain {
     sender_id?: string;
     kind: BargainKind;
     promise_target: string | null;
+    gift_target?: string | null;
     status:
         | 'offered'
         | 'accepted'
@@ -28,13 +29,21 @@ export const bargains: Record<BargainKind, { name: string; gift: string }> = {
     },
     voice: {
         name: 'A Borrowed Voice',
-        gift: 'Your current curse and haunting are cleansed immediately upon acceptance, even if you break your promise.',
+        gift: 'After today’s voting closes, privately learn the chosen player’s actual ballot, including abstention or a missed vote. This reveals no role. You still receive the report if you break your promise; there is no report if the match ends before voting.',
     },
     lantern: {
         name: 'Lantern Secret',
         gift: 'A private clue about whether someone other than you visibly visited the promised accusation target tonight. Hidden visits stay hidden.',
     },
 };
+export function bargainGift(bargain: FaeBargain, targetName: string): string {
+    if (bargain.kind === 'voice') {
+        if (!bargain.gift_target)
+            return 'Your current curse and haunting are cleansed immediately upon acceptance, even if you break your promise.';
+        return `Ballot to reveal: ${targetName}. ${bargains.voice.gift}`;
+    }
+    return bargains[bargain.kind].gift;
+}
 export function bargainPromise(kind: BargainKind, name: string): string {
     if (kind === 'voice')
         return 'Explicitly abstain in today’s vote. Missing the vote does not count.';

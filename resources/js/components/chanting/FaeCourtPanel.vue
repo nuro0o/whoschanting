@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import type { RoomState } from '@/lib/chanting';
-import { bargains, bargainPromise } from '@/lib/faeCourt';
+import { bargains, bargainPromise, bargainGift } from '@/lib/faeCourt';
 const props = defineProps<{
     state: RoomState;
     revealed: boolean;
@@ -27,7 +27,7 @@ const answered = computed(() =>
             ['accepted', 'declined'].includes(b.status),
     ),
 );
-function name(id: string | null) {
+function name(id: string | null | undefined) {
     return (
         props.state.players.find((p) => p.id === id)?.name ??
         'the chosen player'
@@ -78,7 +78,7 @@ function name(id: string | null) {
                 <h4>{{ bargains[offer.kind].name }}</h4>
                 <p>
                     <strong>You receive:</strong>
-                    {{ bargains[offer.kind].gift }}
+                    {{ bargainGift(offer, name(offer.gift_target)) }}
                 </p>
                 <p>
                     <strong>You promise:</strong>
@@ -118,7 +118,9 @@ function name(id: string | null) {
             <p v-else-if="revealed && answered" role="status">
                 {{
                     answered.status === 'accepted'
-                        ? 'Bargain accepted. Your gift is yours to keep.'
+                        ? answered.kind === 'voice' && answered.gift_target
+                            ? `Bargain accepted. The ballot report about ${name(answered.gift_target)} will appear in your Journal after today’s voting closes.`
+                            : 'Bargain accepted. Your gift is yours to keep.'
                         : 'Bargain declined. You received no gift and made no promise.'
                 }}
                 <template v-if="answered.status === 'accepted'"
@@ -157,6 +159,11 @@ function name(id: string | null) {
                             name(bargain.promise_target),
                         )
                     }}
+                </p>
+                <p v-if="bargain.kind === 'voice' && bargain.gift_target">
+                    Ballot to reveal: {{ name(bargain.gift_target) }}. Accepted
+                    reports arrive privately in the recipient’s Journal after
+                    that day’s voting closes.
                 </p>
             </article>
         </details>

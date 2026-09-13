@@ -16,6 +16,13 @@ export function discussionActionTypes(
 }
 
 export function privateResultText(result: PrivateNightResult): string {
+    if (result.kind === 'ballot') {
+        if (!result.submitted)
+            return `${result.target} did not submit a ballot on day ${result.day}.`;
+        return result.voted_for === null
+            ? `${result.target} explicitly abstained on day ${result.day}.`
+            : `${result.target} voted to banish ${result.voted_for} on day ${result.day}.`;
+    }
     if (result.kind === 'shot')
         return result.guilty
             ? `You shot ${result.target}, who was not a cultist. Guilt has driven you from the village.`

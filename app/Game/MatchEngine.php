@@ -307,7 +307,7 @@ class MatchEngine
 
             return;
         }
-        $this->ensure($type === 'night' || (! isset($a['bargain_kind']) && ! isset($a['promise_target'])), 'Bargains are offered at night.');
+        $this->ensure($type === 'night' || (! isset($a['bargain_kind']) && ! isset($a['promise_target']) && ! isset($a['gift_target'])), 'Bargains are offered at night.');
         if ($selectedCurse !== null) {
             $this->ensure($type === 'night' && in_array($p['role'], ['veilweaver', 'acolyte'], true) && ($a['target'] ?? null) !== null, 'Only a cultist cursing a target can choose a curse.');
             $this->ensure(in_array($selectedCurse, $this->curses->availableTypes($s['tokens'], $s['threshold']), true), 'Choose an unlocked curse. Misdirection unlocks at ritual level 3.');
@@ -504,6 +504,7 @@ class MatchEngine
             'misdirection_source_id' => $misdirectionSource,
             'forged_alignment' => $forgedAlignment,
             'bargain_kind' => $a['bargain_kind'] ?? null, 'promise_target' => $a['promise_target'] ?? null,
+            'gift_target' => $a['gift_target'] ?? null,
             'curse_type' => $type === 'night' && in_array($p['role'], ['veilweaver', 'acolyte'], true) && $target !== null ? ($selectedCurse ?? 'puzzle') : null];
         $this->advanceIfComplete($room, $s);
     }

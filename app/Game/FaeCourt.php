@@ -36,14 +36,15 @@ class FaeCourt
         $target = $action['target'] ?? null;
         $kind = $action['bargain_kind'] ?? null;
         $promise = $action['promise_target'] ?? null;
+        $gift = $action['gift_target'] ?? null;
         if ($state['players'][$id]['role'] !== 'fae_broker') {
-            self::ensure($kind === null && $promise === null, 'Only the Fae Broker can offer a bargain.');
+            self::ensure($kind === null && $promise === null && $gift === null, 'Only the Fae Broker can offer a bargain.');
 
             return;
         }
         self::ensure(isset($state['fae']), 'This match does not include the Fae Court.');
         if ($target === null) {
-            self::ensure($kind === null && $promise === null, 'Choose a recipient for your bargain.');
+            self::ensure($kind === null && $promise === null && $gift === null, 'Choose a recipient for your bargain.');
 
             return;
         }
@@ -55,7 +56,9 @@ class FaeCourt
         }
         if ($kind === 'voice') {
             self::ensure($promise === null, 'A Borrowed Voice asks for abstention, not a target.');
+            self::ensure($gift !== $target && isset($state['players'][$gift]) && $state['players'][$gift]['alive'], 'Choose a living player other than the recipient whose ballot will be revealed.');
         } else {
+            self::ensure($gift === null, 'Only A Borrowed Voice can offer a ballot report.');
             self::ensure($promise !== $target && isset($state['players'][$promise]) && $state['players'][$promise]['alive'], 'Choose a living player other than the recipient for the promise.');
         }
     }
@@ -76,7 +79,9 @@ class FaeCourt
                 continue;
             }
             $promise = $action['promise_target'] ?? null;
-            $valid = $state['players'][$target]['alive'] && ($promise === null || $state['players'][$promise]['alive']);
+            $gift = $action['gift_target'] ?? null;
+            $valid = $state['players'][$target]['alive'] && ($promise === null || $state['players'][$promise]['alive'])
+                && ($gift === null || $state['players'][$gift]['alive']);
             $visited = false;
             foreach ($state['actions'] as $visitor => $visit) {
                 if ($visitor !== $target && ! isset($hiddenVisitors[$visitor]) && $promise !== null && ($visit['target'] ?? null) === $promise) {
@@ -84,7 +89,7 @@ class FaeCourt
                 }
             }
             $state['fae']['bargains'][] = ['id' => (string) Str::uuid(), 'day' => $state['day'], 'sender_id' => $id,
-                'recipient_id' => $target, 'kind' => $action['bargain_kind'], 'promise_target' => $promise,
+                'recipient_id' => $target, 'kind' => $action['bargain_kind'], 'promise_target' => $promise, 'gift_target' => $gift,
                 'status' => $valid ? 'offered' : 'void', 'visited' => $visited];
         }
     }
@@ -105,11 +110,12 @@ class FaeCourt
             if ($action['accept']) {
                 if ($bargain['kind'] === 'thorn') {
                     $state['players'][$id]['fae_protection_day'] = $state['day'] + 1;
-                } elseif ($bargain['kind'] === 'voice') {
+                } elseif ($bargain['kind'] === 'voice' && empty($bargain['gift_target'])) {
+                    // Honor cleansing offers already issued before the ballot-report change.
                     $state['players'][$id]['curse'] = null;
                     $state['players'][$id]['haunting'] = null;
                     $state['players'][$id]['curse_notice'] = null;
-                } else {
+                } elseif ($bargain['kind'] === 'lantern') {
                     $state['players'][$id]['results'][] = ['kind' => 'visits', 'day' => $state['day'],
                         'target' => $state['players'][$bargain['promise_target']]['name'], 'visited' => $bargain['visited']];
                 }
@@ -149,6 +155,16 @@ class FaeCourt
                 default => false,
             };
             $state['fae']['bargains'][$index]['status'] = $kept ? 'fulfilled' : 'broken';
+            if ($bargain['kind'] === 'voice' && isset($bargain['gift_target'])) {
+                // Read the resolved ballot, never the intended target or the player's role.
+                // Accepted gifts remain theirs even when a promise is broken.
+                $vote = $state['actions'][$bargain['gift_target']] ?? null;
+                $submitted = ($vote['type'] ?? null) === 'vote';
+                $votedFor = $submitted ? ($vote['target'] ?? null) : null;
+                $state['players'][$id]['results'][] = ['kind' => 'ballot', 'day' => $state['day'],
+                    'target' => $state['players'][$bargain['gift_target']]['name'], 'submitted' => $submitted,
+                    'voted_for' => $votedFor === null ? null : $state['players'][$votedFor]['name']];
+            }
             if ($kept) {
                 $state['log'][] = 'A bargain was fulfilled. The Fae Court earned a seal.';
             }
@@ -201,7 +217,7 @@ class FaeCourt
             if (! $finished && ! $court && $bargain['recipient_id'] !== $id) {
                 continue;
             }
-            $public = array_intersect_key($bargain, array_flip(['id', 'day', 'recipient_id', 'kind', 'promise_target', 'status']));
+            $public = array_intersect_key($bargain, array_flip(['id', 'day', 'recipient_id', 'kind', 'promise_target', 'gift_target', 'status']));
             if ($finished) {
                 $public['sender_id'] = $bargain['sender_id'];
             }

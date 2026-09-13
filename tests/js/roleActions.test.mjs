@@ -18,6 +18,28 @@ const state = {
     ],
 };
 
+await test('Borrowed Voice reports distinguish votes, abstentions and missing ballots', () => {
+    const result = {
+        kind: 'ballot',
+        day: 2,
+        target: 'Mara',
+        submitted: true,
+        voted_for: 'Rowan',
+    };
+    assert.equal(
+        privateResultText(result),
+        'Mara voted to banish Rowan on day 2.',
+    );
+    assert.equal(
+        privateResultText({ ...result, voted_for: null }),
+        'Mara explicitly abstained on day 2.',
+    );
+    assert.equal(
+        privateResultText({ ...result, submitted: false, voted_for: null }),
+        'Mara did not submit a ballot on day 2.',
+    );
+});
+
 await test('only curse-capable cultists can select themselves at night, with an explicit confirmation label', () => {
     for (const role of ['veilweaver', 'acolyte']) {
         const cult = { ...state, me: { ...state.me, role, alignment: 'cult' } };

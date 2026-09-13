@@ -55,6 +55,7 @@ const membershipDate = computed(() => {
                 BACK</span
             >
         </header>
+        <ProgressionSummary :progression="progression" />
         <section class="ledger-arrival" aria-labelledby="arrival-title">
             <img
                 src="/assets/chanting/welcome-email-ferryman.png"
@@ -77,7 +78,6 @@ const membershipDate = computed(() => {
                 >A SAFE CROSSING. PROBABLY.</span
             >
         </section>
-        <ProgressionSummary :progression="progression" />
         <div class="ledger-columns">
             <section class="ledger-play" aria-labelledby="gather-title">
                 <header class="ledger-section-heading">

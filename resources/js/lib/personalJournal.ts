@@ -30,6 +30,7 @@ export function journalResultLabel(result: PrivateNightResult): string {
     return {
         alignment: 'Oracle reading',
         visits: 'Lamplighter watch',
+        ballot: 'A Borrowed Voice',
         tracking: 'Tracking',
         herbs: 'Village protection',
         shot: 'Vigilante shot',

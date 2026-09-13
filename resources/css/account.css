@@ -1714,3 +1714,68 @@
         font-size: 10px;
     }
 }
+
+/* A visible directory, including on narrow screens. */
+.registry-chapters {
+    width: 100%;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 0 24px;
+}
+.registry-chapters > a {
+    min-height: 48px;
+    gap: 8px;
+}
+.registry-chapters > a.registry-destination {
+    color: var(--account-text);
+    font-weight: 600;
+}
+.registry-chapters > a.registry-destination > svg {
+    color: var(--account-brass);
+    flex-shrink: 0;
+}
+.registry-chapters > a.is-current {
+    color: var(--account-green);
+}
+#progression-sections {
+    scroll-margin-top: 24px;
+}
+@media (max-width: 850px) {
+    .registry-chapters {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 0 16px;
+    }
+    .registry-chapters > a {
+        flex-direction: row;
+        align-items: center;
+        padding: 12px 0;
+    }
+    .registry-chapters > a:nth-child(n + 5) {
+        border-top: 1px solid var(--account-line);
+    }
+    .registry-chapter-number {
+        display: none;
+    }
+}
+@media (max-width: 600px) {
+    .registry-chapters {
+        gap: 0 10px;
+    }
+    .registry-chapters > a {
+        font-size: 11px;
+        gap: 5px;
+        min-height: 44px;
+    }
+    .registry-chapters > a.registry-destination > svg {
+        width: 13px;
+    }
+}
+@media (max-width: 360px) {
+    .registry-chapters {
+        gap: 0 8px;
+    }
+    .registry-chapters > a.registry-destination > svg {
+        display: none;
+    }
+}

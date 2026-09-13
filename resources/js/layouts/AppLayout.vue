@@ -1,24 +1,63 @@
 ﻿<script setup lang="ts">
-import { Link, router, usePage } from '@inertiajs/vue3';
+import { Link, router } from '@inertiajs/vue3';
 import LegalLinks from '@/components/LegalLinks.vue';
-import { ArrowUpRight, Eye, LogOut, Waves } from '@lucide/vue';
+import {
+    ArrowUpRight,
+    Eye,
+    LogOut,
+    Shirt,
+    ShoppingBag,
+    Trophy,
+} from '@lucide/vue';
 import { onMounted, onUnmounted } from 'vue';
+import { useAccountLocation } from '@/composables/useAccountLocation';
 import { logout } from '@/routes';
 import type { BreadcrumbItem } from '@/types';
 import '../../css/chanting.css';
 import '../../css/account.css';
 
 defineProps<{ breadcrumbs?: BreadcrumbItem[] }>();
-const page = usePage();
+const location = useAccountLocation();
 const navigation = [
     { number: '01', label: 'Ledger', href: '/dashboard' },
-    { number: '02', label: 'Progression', href: '/progression' },
-    { number: '03', label: 'Profile', href: '/settings/profile' },
-    { number: '04', label: 'Purchases', href: '/account/purchases' },
-    { number: '05', label: 'Security', href: '/settings/security' },
-    { number: '06', label: 'Appearance', href: '/settings/appearance' },
+    { icon: ShoppingBag, label: 'Store', href: '/settings/profile#store' },
+    {
+        icon: Shirt,
+        label: 'Wardrobe',
+        href: '/progression?tab=wardrobe#progression-sections',
+    },
+    {
+        icon: Trophy,
+        label: 'Progression',
+        href: '/progression?tab=achievements',
+    },
+    { number: '05', label: 'Profile', href: '/settings/profile' },
+    { number: '06', label: 'Purchases', href: '/account/purchases' },
+    { number: '07', label: 'Security', href: '/settings/security' },
+    { number: '08', label: 'Appearance', href: '/settings/appearance' },
 ];
-const isCurrent = (href: string) => page.url.split('?')[0] === href;
+const isCurrent = (href: string) => {
+    const current = location.value;
+    if (current.pathname === '/settings/profile') {
+        return (
+            href ===
+            (current.hash === '#store'
+                ? '/settings/profile#store'
+                : '/settings/profile')
+        );
+    }
+    if (current.pathname === '/progression') {
+        return (
+            href ===
+            (['achievements', 'season'].includes(
+                current.searchParams.get('tab') ?? '',
+            )
+                ? '/progression?tab=achievements'
+                : '/progression?tab=wardrobe#progression-sections')
+        );
+    }
+    return current.pathname === href;
+};
 onMounted(() => document.body.classList.add('account-theme'));
 onUnmounted(() => document.body.classList.remove('account-theme'));
 </script>
@@ -60,18 +99,26 @@ onUnmounted(() => document.body.classList.remove('account-theme'));
                     v-for="item in navigation"
                     :key="item.href"
                     :href="item.href"
+                    preserve-state
                     :aria-current="isCurrent(item.href) ? 'page' : undefined"
-                    :class="{ 'is-current': isCurrent(item.href) }"
-                    ><span class="registry-chapter-number" aria-hidden="true">{{
-                        item.number
-                    }}</span
+                    :class="{
+                        'is-current': isCurrent(item.href),
+                        'registry-destination': item.icon,
+                    }"
+                    ><component
+                        v-if="item.icon"
+                        :is="item.icon"
+                        :size="16"
+                        :stroke-width="1.6"
+                        aria-hidden="true"
+                    /><span
+                        v-else
+                        class="registry-chapter-number"
+                        aria-hidden="true"
+                        >{{ item.number }}</span
                     ><span>{{ item.label }}</span></Link
                 >
             </nav>
-            <p class="registry-chapter-note">
-                <Waves :size="19" :stroke-width="1.2" aria-hidden="true" />
-                Every resident has a record.
-            </p>
         </div>
         <main id="account-main" class="registry-main" tabindex="-1">
             <slot />

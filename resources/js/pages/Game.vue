@@ -183,10 +183,12 @@ const live = ref(false);
 const target = ref<string | null>(null);
 const bargainKind = ref<BargainKind>('thorn');
 const promiseTarget = ref<string | null>(null);
+const giftTarget = ref<string | null>(null);
 watch(
     () => state.value?.phase_id,
     () => {
         promiseTarget.value = null;
+        giftTarget.value = null;
         bargainKind.value = 'thorn';
     },
 );
@@ -197,6 +199,8 @@ const invalidBargain = computed(
         !!target.value &&
         ((bargainKind.value !== 'voice' &&
             (!promiseTarget.value || promiseTarget.value === target.value)) ||
+            (bargainKind.value === 'voice' &&
+                (!giftTarget.value || giftTarget.value === target.value)) ||
             state.value.me.curse?.type === 'misdirection'),
 );
 const inspectedPlayerId = ref<string | null>(null);
@@ -382,6 +386,10 @@ async function confirmDock() {
                           bargainKind.value === 'voice'
                               ? null
                               : promiseTarget.value,
+                      gift_target:
+                          bargainKind.value === 'voice'
+                              ? giftTarget.value
+                              : null,
                   }
                 : {}),
             ...(useAbility.value && state.value.me.role === 'counterfeiter'
@@ -1683,6 +1691,7 @@ onBeforeUnmount(() => {
                                         v-model:target="target"
                                         v-model:kind="bargainKind"
                                         v-model:promise="promiseTarget"
+                                        v-model:gift="giftTarget"
                                         :state="state"
                                         :disabled="pending || disconnected"
                                     />
