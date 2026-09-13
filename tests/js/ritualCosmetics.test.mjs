@@ -103,7 +103,8 @@ test('reduced motion shows a static 3D composition; effects stop after their dur
     const scene = new THREE.Scene();
     const cosmetics = createTableCosmetics(scene);
     cosmetics.play(banish, [{ id: 'p1', x: 0.2, y: 0.8, alive: false }]);
-    const effect = scene.children[1];
+    const effect = scene.getObjectByName('Table cosmetic event');
+    assert.ok(effect, 'the event composition is mounted in the scene');
     const pose = () =>
         effect.children.map((object) => [
             ...object.position.toArray(),

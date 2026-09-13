@@ -5,19 +5,9 @@ import type { RitualCosmeticEvent, RitualSceneSeat } from './ritualSceneState';
 export function createTableCosmetics(scene: THREE.Scene) {
     const geometries = new Set<THREE.BufferGeometry>();
     const materials = new Set<THREE.Material>();
-    const ornaments = new THREE.Group();
     const effect = new THREE.Group();
-    scene.add(ornaments, effect);
-    const gold = new THREE.MeshStandardMaterial({
-        color: 0xc9a65a,
-        metalness: 0.8,
-        roughness: 0.35,
-    });
-    const silver = new THREE.MeshStandardMaterial({
-        color: 0xa9b8e6,
-        metalness: 0.7,
-        roughness: 0.3,
-    });
+    effect.name = 'Table cosmetic event';
+    scene.add(effect);
     const glow = new THREE.MeshStandardMaterial({
         color: 0xf5ce7a,
         emissive: 0xc68b37,
@@ -28,7 +18,7 @@ export function createTableCosmetics(scene: THREE.Scene) {
         color: 0x425c58,
         transparent: true,
     });
-    [gold, silver, glow, shadow].forEach((material) => materials.add(material));
+    [glow, shadow].forEach((material) => materials.add(material));
     function geometry<T extends THREE.BufferGeometry>(value: T): T {
         geometries.add(value);
         return value;
@@ -59,28 +49,6 @@ export function createTableCosmetics(scene: THREE.Scene) {
         parent.add(object);
         return object;
     }
-    // Inlaid crowns and silver crescents. Harvest owns a complete table scene.
-    const motifs = Array.from({ length: 12 }, (_, i) => {
-        const group = new THREE.Group();
-        const angle = (i / 12) * Math.PI * 2;
-        group.position.set(
-            Math.cos(angle) * 4.62,
-            0.15,
-            Math.sin(angle) * 3.22,
-        );
-        group.rotation.set(-Math.PI / 2, 0, angle);
-        group.scale.setScalar(0.55);
-        ornaments.add(group);
-        const crown = new THREE.Group();
-        group.add(crown);
-        mesh(ring, gold, crown).scale.y = 0.48;
-        for (let j = 0; j < 3; j++) {
-            const point = mesh(jewel, gold, crown);
-            point.position.set((j - 1) * 0.23, 0.25, 0);
-        }
-        const crescent = mesh(moon, silver, group);
-        return { crown, crescent };
-    });
     const halo = mesh(ring, glow, effect);
     halo.rotation.x = -Math.PI / 2;
     const risingMoon = mesh(moon, glow, effect);
@@ -98,10 +66,6 @@ export function createTableCosmetics(scene: THREE.Scene) {
 
     return {
         table(id: string) {
-            motifs.forEach(({ crown, crescent }) => {
-                crown.visible = id === 'founders_oak';
-                crescent.visible = id === 'moonlit';
-            });
             return id === 'moonlit'
                 ? 0x7e8dad
                 : id === 'harvest'
@@ -204,7 +168,7 @@ export function createTableCosmetics(scene: THREE.Scene) {
             });
         },
         dispose() {
-            scene.remove(ornaments, effect);
+            scene.remove(effect);
             geometries.forEach((value) => value.dispose());
             materials.forEach((value) => value.dispose());
         },

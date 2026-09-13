@@ -249,7 +249,11 @@ onBeforeUnmount(() => {
             <span class="eyebrow">{{
                 cosmetics?.table === 'harvest'
                     ? 'THE HARVEST TABLE'
-                    : 'THE VILLAGE TABLE'
+                    : cosmetics?.table === 'founders_oak'
+                      ? 'THE FOUNDERS’ TABLE'
+                      : cosmetics?.table === 'moonlit'
+                        ? 'THE MOONLIT TABLE'
+                        : 'THE VILLAGE TABLE'
             }}</span>
             <button
                 v-if="sceneReady"
@@ -280,6 +284,15 @@ onBeforeUnmount(() => {
             <div
                 v-if="!sceneReady && cosmetics?.table === 'harvest'"
                 class="harvest-table-fallback"
+                aria-hidden="true"
+            ></div>
+            <div
+                v-if="
+                    !sceneReady &&
+                    (cosmetics?.table === 'founders_oak' ||
+                        cosmetics?.table === 'moonlit')
+                "
+                class="paid-table-fallback"
                 aria-hidden="true"
             ></div>
             <div
@@ -616,6 +629,82 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
+.table-panel[data-table='founders_oak'] {
+    border-color: #b0935655;
+    background: radial-gradient(ellipse at 50% 38%, #47634a35, #18241f 76%);
+    box-shadow:
+        0 12px 36px #060e0930,
+        inset 0 1px #e0c28618;
+}
+.table-panel[data-table='moonlit'] {
+    border-color: #a3aec45c;
+    background: radial-gradient(ellipse at 50% 38%, #5455823b, #141c2b 76%);
+    box-shadow:
+        0 12px 36px #06081838,
+        inset 0 1px #c8c8f31a;
+}
+.table-panel[data-table='founders_oak'] .eyebrow {
+    color: #d8c18b;
+    letter-spacing: 0.17em;
+}
+.table-panel[data-table='moonlit'] .eyebrow {
+    color: #c9cfed;
+    letter-spacing: 0.19em;
+}
+.table-panel[data-table='founders_oak'] .table-reset {
+    color: #dbd3b4;
+    border-color: #b69b5e65;
+}
+.table-panel[data-table='moonlit'] .table-reset {
+    color: #d6d7eb;
+    border-color: #a4acc86b;
+}
+.table-panel[data-table='founders_oak'] .table-clock {
+    background: #152e25;
+    border-color: #b69a58;
+}
+.table-panel[data-table='moonlit'] .table-clock {
+    background: #191e34;
+    border-color: #adb8d0;
+    color: #eeebff;
+}
+.paid-table-fallback {
+    position: absolute;
+    inset: 18% 7%;
+    z-index: -1;
+    border: 9px solid #9d7c41;
+    background: radial-gradient(
+        ellipse,
+        #284234 0 58%,
+        #674b2e 59% 71%,
+        #382a1e 72%
+    );
+    clip-path: polygon(
+        15% 0,
+        85% 0,
+        100% 23%,
+        100% 77%,
+        85% 100%,
+        15% 100%,
+        0 77%,
+        0 23%
+    );
+}
+[data-table='moonlit'] > .paid-table-fallback {
+    border: 7px double #aab3d0;
+    border-radius: 43%;
+    clip-path: none;
+    background: radial-gradient(
+        ellipse,
+        #252d4a 0 53%,
+        #606782 54% 55%,
+        #202941 56% 72%,
+        #414b67 73%
+    );
+    box-shadow:
+        0 9px 0 #192037,
+        0 18px 30px #080c2055;
+}
 .table-panel[data-table='harvest'] {
     border-color: #a7754955;
     background: radial-gradient(ellipse at 50% 38%, #78503530, #211f1b 76%);

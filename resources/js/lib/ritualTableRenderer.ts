@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import { createTableCosmetics } from './ritualCosmetics';
 import { createHarvestTable } from './harvestTable';
+import { createFoundersTable } from './foundersTable';
+import { createMoonlitTable } from './moonlitTable';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import {
     poseRimTentacle,
@@ -29,6 +31,73 @@ export interface RitualTableRenderer {
     resetView: () => void;
 }
 
+const tablePalettes = {
+    classic: {
+        metal: 0x91815a,
+        base: 0x111f20,
+        warm: 0xffd39a,
+        edge: 0x8bced0,
+        ambient: 0xc6ded0,
+        face: '#132526',
+        rule: '#a99665',
+        tick: '#d0b980',
+        minor: '#6d7154',
+        title: '#e1c990',
+        value: '#fff0cc',
+        detail: '#c2d0b6',
+    },
+    harvest: {
+        metal: 0xb78148,
+        base: 0x30221c,
+        warm: 0xffc48e,
+        edge: 0xc9bc9c,
+        ambient: 0xf0dcc3,
+        face: '#30221c',
+        rule: '#a99665',
+        tick: '#d0b980',
+        minor: '#6d7154',
+        title: '#e1c990',
+        value: '#fff0cc',
+        detail: '#d8bea0',
+    },
+    founders_oak: {
+        metal: 0xb69a58,
+        base: 0x152e25,
+        warm: 0xffdfad,
+        edge: 0xb7d5be,
+        ambient: 0xe0dfc6,
+        face: '#152e25',
+        rule: '#a58d56',
+        tick: '#dcc58b',
+        minor: '#597460',
+        title: '#e2ca91',
+        value: '#fff2ce',
+        detail: '#bfd4bf',
+    },
+    moonlit: {
+        metal: 0xadb8d0,
+        base: 0x191e34,
+        warm: 0xc9d6ff,
+        edge: 0xb6a6ed,
+        ambient: 0xc9d4ef,
+        face: '#191e34',
+        rule: '#8795b8',
+        tick: '#c6cceb',
+        minor: '#586789',
+        title: '#d7d9f3',
+        value: '#f2edff',
+        detail: '#bec5e0',
+    },
+};
+const paidTableFactories: Record<
+    string,
+    (scene: THREE.Scene) => ReturnType<typeof createHarvestTable>
+> = {
+    harvest: createHarvestTable,
+    founders_oak: createFoundersTable,
+    moonlit: createMoonlitTable,
+};
+
 /** Loaded when the room's table mounts. Nothing here owns game state. */
 export function createRitualTable(
     host: HTMLElement,
@@ -54,8 +123,9 @@ export function createRitualTable(
     });
     const scene = new THREE.Scene();
     let cosmetics: ReturnType<typeof createTableCosmetics> | undefined;
-    let harvest: ReturnType<typeof createHarvestTable> | undefined;
+    const paidTables = new Map<string, ReturnType<typeof createHarvestTable>>();
     let tableTheme = 'classic';
+    let palette = tablePalettes.classic;
     const geometries = new Set<THREE.BufferGeometry>();
     const materials = new Set<THREE.Material>();
     const textures = new Set<THREE.Texture>();
@@ -180,7 +250,8 @@ export function createRitualTable(
         controls.removeEventListener('change', cameraChanged);
         controls.dispose();
         cosmetics?.dispose();
-        harvest?.dispose();
+        paidTables.forEach((table) => table.dispose());
+        paidTables.clear();
         geometries.forEach((geometry) => geometry.dispose());
         materials.forEach((material) => material.dispose());
         textures.forEach((texture) => texture.dispose());
@@ -628,9 +699,9 @@ export function createRitualTable(
             if (nextKey === displayKey) return;
             displayKey = nextKey;
             const ink = dialInk!;
-            ink.fillStyle = tableTheme === 'harvest' ? '#30221c' : '#132526';
+            ink.fillStyle = palette.face;
             ink.fillRect(0, 0, 1024, 1024);
-            ink.strokeStyle = '#a99665';
+            ink.strokeStyle = palette.rule;
             ink.lineWidth = 3;
             ink.beginPath();
             ink.arc(512, 512, 478, 0, Math.PI * 2);
@@ -638,7 +709,7 @@ export function createRitualTable(
             for (let i = 0; i < 60; i++) {
                 const angle = (i / 60) * Math.PI * 2;
                 const inner = i % 5 === 0 ? 432 : 450;
-                ink.strokeStyle = i % 5 === 0 ? '#d0b980' : '#6d7154';
+                ink.strokeStyle = i % 5 === 0 ? palette.tick : palette.minor;
                 ink.lineWidth = i % 5 === 0 ? 5 : 2;
                 ink.beginPath();
                 ink.moveTo(
@@ -653,21 +724,21 @@ export function createRitualTable(
             }
             ink.textAlign = 'center';
             ink.textBaseline = 'middle';
-            ink.fillStyle = '#e1c990';
+            ink.fillStyle = palette.title;
             ink.font = '600 104px Georgia, serif';
             ink.fillText(display.phase.toUpperCase(), 512, 305, 710);
-            ink.fillStyle = display.urgent ? '#ffb797' : '#fff0cc';
+            ink.fillStyle = display.urgent ? '#ffb797' : palette.value;
             ink.font = /^\d+:\d{2}$/.test(display.value)
                 ? 'bold 240px Georgia, serif'
                 : 'bold 148px Georgia, serif';
             ink.fillText(display.value, 512, 510, 830);
-            ink.strokeStyle = '#a99665';
+            ink.strokeStyle = palette.rule;
             ink.lineWidth = 2;
             ink.beginPath();
             ink.moveTo(360, 672);
             ink.lineTo(664, 672);
             ink.stroke();
-            ink.fillStyle = tableTheme === 'harvest' ? '#d8bea0' : '#c2d0b6';
+            ink.fillStyle = palette.detail;
             ink.font = '600 62px Georgia, serif';
             ink.fillText(display.detail.toUpperCase(), 512, 755, 690);
             dialTexture.needsUpdate = true;
@@ -880,7 +951,7 @@ export function createRitualTable(
             dial.rotation.y = azimuth;
             const blend = motion.matches ? 1 : 1 - Math.exp(-delta * 2);
             darkness += ((state.night ? 1 : 0) - darkness) * blend;
-            if (tableTheme === 'harvest') harvest?.update(darkness);
+            paidTables.get(tableTheme)?.update(darkness);
             emergence += (state.emergence - emergence) * blend;
             warm.intensity = 3.5 - darkness * 1.9;
             edge.intensity = 2.1 + darkness * 0.8;
@@ -1004,23 +1075,30 @@ export function createRitualTable(
                 wood.color.setHex(cosmetics.table(table));
                 if (table !== tableTheme) {
                     tableTheme = table;
-                    const autumn = table === 'harvest';
-                    if (autumn && !harvest) {
+                    const factory = Object.hasOwn(paidTableFactories, table)
+                        ? paidTableFactories[table]
+                        : undefined;
+                    if (factory && !paidTables.has(table)) {
                         try {
-                            harvest = createHarvestTable(scene);
+                            paidTables.set(table, factory(scene));
                         } catch {
                             dispose();
                             failed();
                             return;
                         }
                     }
-                    if (harvest) harvest.root.visible = autumn;
-                    oval.visible = !autumn;
-                    brass.color.setHex(autumn ? 0xb78148 : 0x91815a);
-                    black.color.setHex(autumn ? 0x30221c : 0x111f20);
-                    warm.color.setHex(autumn ? 0xffc48e : 0xffd39a);
-                    edge.color.setHex(autumn ? 0xc9bc9c : 0x8bced0);
-                    ambient.color.setHex(autumn ? 0xf0dcc3 : 0xc6ded0);
+                    paidTables.forEach((model, id) => {
+                        model.root.visible = id === table;
+                    });
+                    oval.visible = !factory;
+                    palette = Object.hasOwn(tablePalettes, table)
+                        ? tablePalettes[table as keyof typeof tablePalettes]
+                        : tablePalettes.classic;
+                    brass.color.setHex(palette.metal);
+                    black.color.setHex(palette.base);
+                    warm.color.setHex(palette.warm);
+                    edge.color.setHex(palette.edge);
+                    ambient.color.setHex(palette.ambient);
                 }
                 cosmetics.play(event, seats);
                 schedule();

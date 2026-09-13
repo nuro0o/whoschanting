@@ -185,7 +185,44 @@ button:disabled {
     font-size: 70px;
 }
 [data-table='moonlit'] {
-    background: #20283b;
+    border-color: #a3aec45c;
+    background: radial-gradient(ellipse at 50% 30%, #54558245, #141c2b 75%);
+}
+[data-table='moonlit'] figcaption {
+    border-color: #a3aec444;
+}
+[data-table='moonlit'] button {
+    background: #323b58;
+    color: #e3e2f5;
+    border-color: #a4acc888;
+}
+[data-table='moonlit'] button:hover {
+    background: #454c71;
+}
+[data-table='moonlit'] button:focus-visible {
+    outline-color: #d3cafa;
+}
+[data-table='moonlit'] .cosmetic-preview-fallback {
+    color: #d6d7ed;
+    background: radial-gradient(ellipse, #353e60, transparent 70%);
+}
+[data-table='founders_oak'] {
+    border-color: #b0935655;
+    background: radial-gradient(ellipse at 50% 30%, #47634a45, #18241f 75%);
+}
+[data-table='founders_oak'] figcaption {
+    border-color: #b0935644;
+}
+[data-table='founders_oak'] button {
+    background: #344a37;
+    border-color: #b69b5e88;
+}
+[data-table='founders_oak'] button:hover {
+    background: #496044;
+}
+[data-table='founders_oak'] .cosmetic-preview-fallback {
+    color: #e0ce9f;
+    background: radial-gradient(ellipse, #414c32, transparent 70%);
 }
 [data-table='harvest'] {
     border-color: #ae815955;
