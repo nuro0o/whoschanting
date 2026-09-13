@@ -268,6 +268,9 @@ const gifts = [
                     :id="`${headingId}-fae-details`"
                     v-show="compact || expanded['fae-court']"
                     class="role-guide__expansion-details"
+                    :role="compact ? undefined : 'region'"
+                    :aria-labelledby="compact ? undefined : `${headingId}-fae`"
+                    :tabindex="compact ? undefined : 0"
                 >
                     <div class="role-guide__fae-introduction">
                         <span
@@ -408,6 +411,11 @@ const gifts = [
                     :id="`${headingId}-${expansion.id}-details`"
                     v-show="compact || expanded[expansion.id]"
                     class="role-guide__expansion-details"
+                    :role="compact ? undefined : 'region'"
+                    :aria-labelledby="
+                        compact ? undefined : `${headingId}-${expansion.id}`
+                    "
+                    :tabindex="compact ? undefined : 0"
                 >
                     <header v-if="compact" class="role-guide__new-heading">
                         <span
@@ -508,11 +516,6 @@ const gifts = [
 }
 .role-guide:not(.role-guide--compact)
     .role-guide__expansions
-    > article.is-expanded {
-    grid-column: 1 / -1;
-}
-.role-guide:not(.role-guide--compact)
-    .role-guide__expansions
     .role-guide__toggle {
     grid-template-columns: 40px minmax(0, 1fr) 18px;
     gap: 8px 12px;
@@ -553,15 +556,6 @@ const gifts = [
     grid-column: 3;
     grid-row: 1;
 }
-.role-guide:not(.role-guide--compact)
-    .role-guide__expansions:has(> article.is-expanded) {
-    grid-template-columns: 1fr;
-}
-.role-guide:not(.role-guide--compact)
-    .role-guide__expansions:has(> article.is-expanded)
-    .role-guide__toggle {
-    min-height: 0;
-}
 @media (max-width: 1100px) {
     .role-guide:not(.role-guide--compact) .role-guide__expansions {
         grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -582,13 +576,84 @@ const gifts = [
 .role-guide__expansion-symbol {
     font-size: 28px;
 }
-.role-guide:not(.role-guide--compact) .role-guide__expansion-details {
+.role-guide:not(.role-guide--compact)
+    .role-guide__expansions
+    .role-guide__expansion-details {
+    max-height: min(420px, 55dvh);
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+    overflow-wrap: anywhere;
+    scrollbar-width: thin;
+    scrollbar-color: var(--role-accent) transparent;
+    padding: 18px;
     border-top: 1px solid var(--line);
 }
 .role-guide:not(.role-guide--compact)
-    .role-guide__new-expansion
-    .role-guide__expansion-details {
-    padding: clamp(18px, 3vw, 28px);
+    .role-guide__expansions
+    .role-guide__expansion-details:focus-visible {
+    outline: 2px solid var(--role-accent);
+    outline-offset: -2px;
+}
+.role-guide:not(.role-guide--compact)
+    .role-guide__expansions
+    .role-guide__new-roles {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+    margin: 0;
+    padding: 0;
+}
+.role-guide:not(.role-guide--compact)
+    .role-guide__expansions
+    .role-guide__new-roles
+    .role-guide__entry {
+    padding-block: 18px;
+}
+.role-guide:not(.role-guide--compact)
+    .role-guide__expansions
+    .role-guide__new-roles
+    .role-guide__entry
+    + .role-guide__entry {
+    border-top: 1px solid var(--line);
+}
+.role-guide:not(.role-guide--compact)
+    .role-guide__expansions
+    .role-guide__fae-introduction {
+    display: block;
+    padding: 0 0 18px;
+}
+.role-guide:not(.role-guide--compact)
+    .role-guide__expansions
+    .role-guide__fae-emblem {
+    display: none;
+}
+.role-guide:not(.role-guide--compact)
+    .role-guide__expansions
+    .role-guide__fae-details {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 20px;
+    margin: 0;
+    padding-block: 18px;
+}
+.role-guide:not(.role-guide--compact)
+    .role-guide__expansions
+    .role-guide__bargains {
+    padding: 18px 0 0;
+    border-top: 1px solid var(--line);
+    border-left: 0;
+}
+.role-guide:not(.role-guide--compact)
+    .role-guide__expansions
+    .role-guide__fae-footer {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 18px 0 0;
+}
+.role-guide:not(.role-guide--compact)
+    .role-guide__expansions
+    .role-guide__fae-footer
+    svg {
+    flex-shrink: 0;
 }
 
 .role-guide__new-expansion {
