@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import RitualTableScene from './RitualTableScene.vue';
 import {
     banishmentDetail,
+    celebrationDetail,
     cosmeticPlaybackMilliseconds,
 } from '@/lib/ritualCosmeticTiming';
 import {
@@ -17,6 +18,7 @@ const props = defineProps<{
 }>();
 const unavailable = ref(false);
 const active = ref<RitualCosmeticEvent | null>(null);
+const selectedKind = ref<'banishment' | 'celebration' | null>(null);
 const state = ritualSceneState({
     phase: 'lobby',
     tokens: 0,
@@ -42,12 +44,22 @@ const caption = computed(() =>
     active.value?.kind === 'banishment'
         ? (banishmentDetail(active.value.effect)?.name ?? 'Classic banishment')
         : active.value
-          ? 'Victory preview'
+          ? (celebrationDetail(active.value.effect)?.name ?? 'Classic victory')
           : tableName.value,
 );
-const banishment = computed(() => banishmentDetail(props.banishment ?? ''));
+const selectedDetail = computed(() => {
+    const kind =
+        active.value?.kind ??
+        selectedKind.value ??
+        (props.banishment ? 'banishment' : 'celebration');
+    const effect = active.value?.effect ?? props[kind] ?? '';
+    return kind === 'banishment'
+        ? banishmentDetail(effect)
+        : celebrationDetail(effect);
+});
 function play(kind: 'banishment' | 'celebration') {
     clearTimeout(timer);
+    selectedKind.value = kind;
     active.value = {
         id: `preview-${++serial}`,
         kind,
@@ -64,6 +76,7 @@ watch(
     () => {
         clearTimeout(timer);
         active.value = null;
+        selectedKind.value = null;
     },
 );
 onBeforeUnmount(() => clearTimeout(timer));
@@ -93,19 +106,17 @@ onBeforeUnmount(() => clearTimeout(timer));
         </div>
         <figcaption>
             <strong role="status">{{ caption }}</strong>
-            <p v-if="banishment" class="banishment-description">
-                <span
-                    v-if="active?.kind !== 'banishment'"
-                    class="banishment-name"
-                    >{{ banishment.name }}. </span
-                >{{ banishment.description }}
+            <p v-if="selectedDetail" class="effect-description">
+                <span v-if="!active" class="effect-name"
+                    >{{ selectedDetail.name }}. </span
+                >{{ selectedDetail.description }}
             </p>
             <ol
-                v-if="banishment"
-                class="banishment-phases"
-                aria-label="Banishment sequence"
+                v-if="selectedDetail"
+                class="effect-phases"
+                :aria-label="`${selectedDetail.name} sequence`"
             >
-                <li v-for="phase in banishment.phases" :key="phase">
+                <li v-for="phase in selectedDetail.phases" :key="phase">
                     {{ phase }}
                 </li>
             </ol>
@@ -165,18 +176,18 @@ figcaption strong {
 figcaption small {
     color: #c2c9bb;
 }
-.banishment-description {
+.effect-description {
     margin: 0;
     font-size: 13px;
     line-height: 1.65;
     color: #d4d8c9;
     max-width: 62ch;
 }
-.banishment-name {
+.effect-name {
     color: #f0dfb2;
     font-weight: 600;
 }
-.banishment-phases {
+.effect-phases {
     display: flex;
     flex-wrap: wrap;
     gap: 5px 15px;
@@ -189,10 +200,10 @@ figcaption small {
     line-height: 1.6;
     letter-spacing: 0.035em;
 }
-.banishment-phases li {
+.effect-phases li {
     counter-increment: phase;
 }
-.banishment-phases li::before {
+.effect-phases li::before {
     content: '0' counter(phase) ' ';
     opacity: 0.65;
     margin-right: 3px;

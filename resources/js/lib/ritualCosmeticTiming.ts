@@ -34,13 +34,57 @@ export function banishmentDetail(effect: string) {
         : undefined;
 }
 
+export const celebrationDetails = {
+    crownfall: {
+        name: 'Crownfall',
+        description:
+            'Golden laurels unfurl as an ornate crown assembles above a jade medallion. A shower of coins celebrates the coronation.',
+        phases: [
+            'Unfurl the laurels',
+            'Assemble the crown',
+            'Celebrate the reign',
+        ],
+        duration: 5.6,
+    },
+    moonrise: {
+        name: 'Moonrise',
+        description:
+            'A pearl moon rises from a silver pool. Lunar phases align in a celestial halo, returning starlight to the water.',
+        phases: [
+            'Awaken the water',
+            'Align the heavens',
+            'Shower the starlight',
+        ],
+        duration: 5.8,
+    },
+    lantern_festival: {
+        name: 'Lantern Festival',
+        description:
+            'Paper lanterns kindle one by one and rise into a glowing canopy, with drifting autumn leaves and dancing fireflies.',
+        phases: [
+            'Kindle the wishes',
+            'Release the lanterns',
+            'Light the canopy',
+        ],
+        duration: 5.6,
+    },
+} as const;
+
+export function celebrationDetail(effect: string) {
+    return Object.hasOwn(celebrationDetails, effect)
+        ? celebrationDetails[effect as keyof typeof celebrationDetails]
+        : undefined;
+}
+
 /** Renderer and both event consumers share one clock, with a short quiet tail. */
 export function cosmeticDuration(
     event: Pick<RitualCosmeticEvent, 'effect' | 'kind'>,
 ) {
     return event.kind === 'banishment'
         ? (banishmentDetail(event.effect)?.duration ?? 3.2)
-        : 3.2;
+        : event.kind === 'celebration'
+          ? (celebrationDetail(event.effect)?.duration ?? 3.2)
+          : 3.2;
 }
 
 export function cosmeticPlaybackMilliseconds(

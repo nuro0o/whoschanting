@@ -1,7 +1,12 @@
 import * as THREE from 'three';
 import type { RitualCosmeticEvent, RitualSceneSeat } from './ritualSceneState';
 import { createPaidBanishments } from './ritualBanishments.ts';
-import { banishmentDetail, cosmeticDuration } from './ritualCosmeticTiming.ts';
+import { createPaidCelebrations } from './ritualCelebrations.ts';
+import {
+    banishmentDetail,
+    celebrationDetail,
+    cosmeticDuration,
+} from './ritualCosmeticTiming.ts';
 
 /** Fixed geometry pool, shared by the store preview and live table. */
 export function createTableCosmetics(scene: THREE.Scene) {
@@ -14,6 +19,7 @@ export function createTableCosmetics(scene: THREE.Scene) {
     legacy.name = 'Classic banishment and celebrations';
     effect.add(legacy);
     const paid = createPaidBanishments(effect);
+    const celebrations = createPaidCelebrations(effect);
     const glow = new THREE.MeshStandardMaterial({
         color: 0xf5ce7a,
         emissive: 0xc68b37,
@@ -86,11 +92,14 @@ export function createTableCosmetics(scene: THREE.Scene) {
             elapsed = 0;
             effect.visible = !!event;
             paid.reset();
+            celebrations.reset();
             legacy.visible =
                 !!event &&
                 !(
-                    event.kind === 'banishment' &&
-                    banishmentDetail(event.effect)
+                    (event.kind === 'banishment' &&
+                        banishmentDetail(event.effect)) ||
+                    (event.kind === 'celebration' &&
+                        celebrationDetail(event.effect))
                 );
             const seat = seats.find((seat) => seat.id === event?.player_id);
             origin.set(
@@ -125,7 +134,9 @@ export function createTableCosmetics(scene: THREE.Scene) {
                 : Math.min(1, elapsed / cosmeticDuration(event));
             effect.visible = reduced || progress < 1;
             if (!legacy.visible) {
-                paid.update(event.effect, elapsed, origin, reduced);
+                if (event.kind === 'banishment')
+                    paid.update(event.effect, elapsed, origin, reduced);
+                else celebrations.update(event.effect, elapsed, reduced);
                 return;
             }
             const banish = event.kind === 'banishment';
@@ -188,6 +199,7 @@ export function createTableCosmetics(scene: THREE.Scene) {
         },
         dispose() {
             paid.dispose();
+            celebrations.dispose();
             scene.remove(effect);
             geometries.forEach((value) => value.dispose());
             materials.forEach((value) => value.dispose());

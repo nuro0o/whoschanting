@@ -46,6 +46,8 @@ Each collection has a real Three.js preview. Wardrobe selections are independent
 
 Paid banishments have distinct multi-stage sequences: Gilded Vortex's golden tribunal, Lunar Rift's eclipse doorway, and Ember Spiral's autumn pyre. The renderer, live event queue and preview share effect durations. See [the banishment sound brief](banishment-sounds.md) for matching sound layers, cue timings, sourcing links and delivery filenames; recordings and playback are not included yet.
 
+Paid victories also have separate productions: Crownfall's gilded coronation, Moonrise's celestial reveal above a reflecting pool, and Lantern Festival's rising canopy of paper lanterns. Preview captions follow the selected effect, and shared durations allow each finale to finish. See [the victory sound brief](victory-sounds.md) for synchronized cue sheets, sample candidates and delivery filenames; custom victory recordings and playback are not included yet.
+
 Bundles do not grant Crowns, XP, roles, abilities, improved matchmaking or win chances. The current Crown catalog, earning rates and quarterly free progression track remain available. Subscriptions, paid Crown top-ups and season passes are not implemented.
 
 ## Stripe configuration

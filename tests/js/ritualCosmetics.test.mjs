@@ -5,6 +5,7 @@ import { createTableCosmetics } from '../../resources/js/lib/ritualCosmetics.ts'
 import { createCosmeticEventStream } from '../../resources/js/lib/ritualSceneState.ts';
 import {
     banishmentDetails,
+    celebrationDetails,
     cosmeticDuration,
     cosmeticPlaybackMilliseconds,
 } from '../../resources/js/lib/ritualCosmeticTiming.ts';
@@ -169,8 +170,16 @@ function pose(root, visibleOnly = false) {
 test('each paid effect lasts for its shared duration and keeps a quiet queue tail', () => {
     const scene = new THREE.Scene();
     const cosmetics = createTableCosmetics(scene);
-    for (const name of ['classic', ...Object.keys(banishmentDetails)]) {
-        const event = { ...banish, id: name, effect: name };
+    for (const name of [
+        'classic',
+        ...Object.keys(banishmentDetails),
+        ...Object.keys(celebrationDetails),
+    ]) {
+        const event = {
+            ...(Object.hasOwn(celebrationDetails, name) ? victory : banish),
+            id: name,
+            effect: name,
+        };
         const duration = cosmeticDuration(event);
         assert.equal(
             cosmeticPlaybackMilliseconds(event),
@@ -191,15 +200,31 @@ test('each paid effect lasts for its shared duration and keeps a quiet queue tai
         cosmeticDuration({ ...victory, effect: 'gilded_vortex' }),
         3.2,
     );
+    assert.equal(cosmeticDuration({ ...banish, effect: 'crownfall' }), 3.2);
+    assert.equal(cosmeticDuration({ ...victory, effect: 'unknown' }), 3.2);
     cosmetics.dispose();
 });
 
 test('paid compositions reset across types, null and repeated play without replaying an event ID', () => {
     const scene = new THREE.Scene();
     const cosmetics = createTableCosmetics(scene);
-    const names = ['gilded_vortex', 'lunar_rift', 'ember_spiral', 'classic'];
-    for (const name of names) {
-        const event = { ...banish, id: `fresh-${name}`, effect: name };
+    const events = [
+        ...Object.keys(banishmentDetails).map((effect) => ({
+            ...banish,
+            effect,
+        })),
+        ...Object.keys(celebrationDetails).map((effect) => ({
+            ...victory,
+            effect,
+        })),
+        { ...banish, effect: 'classic' },
+        { ...victory, effect: 'classic' },
+        { ...banish, effect: 'crownfall' },
+        { ...victory, effect: 'lunar_rift' },
+    ];
+    for (const entry of events) {
+        const name = `${entry.kind}-${entry.effect}`;
+        const event = { ...entry, id: `fresh-${name}` };
         cosmetics.play(event, []);
         cosmetics.update(1.8, false);
         const expected = pose(scene, true);
@@ -210,11 +235,9 @@ test('paid compositions reset across types, null and repeated play without repla
             expected,
             'same event ID must not restart',
         );
-        for (const other of names) {
-            cosmetics.play(
-                { ...banish, id: `other-${name}-${other}`, effect: other },
-                [],
-            );
+        for (const otherEvent of events) {
+            const other = `${otherEvent.kind}-${otherEvent.effect}`;
+            cosmetics.play({ ...otherEvent, id: `other-${name}-${other}` }, []);
             cosmetics.update(3.6, false);
             cosmetics.play(null, []);
             assert.equal(scene.children[0].visible, false);
@@ -227,6 +250,72 @@ test('paid compositions reset across types, null and repeated play without repla
             );
         }
     }
+    cosmetics.dispose();
+});
+
+test('victories use centered distinct stages and retain their own choreography', () => {
+    const scene = new THREE.Scene();
+    const cosmetics = createTableCosmetics(scene);
+    const stages = [
+        'Crownfall coronation',
+        'Moonrise celestial revelation',
+        'Lantern Festival wish release',
+    ];
+    const names = Object.keys(celebrationDetails);
+    names.forEach((name, index) => {
+        cosmetics.play({ ...victory, id: name, effect: name }, [
+            { id: 'p2', x: 0.1, y: 0.8, alive: true },
+        ]);
+        cosmetics.update(1, false);
+        const early = pose(scene, true);
+        stages.forEach((stage, i) =>
+            assert.equal(scene.getObjectByName(stage).visible, index === i),
+        );
+        assert.equal(
+            scene.getObjectByName('Paid banishment stage').visible,
+            false,
+        );
+        assert.equal(
+            scene.getObjectByName('Classic banishment and celebrations')
+                .visible,
+            false,
+        );
+        assert.equal(scene.getObjectByName('Paid victory stage').position.x, 0);
+        assert.equal(scene.getObjectByName('Paid victory stage').position.z, 0);
+        cosmetics.update(2.8, false);
+        assert.notDeepEqual(
+            pose(scene, true),
+            early,
+            `${name} must progress through its stages`,
+        );
+        if (name === 'crownfall') {
+            assert.equal(
+                scene.getObjectByName('Assembled royal crown').position.y,
+                1.3,
+            );
+            assert.equal(
+                scene.getObjectByName('Coronation pennants').visible,
+                true,
+            );
+        } else if (name === 'moonrise') {
+            assert.equal(
+                scene.getObjectByName('Rising pearl moon').position.y,
+                1.98,
+            );
+            assert.equal(
+                scene.getObjectByName('Aligned lunar phase halo').scale.x,
+                1,
+            );
+        } else {
+            assert.ok(
+                scene.getObjectByName('Crafted wish lantern').position.y > 1.6,
+            );
+            assert.ok(
+                scene.getObjectByName('Pleated paper body').material
+                    .emissiveIntensity > 0.8,
+            );
+        }
+    });
     cosmetics.dispose();
 });
 
