@@ -62,6 +62,12 @@ function openEditor(value: 'characters' | 'modes', event: MouseEvent) {
 }
 const setup = ref(defaultModeSetup());
 const setupError = computed(() => customModeError(setup.value));
+const setupSummary = computed(() => {
+    const expansion = page.props.factionCatalog?.find(
+        (item) => item.id === setup.value.expansion,
+    );
+    return [modeName(setup.value), expansion?.name].filter(Boolean).join(' · ');
+});
 const modeDetail = computed(() =>
     setup.value.mode === 'custom'
         ? t('roomEntry.mode.custom_description', {
@@ -337,7 +343,7 @@ async function enter() {
                     /></span>
                     <span class="entry-setting-copy"
                         ><small>{{ t('roomEntry.mode.label') }}</small
-                        ><strong>{{ modeName(setup) }}</strong
+                        ><strong>{{ setupSummary }}</strong
                         ><span>{{ modeDetail }}</span></span
                     >
                     <ChevronRight
@@ -402,9 +408,7 @@ async function enter() {
                     : t('roomEntry.editor.mode_description')
             "
             :summary="
-                editor === 'characters'
-                    ? selectedCharacterName
-                    : modeName(setup)
+                editor === 'characters' ? selectedCharacterName : setupSummary
             "
             :error="editor === 'modes' ? setupError : null"
         >

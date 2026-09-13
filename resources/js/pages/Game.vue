@@ -2723,7 +2723,7 @@ onBeforeUnmount(() => {
                                 :disabled="pending"
                                 @click="modeEditorOpen = !modeEditorOpen"
                             >
-                                Modes ·
+                                Modes &amp; expansions ·
                                 {{ modeName(state.mode_setup, state.roster) }}
                             </button>
                             <div
