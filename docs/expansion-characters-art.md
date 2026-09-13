@@ -1,5 +1,7 @@
 # Expansion character portraits
 
+The latest requested revisions are documented at the end of this file; earlier prompts below preserve the original generation history.
+
 Created 2026-09-13 with the built-in image_gen tool. Five individual portraits use the original illustrated ensemble as the style authority and the existing Tidecaller portrait as a secondary framing reference. Each final PNG is copied unchanged from the generated output, preserving image metadata; no raster post-processing was applied.
 
 All are 1254 × 1254 square portraits intended for store previews and character selection. The five identities have distinct faction clothing, props and silhouettes while retaining dark ink contours, angular opaque gouache planes, muted village colors and expressive faces.
@@ -123,4 +125,50 @@ Targeted refinement uses the initial generated portrait as its only edit target:
 
 ```text
 Use case: precise-object-edit. Input is the edit target, a single square game character illustration. Preserve its exact angular ink-and-opaque-gouache finish, brush shapes and muted palette. Do not make any part photographic or realistic. Refine her identity: she is a clearly deep-brown-skinned Black woman, with rich dark umber and chestnut skin instead of the current light orange ochre. Match face, neck, ears and visible hand. Give her a broader joyful smile with a modest glimpse of teeth and round cheerful cheeks, keeping her shrewd expressive eyebrows. Reduce only the height of the short plum top hat slightly so the ENTIRE hat crown is within the square with a small top margin; do not shrink the face or pull back the portrait. Preserve cropped copper curls, coat, three prediction cards, backdrop and composition. No words, no border, no watermark. Output one square PNG.
+```
+
+## Latest requested revisions — 2026-09-13
+
+These built-in image_gen edits replace the three corresponding final assets above. Earlier prompts are retained as generation history. The Thorn Envoy is now a white, fair-skinned elf woman; the Deep Diver wears a complete brass helmet; the Ringmaster is now a white ginger-haired man with curled handlebar moustache and a wild theatrical grin. PNGs were visually inspected and copied unchanged to the existing project paths.
+
+### fae_envoy
+
+Final asset: `public/assets/chanting/expansions/fae_envoy-illustrated.png`
+
+Generated source: `C:\Users\nurdo\.codex\generated_images\01a09a12-d4c4-7453-bbfa-e69d41487edd\exec-22d8e469-d827-495c-8f2e-c31f8ffdc11b.png`
+
+Edit input: the previous version of this same project asset.
+
+Exact prompt:
+
+```text
+Use case: precise-object-edit. Edit the supplied single square game portrait. Preserve its exact dark ink outlines, angular opaque gouache brush shapes, muted navy/teal/olive/burgundy/brass palette and expressive illustrated storybook finish. No photorealism, no 3D rendering, no smooth airbrushed skin. Keep the square close chest-up composition and original background. One portrait only, no border, text or watermark. Change the Thorn Envoy into a white, fair-skinned adult elf woman. Give all visible skin (face, pointed ears, neck and hand) a consistent light ivory/peach complexion with subtle rosy warmth, clearly fair rather than tan. Preserve her silver swept-up hair, thorn circlet, pointed ears, knowing sideways glance and sly smile, plum-and-olive court clothing, jewelry, folded parchment and woodland court background. Keep her graceful facial structure and the existing illustrated style.
+```
+
+### drowned_diver
+
+Final asset: `public/assets/chanting/expansions/drowned_diver-illustrated.png`
+
+Generated source: `C:\Users\nurdo\.codex\generated_images\01a09a12-d4c4-7453-bbfa-e69d41487edd\exec-51ff14ba-9e1a-4b94-a0fd-17a9dba6247e.png`
+
+Edit input: the previous version of this same project asset.
+
+Exact prompt:
+
+```text
+Use case: precise-object-edit. Edit the supplied single square game portrait. Preserve its exact dark ink outlines, angular opaque gouache brush shapes, muted navy/teal/olive/burgundy/brass palette and expressive illustrated storybook finish. No photorealism, no 3D rendering, no smooth airbrushed skin. Keep the square close chest-up composition and original background. One portrait only, no border, text or watermark. Put the Deep Diver inside a complete vintage brass deep-sea diving helmet, bolted firmly onto the existing brass shoulder collar. The large rounded riveted helmet fully encloses the head, with a circular thick glass front viewport and small side ports, worn brass, restrained teal patina and a few barnacles. Show a faint readable glimpse of the existing face through the dark teal glass, but the unmistakable enclosed brass helmet is the main silhouette; no exposed hair or head outside it. Fit the whole helmet within the square with a little headroom. Preserve the indigo diving suit, rope, chain, brass collar and drowned harbor background. Render the helmet with bold painted planes and ink contours matching the illustration, not realistic reflective metal.
+```
+
+### carnival_ringmaster
+
+Final asset: `public/assets/chanting/expansions/carnival_ringmaster-illustrated.png`
+
+Generated source: `C:\Users\nurdo\.codex\generated_images\01a09a12-d4c4-7453-bbfa-e69d41487edd\exec-1e9d6773-35ec-46ca-b889-65342cb9721c.png`
+
+Edit input: the previous version of this same project asset.
+
+Exact prompt:
+
+```text
+Use case: precise-object-edit. Edit the supplied single square game portrait. Preserve its exact dark ink outlines, angular opaque gouache brush shapes, muted navy/teal/olive/burgundy/brass palette and expressive illustrated storybook finish. No photorealism, no 3D rendering, no smooth airbrushed skin. Keep the square close chest-up composition and original background. One portrait only, no border, text or watermark. Transform the Ringmaster into a white, fair-skinned adult man with a flamboyant ginger handlebar moustache, both ends rolled upward into distinct curls. Give him tousled ginger hair, a masculine angular face, light freckled peach/ivory skin consistently on face, ears, neck and hand, and a clean-shaven chin so the curled moustache is prominent. Make him look a little wild and unhinged in a playful theatrical way: bright wide eyes, one dramatically cocked eyebrow, and an impish lopsided toothy grin. No horror or gore. Preserve the jaunty short plum top hat, teal-and-burgundy striped ringmaster coat with brass fastenings, small fan of three prediction cards, carnival tent backdrop and painterly finish. Keep the complete hat in frame with small headroom and the face large enough to read as a tiny avatar.
 ```

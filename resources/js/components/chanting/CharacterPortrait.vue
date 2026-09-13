@@ -31,12 +31,12 @@ const portraitImages: Record<string, string> = {
         '/assets/chanting/unlocks/seasonal_cultist-illustrated.png',
     seasonal_oathkeeper:
         '/assets/chanting/unlocks/seasonal_oathkeeper-illustrated.png',
-    fae_envoy: '/assets/chanting/expansions/fae_envoy-illustrated.png',
-    drowned_diver: '/assets/chanting/expansions/drowned_diver-illustrated.png',
+    fae_envoy: '/assets/chanting/expansions/fae_envoy-illustrated.png?v=2',
+    drowned_diver: '/assets/chanting/expansions/drowned_diver-illustrated.png?v=2',
     relic_broker: '/assets/chanting/expansions/relic_broker-illustrated.png',
     hollow_cantor: '/assets/chanting/expansions/hollow_cantor-illustrated.png',
     carnival_ringmaster:
-        '/assets/chanting/expansions/carnival_ringmaster-illustrated.png',
+        '/assets/chanting/expansions/carnival_ringmaster-illustrated.png?v=2',
 };
 const portraitImage = computed(() => portraitImages[props.character]);
 const label = computed(() =>
