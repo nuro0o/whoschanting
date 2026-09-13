@@ -20,7 +20,6 @@ withDefaults(
             max_players: number;
             town_roles_min_players?: Record<string, number>;
             cult_roles_min_players?: Record<string, number>;
-            ritual_goals?: { players: number; steps: number }[];
         };
     }>(),
     {
@@ -196,7 +195,8 @@ withDefaults(
                 </div>
                 <details class="rules-details">
                     <summary>
-                        {{ t('welcome.rules.summary') }} <span>+</span>
+                        {{ t('welcome.rules.summary') }}
+                        <span aria-hidden="true">+</span>
                     </summary>
                     <div class="rules-copy">
                         <p>
@@ -217,7 +217,6 @@ withDefaults(
                             }}</strong>
                             {{ t('welcome.rules.curses.description') }}
                         </p>
-                        <p>{{ t('welcome.rules.curses.difficulty') }}</p>
                         <p>
                             <strong>{{
                                 t('welcome.rules.ritual.title')
@@ -226,70 +225,15 @@ withDefaults(
                         </p>
                         <p>
                             <strong>{{
-                                t('welcome.rules.small_gathering.title')
+                                t('welcome.rules.final_vote.title')
                             }}</strong>
-                            {{ t('welcome.rules.small_gathering.description') }}
-                        </p>
-                        <table
-                            v-if="rules.ritual_goals?.length"
-                            class="ritual-goals"
-                        >
-                            <caption>
-                                {{
-                                    t('welcome.rules.ritual_goals.caption')
-                                }}
-                            </caption>
-                            <thead>
-                                <tr>
-                                    <th scope="col">
-                                        {{
-                                            t(
-                                                'welcome.rules.ritual_goals.players',
-                                            )
-                                        }}
-                                    </th>
-                                    <th scope="col">
-                                        {{
-                                            t(
-                                                'welcome.rules.ritual_goals.steps_heading',
-                                            )
-                                        }}
-                                    </th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr
-                                    v-for="goal in rules.ritual_goals"
-                                    :key="goal.players"
-                                >
-                                    <td>{{ goal.players }}</td>
-                                    <td>
-                                        {{
-                                            t(
-                                                'welcome.rules.ritual_goals.steps',
-                                                { steps: goal.steps },
-                                            )
-                                        }}
-                                    </td>
-                                </tr>
-                            </tbody>
-                        </table>
-                        <p>
-                            <strong>{{
-                                t('welcome.rules.ready.title')
-                            }}</strong>
-                            {{ t('welcome.rules.ready.description') }}
+                            {{ t('welcome.rules.final_vote.description') }}
                         </p>
                         <p>
                             <strong>{{
-                                t('welcome.rules.balance.title')
+                                t('welcome.rules.setup.title')
                             }}</strong>
-                            {{
-                                t('welcome.rules.balance.description', {
-                                    minPlayers: rules.min_players,
-                                    maxPlayers: rules.max_players,
-                                })
-                            }}
+                            {{ t('welcome.rules.setup.description') }}
                         </p>
                     </div>
                 </details>

@@ -1843,27 +1843,6 @@
     margin-top: 10px;
     color: var(--cream);
 }
-.ritual-goals {
-    border-collapse: collapse;
-    width: 100%;
-    max-width: 440px;
-    font-size: 12px;
-}
-.ritual-goals caption {
-    text-align: left;
-    color: var(--cream);
-    font-weight: 600;
-    padding-bottom: 12px;
-}
-.ritual-goals td,
-.ritual-goals th {
-    text-align: left;
-    padding: 7px 12px;
-    border-bottom: 1px solid var(--line);
-}
-.ritual-goals th {
-    color: var(--green);
-}
 .lobby-rules {
     margin: 20px 0;
     padding: 16px 18px;
