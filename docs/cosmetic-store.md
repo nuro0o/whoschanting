@@ -44,6 +44,8 @@ The store also offers three permanent, one-time bundles through Stripe Checkout:
 
 Each collection has a real Three.js preview. Wardrobe selections are independent: mix a table from one bundle with effects from another. The host's equipped table is snapshotted at match start; later wardrobe changes apply on the next gathering. Banishment uses the voted-out player's effect. At victory, the server chooses uniformly once among all winning-faction players, including eliminated winners, and persists that player's equipped celebration. Default effects remain free. A final vote queues the banishment before the victory celebration. Polls and reconnects do not replay historical effects. Reduced-motion settings use static compositions; a WebGL failure leaves the game and text announcements usable.
 
+Paid banishments have distinct multi-stage sequences: Gilded Vortex's golden tribunal, Lunar Rift's eclipse doorway, and Ember Spiral's autumn pyre. The renderer, live event queue and preview share effect durations. See [the banishment sound brief](banishment-sounds.md) for matching sound layers, cue timings, sourcing links and delivery filenames; recordings and playback are not included yet.
+
 Bundles do not grant Crowns, XP, roles, abilities, improved matchmaking or win chances. The current Crown catalog, earning rates and quarterly free progression track remain available. Subscriptions, paid Crown top-ups and season passes are not implemented.
 
 ## Stripe configuration

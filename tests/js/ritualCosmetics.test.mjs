@@ -3,6 +3,11 @@ import test from 'node:test';
 import * as THREE from 'three';
 import { createTableCosmetics } from '../../resources/js/lib/ritualCosmetics.ts';
 import { createCosmeticEventStream } from '../../resources/js/lib/ritualSceneState.ts';
+import {
+    banishmentDetails,
+    cosmeticDuration,
+    cosmeticPlaybackMilliseconds,
+} from '../../resources/js/lib/ritualCosmeticTiming.ts';
 
 const time = '2026-09-12T12:00:00.000Z';
 const banish = {
@@ -85,6 +90,16 @@ test('3D effects reuse a bounded geometry pool and dispose all owned resources',
         });
         assert.equal(count(), initial);
     }
+    for (const name of Object.keys(banishmentDetails)) {
+        for (let repeat = 0; repeat < 3; repeat++) {
+            cosmetics.play(
+                { ...banish, id: `${name}-${repeat}`, effect: name },
+                [],
+            );
+            for (let step = 0; step < 51; step++) cosmetics.update(0.1, false);
+            assert.equal(count(), initial);
+        }
+    }
     let disposedGeometries = 0;
     let disposedMaterials = 0;
     geometries.forEach((geometry) =>
@@ -99,25 +114,137 @@ test('3D effects reuse a bounded geometry pool and dispose all owned resources',
     assert.equal(disposedMaterials, materials.size);
 });
 
-test('reduced motion shows a static 3D composition; effects stop after their duration', () => {
+test('reduced motion freezes every descendant and material of each distinct production', () => {
     const scene = new THREE.Scene();
     const cosmetics = createTableCosmetics(scene);
-    cosmetics.play(banish, [{ id: 'p1', x: 0.2, y: 0.8, alive: false }]);
     const effect = scene.getObjectByName('Table cosmetic event');
     assert.ok(effect, 'the event composition is mounted in the scene');
-    const pose = () =>
-        effect.children.map((object) => [
-            ...object.position.toArray(),
-            ...object.rotation.toArray(),
-        ]);
-    cosmetics.update(0.1, true);
-    const still = pose();
-    cosmetics.update(1, true);
-    assert.deepEqual(pose(), still);
-    assert.equal(effect.visible, true);
-    cosmetics.update(4, false);
-    assert.equal(effect.visible, false);
+    for (const name of [
+        'classic',
+        ...Object.keys(banishmentDetails),
+        'crownfall',
+        'moonrise',
+        'lantern_festival',
+    ]) {
+        const event = {
+            ...banish,
+            id: name,
+            effect: name,
+            kind: ['crownfall', 'moonrise', 'lantern_festival'].includes(name)
+                ? 'celebration'
+                : 'banishment',
+        };
+        cosmetics.play(event, [{ id: 'p1', x: 0.2, y: 0.8, alive: false }]);
+        cosmetics.update(0.1, true);
+        const still = pose(effect);
+        cosmetics.update(1, true);
+        cosmetics.update(20, true);
+        assert.deepEqual(pose(effect), still, name);
+        assert.equal(effect.visible, true);
+        cosmetics.update(cosmeticDuration(event) + 0.1, false);
+        assert.equal(effect.visible, false);
+    }
     cosmetics.play(null, []);
     assert.equal(effect.visible, false);
+    cosmetics.dispose();
+});
+
+function pose(root, visibleOnly = false) {
+    const result = [];
+    const visit = (object) => {
+        result.push([
+            object.name,
+            object.visible,
+            ...object.position.toArray(),
+            ...object.rotation.toArray(),
+            ...object.scale.toArray(),
+            object.material?.opacity,
+        ]);
+    };
+    if (visibleOnly) root.traverseVisible(visit);
+    else root.traverse(visit);
+    return result;
+}
+
+test('each paid effect lasts for its shared duration and keeps a quiet queue tail', () => {
+    const scene = new THREE.Scene();
+    const cosmetics = createTableCosmetics(scene);
+    for (const name of ['classic', ...Object.keys(banishmentDetails)]) {
+        const event = { ...banish, id: name, effect: name };
+        const duration = cosmeticDuration(event);
+        assert.equal(
+            cosmeticPlaybackMilliseconds(event),
+            Math.round(duration * 1000) + 200,
+        );
+        cosmetics.play(event, []);
+        cosmetics.update(duration - 0.02, false);
+        assert.equal(
+            scene.children[0].visible,
+            true,
+            `${name} must finish before queue advances`,
+        );
+        cosmetics.update(0.03, false);
+        assert.equal(scene.children[0].visible, false, `${name} must end`);
+    }
+    assert.equal(cosmeticDuration({ ...banish, effect: 'unknown' }), 3.2);
+    assert.equal(
+        cosmeticDuration({ ...victory, effect: 'gilded_vortex' }),
+        3.2,
+    );
+    cosmetics.dispose();
+});
+
+test('paid compositions reset across types, null and repeated play without replaying an event ID', () => {
+    const scene = new THREE.Scene();
+    const cosmetics = createTableCosmetics(scene);
+    const names = ['gilded_vortex', 'lunar_rift', 'ember_spiral', 'classic'];
+    for (const name of names) {
+        const event = { ...banish, id: `fresh-${name}`, effect: name };
+        cosmetics.play(event, []);
+        cosmetics.update(1.8, false);
+        const expected = pose(scene, true);
+        cosmetics.play({ ...event }, []);
+        cosmetics.update(0, false);
+        assert.deepEqual(
+            pose(scene, true),
+            expected,
+            'same event ID must not restart',
+        );
+        for (const other of names) {
+            cosmetics.play(
+                { ...banish, id: `other-${name}-${other}`, effect: other },
+                [],
+            );
+            cosmetics.update(3.6, false);
+            cosmetics.play(null, []);
+            assert.equal(scene.children[0].visible, false);
+            cosmetics.play({ ...event, id: `replay-${name}-${other}` }, []);
+            cosmetics.update(1.8, false);
+            assert.deepEqual(
+                pose(scene, true),
+                expected,
+                `${other} must not contaminate ${name}`,
+            );
+        }
+    }
+    cosmetics.dispose();
+});
+
+test('paid banishments have separate stage silhouettes and motion paths', () => {
+    const scene = new THREE.Scene();
+    const cosmetics = createTableCosmetics(scene);
+    const paths = [];
+    const stages = ['Gilded tribunal', 'Lunar eclipse doorway', 'Harvest pyre'];
+    Object.keys(banishmentDetails).forEach((name, index) => {
+        cosmetics.play({ ...banish, id: name, effect: name }, []);
+        cosmetics.update(2.4, false);
+        stages.forEach((stage, i) =>
+            assert.equal(scene.getObjectByName(stage).visible, index === i),
+        );
+        paths.push(scene.getObjectByName('Condemned pawn').position.toArray());
+    });
+    assert.notDeepEqual(paths[0], paths[1]);
+    assert.notDeepEqual(paths[0], paths[2]);
+    assert.notDeepEqual(paths[1], paths[2]);
     cosmetics.dispose();
 });

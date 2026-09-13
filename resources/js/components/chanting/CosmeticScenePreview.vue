@@ -2,6 +2,10 @@
 import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import RitualTableScene from './RitualTableScene.vue';
 import {
+    banishmentDetail,
+    cosmeticPlaybackMilliseconds,
+} from '@/lib/ritualCosmeticTiming';
+import {
     ritualSceneState,
     type RitualCosmeticEvent,
 } from '@/lib/ritualSceneState';
@@ -36,11 +40,12 @@ const tableName = computed(
 );
 const caption = computed(() =>
     active.value?.kind === 'banishment'
-        ? 'Banishment preview'
+        ? (banishmentDetail(active.value.effect)?.name ?? 'Classic banishment')
         : active.value
           ? 'Victory preview'
           : tableName.value,
 );
+const banishment = computed(() => banishmentDetail(props.banishment ?? ''));
 function play(kind: 'banishment' | 'celebration') {
     clearTimeout(timer);
     active.value = {
@@ -52,7 +57,7 @@ function play(kind: 'banishment' | 'celebration') {
     };
     timer = setTimeout(() => {
         active.value = null;
-    }, 3400);
+    }, cosmeticPlaybackMilliseconds(active.value));
 }
 watch(
     () => [props.table, props.banishment, props.celebration],
@@ -88,9 +93,25 @@ onBeforeUnmount(() => clearTimeout(timer));
         </div>
         <figcaption>
             <strong role="status">{{ caption }}</strong>
+            <p v-if="banishment" class="banishment-description">
+                <span
+                    v-if="active?.kind !== 'banishment'"
+                    class="banishment-name"
+                    >{{ banishment.name }}. </span
+                >{{ banishment.description }}
+            </p>
+            <ol
+                v-if="banishment"
+                class="banishment-phases"
+                aria-label="Banishment sequence"
+            >
+                <li v-for="phase in banishment.phases" :key="phase">
+                    {{ phase }}
+                </li>
+            </ol>
             <div class="cosmetic-preview-controls">
                 <button
-                    v-if="banishment"
+                    v-if="props.banishment"
                     type="button"
                     :disabled="unavailable"
                     @click="play('banishment')"
@@ -143,6 +164,38 @@ figcaption strong {
 }
 figcaption small {
     color: #c2c9bb;
+}
+.banishment-description {
+    margin: 0;
+    font-size: 13px;
+    line-height: 1.65;
+    color: #d4d8c9;
+    max-width: 62ch;
+}
+.banishment-name {
+    color: #f0dfb2;
+    font-weight: 600;
+}
+.banishment-phases {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px 15px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    counter-reset: phase;
+    color: #d9c598;
+    font-size: 10px;
+    line-height: 1.6;
+    letter-spacing: 0.035em;
+}
+.banishment-phases li {
+    counter-increment: phase;
+}
+.banishment-phases li::before {
+    content: '0' counter(phase) ' ';
+    opacity: 0.65;
+    margin-right: 3px;
 }
 .cosmetic-preview-controls {
     display: flex;

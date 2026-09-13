@@ -24,6 +24,7 @@ import {
 } from '@/lib/ritualSceneState';
 import type { RitualTableDisplay } from '@/lib/ritualSceneState';
 import { createTableChat, type TableChatBubble } from '@/lib/tableChat';
+import { cosmeticPlaybackMilliseconds } from '@/lib/ritualCosmeticTiming';
 
 // The table uses public seats and ritual progress. A selection and wax seal are
 // local to this browser; final roles are read only from public player fields.
@@ -60,7 +61,11 @@ let effectTimer: ReturnType<typeof setTimeout> | undefined;
 let effectMatch: string | null | undefined;
 function nextEffect() {
     activeEffect.value = effectQueue.shift() ?? null;
-    if (activeEffect.value) effectTimer = setTimeout(nextEffect, 3400);
+    if (activeEffect.value)
+        effectTimer = setTimeout(
+            nextEffect,
+            cosmeticPlaybackMilliseconds(activeEffect.value),
+        );
 }
 watch(
     () => [props.cosmetics, props.matchId],

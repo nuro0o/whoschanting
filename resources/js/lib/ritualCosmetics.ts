@@ -1,5 +1,7 @@
 import * as THREE from 'three';
 import type { RitualCosmeticEvent, RitualSceneSeat } from './ritualSceneState';
+import { createPaidBanishments } from './ritualBanishments.ts';
+import { banishmentDetail, cosmeticDuration } from './ritualCosmeticTiming.ts';
 
 /** Fixed geometry pool, shared by the store preview and live table. */
 export function createTableCosmetics(scene: THREE.Scene) {
@@ -8,6 +10,10 @@ export function createTableCosmetics(scene: THREE.Scene) {
     const effect = new THREE.Group();
     effect.name = 'Table cosmetic event';
     scene.add(effect);
+    const legacy = new THREE.Group();
+    legacy.name = 'Classic banishment and celebrations';
+    effect.add(legacy);
+    const paid = createPaidBanishments(effect);
     const glow = new THREE.MeshStandardMaterial({
         color: 0xf5ce7a,
         emissive: 0xc68b37,
@@ -49,15 +55,15 @@ export function createTableCosmetics(scene: THREE.Scene) {
         parent.add(object);
         return object;
     }
-    const halo = mesh(ring, glow, effect);
+    const halo = mesh(ring, glow, legacy);
     halo.rotation.x = -Math.PI / 2;
-    const risingMoon = mesh(moon, glow, effect);
+    const risingMoon = mesh(moon, glow, legacy);
     const pawn = new THREE.Group();
-    effect.add(pawn);
+    legacy.add(pawn);
     mesh(body, shadow, pawn).position.y = 0.35;
     mesh(head, shadow, pawn).position.y = 0.88;
     const particles = Array.from({ length: 28 }, () =>
-        mesh(jewel, glow, effect),
+        mesh(jewel, glow, legacy),
     );
     let active: RitualCosmeticEvent | null = null;
     let elapsed = 0;
@@ -79,6 +85,13 @@ export function createTableCosmetics(scene: THREE.Scene) {
             active = event;
             elapsed = 0;
             effect.visible = !!event;
+            paid.reset();
+            legacy.visible =
+                !!event &&
+                !(
+                    event.kind === 'banishment' &&
+                    banishmentDetail(event.effect)
+                );
             const seat = seats.find((seat) => seat.id === event?.player_id);
             origin.set(
                 seat ? (seat.x - 0.5) * 10 : 0,
@@ -107,8 +120,14 @@ export function createTableCosmetics(scene: THREE.Scene) {
             const event = active;
             if (!event) return;
             elapsed += reduced ? 0 : delta;
-            const progress = reduced ? 0.45 : Math.min(1, elapsed / 3.2);
+            const progress = reduced
+                ? 0.45
+                : Math.min(1, elapsed / cosmeticDuration(event));
             effect.visible = reduced || progress < 1;
+            if (!legacy.visible) {
+                paid.update(event.effect, elapsed, origin, reduced);
+                return;
+            }
             const banish = event.kind === 'banishment';
             const fade = reduced
                 ? 1
@@ -168,6 +187,7 @@ export function createTableCosmetics(scene: THREE.Scene) {
             });
         },
         dispose() {
+            paid.dispose();
             scene.remove(effect);
             geometries.forEach((value) => value.dispose());
             materials.forEach((value) => value.dispose());
