@@ -434,6 +434,9 @@ const gifts = [
                     <p v-if="!compact" class="role-guide__expansion-label">
                         ROOM EXPANSION · {{ expansion.min_players }}–15 PLAYERS
                     </p>
+                    <p v-if="!compact" class="role-guide__intro">
+                        {{ expansion.description }}
+                    </p>
                     <p class="role-guide__new-objective">
                         {{ expansion.instructions }}
                     </p>
@@ -489,8 +492,92 @@ const gifts = [
     border: 1px solid var(--line);
     border-left: 3px solid var(--role-accent);
 }
-.role-guide:not(.role-guide--compact) .role-guide__new-expansion {
-    margin-top: 14px;
+.role-guide:not(.role-guide--compact) .role-guide__expansions {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    align-items: start;
+    gap: 14px;
+}
+.role-guide:not(.role-guide--compact) .role-guide__expansions-heading {
+    grid-column: 1 / -1;
+    margin-bottom: 8px;
+}
+.role-guide:not(.role-guide--compact) .role-guide__expansions > article {
+    min-width: 0;
+    margin-top: 0;
+}
+.role-guide:not(.role-guide--compact)
+    .role-guide__expansions
+    > article.is-expanded {
+    grid-column: 1 / -1;
+}
+.role-guide:not(.role-guide--compact)
+    .role-guide__expansions
+    .role-guide__toggle {
+    grid-template-columns: 40px minmax(0, 1fr) 18px;
+    gap: 8px 12px;
+    min-height: 154px;
+    padding: 20px;
+}
+.role-guide:not(.role-guide--compact)
+    .role-guide__expansions
+    .role-guide__emblem {
+    width: 40px;
+    height: 40px;
+    align-self: start;
+}
+.role-guide:not(.role-guide--compact)
+    .role-guide__expansions
+    .role-guide__faction-name {
+    font-size: 25px;
+}
+.role-guide:not(.role-guide--compact)
+    .role-guide__expansions
+    .role-guide__purpose {
+    display: -webkit-box;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    font-size: 12px;
+    line-height: 1.5;
+}
+.role-guide:not(.role-guide--compact)
+    .role-guide__expansions
+    .role-guide__count {
+    grid-column: 2;
+    align-self: end;
+}
+.role-guide:not(.role-guide--compact)
+    .role-guide__expansions
+    .role-guide__chevron {
+    grid-column: 3;
+    grid-row: 1;
+}
+.role-guide:not(.role-guide--compact)
+    .role-guide__expansions:has(> article.is-expanded) {
+    grid-template-columns: 1fr;
+}
+.role-guide:not(.role-guide--compact)
+    .role-guide__expansions:has(> article.is-expanded)
+    .role-guide__toggle {
+    min-height: 0;
+}
+@media (max-width: 1100px) {
+    .role-guide:not(.role-guide--compact) .role-guide__expansions {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+@media (max-width: 700px) {
+    .role-guide:not(.role-guide--compact) .role-guide__expansions {
+        grid-template-columns: 1fr;
+        gap: 10px;
+    }
+    .role-guide:not(.role-guide--compact)
+        .role-guide__expansions
+        .role-guide__toggle {
+        min-height: 0;
+        padding: 16px;
+    }
 }
 .role-guide__expansion-symbol {
     font-size: 28px;

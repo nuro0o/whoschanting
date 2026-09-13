@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { t } from '@/i18n';
-import { computed, ref } from 'vue';
+import { computed, nextTick, ref } from 'vue';
 import { usePage } from '@inertiajs/vue3';
 import {
     ArrowRight,
+    ChevronDown,
     ChevronRight,
     Globe,
     KeyRound,
@@ -73,7 +74,7 @@ const modeDetail = computed(() =>
         ? t('roomEntry.mode.custom_description', {
               count: rosterTotals(setup.value.roles).total,
           })
-        : t('roomEntry.mode.description'),
+        : '',
 );
 const name = ref((props.initialName ?? '').slice(0, 24));
 const selectedCharacter = computed(() =>
@@ -91,6 +92,32 @@ const selectedCharacterName = computed(() =>
 const code = ref(props.initialCode ?? '');
 const createPin = ref('');
 const visibility = ref<'private' | 'public'>('private');
+const lobbyOptions = ref<HTMLDetailsElement | null>(null);
+const lobbyOptionsOpen = ref(false);
+const lobbySummary = computed(() =>
+    [
+        t(`roomEntry.visibility.${visibility.value}`),
+        t(
+            createPin.value
+                ? 'roomEntry.options.pin_set'
+                : 'roomEntry.options.no_pin',
+        ),
+    ].join(' · '),
+);
+function updateLobbyOptions(event: Event) {
+    lobbyOptionsOpen.value = (event.currentTarget as HTMLDetailsElement).open;
+}
+function revealInvalidPin(event: Event) {
+    if (!lobbyOptions.value || lobbyOptions.value.open) return;
+    event.preventDefault();
+    lobbyOptions.value.open = true;
+    lobbyOptionsOpen.value = true;
+    const input = event.target as HTMLInputElement;
+    void nextTick(() => {
+        input.focus();
+        input.reportValidity();
+    });
+}
 const joinPin = ref('');
 const pin = computed({
     get: () => (mode.value === 'create' ? createPin.value : joinPin.value),
@@ -177,11 +204,6 @@ async function enter() {
                 <KeyRound :size="16" /> {{ t('roomEntry.tabs.join') }}
             </button>
         </div>
-        <a v-if="!initialCode" href="/rooms" class="entry-browser-link">
-            <Globe :size="16" aria-hidden="true" />
-            {{ t('roomEntry.room_browser') }}
-            <ArrowRight :size="15" aria-hidden="true" />
-        </a>
         <form class="entry-form" @submit.prevent="enter">
             <label for="player-name">{{ t('roomEntry.name.label') }}</label>
             <input
@@ -208,89 +230,30 @@ async function enter() {
                     :disabled="pending || !!initialCode"
                 />
             </template>
-            <fieldset
-                v-if="mode === 'create'"
-                class="room-visibility"
-                :disabled="pending"
-                aria-describedby="room-visibility-help"
-            >
-                <legend>{{ t('roomEntry.visibility.label') }}</legend>
-                <div class="visibility-options">
-                    <label :class="{ selected: visibility === 'private' }">
-                        <input
-                            v-model="visibility"
-                            type="radio"
-                            name="visibility"
-                            value="private"
-                        />
-                        <span
-                            ><strong>{{
-                                t('roomEntry.visibility.private')
-                            }}</strong
-                            ><small>{{
-                                t('roomEntry.visibility.private_hint')
-                            }}</small></span
-                        >
-                    </label>
-                    <label :class="{ selected: visibility === 'public' }">
-                        <input
-                            v-model="visibility"
-                            type="radio"
-                            name="visibility"
-                            value="public"
-                        />
-                        <span
-                            ><strong>{{
-                                t('roomEntry.visibility.public')
-                            }}</strong
-                            ><small>{{
-                                t('roomEntry.visibility.public_hint')
-                            }}</small></span
-                        >
-                    </label>
-                </div>
-                <p id="room-visibility-help" class="pin-help">
-                    {{
-                        visibility === 'public'
-                            ? t('roomEntry.visibility.public_help')
-                            : t('roomEntry.visibility.private_help')
-                    }}
+            <template v-if="mode === 'join'">
+                <label for="lobby-pin">{{
+                    pinRequired
+                        ? t('roomEntry.pin.required')
+                        : t('roomEntry.pin.if_required')
+                }}</label>
+                <input
+                    id="lobby-pin"
+                    v-model="joinPin"
+                    type="password"
+                    inputmode="numeric"
+                    pattern="[0-9]{4,8}"
+                    minlength="4"
+                    maxlength="8"
+                    autocomplete="current-password"
+                    :placeholder="t('roomEntry.pin.join_placeholder')"
+                    aria-describedby="lobby-pin-help"
+                    :disabled="pending"
+                />
+                <p id="lobby-pin-help" class="pin-help">
+                    {{ t('roomEntry.pin.join_help') }}
                 </p>
-            </fieldset>
-            <label for="lobby-pin">{{
-                mode === 'create'
-                    ? t('roomEntry.pin.optional')
-                    : pinRequired
-                      ? t('roomEntry.pin.required')
-                      : t('roomEntry.pin.if_required')
-            }}</label>
-            <input
-                id="lobby-pin"
-                v-model="pin"
-                type="password"
-                inputmode="numeric"
-                pattern="[0-9]{4,8}"
-                minlength="4"
-                maxlength="8"
-                :autocomplete="
-                    mode === 'create' ? 'new-password' : 'current-password'
-                "
-                :placeholder="
-                    mode === 'create'
-                        ? t('roomEntry.pin.create_placeholder')
-                        : t('roomEntry.pin.join_placeholder')
-                "
-                aria-describedby="lobby-pin-help"
-                :disabled="pending"
-            />
-            <p id="lobby-pin-help" class="pin-help">
-                {{
-                    mode === 'create'
-                        ? t('roomEntry.pin.create_help')
-                        : t('roomEntry.pin.join_help')
-                }}
-            </p>
-            <div class="entry-settings">
+            </template>
+            <div v-if="signedIn || mode === 'create'" class="entry-settings">
                 <button
                     v-if="signedIn"
                     type="button"
@@ -321,13 +284,6 @@ async function enter() {
                         aria-hidden="true"
                     />
                 </button>
-                <p v-else class="guest-character-note">
-                    {{ t('roomEntry.guest.description') }}
-                    <a href="/login">{{ t('roomEntry.guest.sign_in') }}</a>
-                    {{ t('roomEntry.guest.or') }}
-                    <a href="/register">{{ t('roomEntry.guest.register') }}</a>
-                    {{ t('roomEntry.guest.pick_own') }}
-                </p>
                 <button
                     v-if="mode === 'create'"
                     type="button"
@@ -344,7 +300,7 @@ async function enter() {
                     <span class="entry-setting-copy"
                         ><small>{{ t('roomEntry.mode.label') }}</small
                         ><strong>{{ setupSummary }}</strong
-                        ><span>{{ modeDetail }}</span></span
+                        ><span v-if="modeDetail">{{ modeDetail }}</span></span
                     >
                     <ChevronRight
                         :size="19"
@@ -353,6 +309,95 @@ async function enter() {
                     />
                 </button>
             </div>
+            <details
+                v-if="mode === 'create'"
+                ref="lobbyOptions"
+                class="lobby-options"
+                :open="lobbyOptionsOpen"
+                @toggle="updateLobbyOptions"
+            >
+                <summary>
+                    <span>{{ t('roomEntry.options.label') }}</span>
+                    <span class="lobby-options-summary">{{
+                        lobbySummary
+                    }}</span>
+                    <ChevronDown :size="16" aria-hidden="true" />
+                </summary>
+                <div class="lobby-options-fields">
+                    <fieldset
+                        class="room-visibility"
+                        :disabled="pending"
+                        aria-describedby="room-visibility-help"
+                    >
+                        <legend>{{ t('roomEntry.visibility.label') }}</legend>
+                        <div class="visibility-options">
+                            <label
+                                :class="{ selected: visibility === 'private' }"
+                            >
+                                <input
+                                    v-model="visibility"
+                                    type="radio"
+                                    name="visibility"
+                                    value="private"
+                                />
+                                <span
+                                    ><strong>{{
+                                        t('roomEntry.visibility.private')
+                                    }}</strong
+                                    ><small>{{
+                                        t('roomEntry.visibility.private_hint')
+                                    }}</small></span
+                                >
+                            </label>
+                            <label
+                                :class="{ selected: visibility === 'public' }"
+                            >
+                                <input
+                                    v-model="visibility"
+                                    type="radio"
+                                    name="visibility"
+                                    value="public"
+                                />
+                                <span
+                                    ><strong>{{
+                                        t('roomEntry.visibility.public')
+                                    }}</strong
+                                    ><small>{{
+                                        t('roomEntry.visibility.public_hint')
+                                    }}</small></span
+                                >
+                            </label>
+                        </div>
+                        <p id="room-visibility-help" class="pin-help">
+                            {{
+                                visibility === 'public'
+                                    ? t('roomEntry.visibility.public_help')
+                                    : t('roomEntry.visibility.private_help')
+                            }}
+                        </p>
+                    </fieldset>
+                    <label for="create-lobby-pin">{{
+                        t('roomEntry.pin.optional')
+                    }}</label>
+                    <input
+                        id="create-lobby-pin"
+                        v-model="createPin"
+                        type="password"
+                        inputmode="numeric"
+                        pattern="[0-9]{4,8}"
+                        minlength="4"
+                        maxlength="8"
+                        autocomplete="new-password"
+                        :placeholder="t('roomEntry.pin.create_placeholder')"
+                        aria-describedby="create-lobby-pin-help"
+                        :disabled="pending"
+                        @invalid="revealInvalidPin"
+                    />
+                    <p id="create-lobby-pin-help" class="pin-help">
+                        {{ t('roomEntry.pin.create_help') }}
+                    </p>
+                </div>
+            </details>
             <p
                 v-if="mode === 'create' && setupError"
                 class="form-error"
@@ -385,13 +430,19 @@ async function enter() {
                     }}<ArrowRight :size="18"
                 /></template>
             </button>
-            <p class="entry-note">
-                {{
-                    signedIn
-                        ? t('roomEntry.note.signed_in')
-                        : t('roomEntry.note.guest')
-                }}
+            <p v-if="!signedIn" class="guest-character-note">
+                {{ t('roomEntry.guest.description') }}
+                <a href="/login">{{ t('roomEntry.guest.sign_in') }}</a>
+                {{ t('roomEntry.guest.or') }}
+                <a href="/register">{{ t('roomEntry.guest.register') }}</a>
+                {{ t('roomEntry.guest.pick_own') }}
             </p>
+            <p v-else class="entry-note">{{ t('roomEntry.note.signed_in') }}</p>
+            <a v-if="!initialCode" href="/rooms" class="entry-browser-link">
+                <Globe :size="16" aria-hidden="true" />
+                {{ t('roomEntry.room_browser') }}
+                <ArrowRight :size="15" aria-hidden="true" />
+            </a>
         </form>
         <EntryEditorPanel
             v-model="editorOpen"
@@ -425,15 +476,76 @@ async function enter() {
 </template>
 
 <style scoped>
+.entry-form {
+    padding: 18px 23px 15px;
+    gap: 9px;
+}
+.entry-form > label,
+.lobby-options-fields > label {
+    color: var(--account-text, var(--cream));
+    font-size: 13px;
+}
+.entry-form input:not([type='radio']) {
+    min-height: 44px;
+}
 .entry-browser-link {
     display: flex;
     align-items: center;
     justify-content: center;
     gap: 8px;
-    padding: 12px;
+    min-height: 36px;
+    padding: 4px;
     color: var(--account-green, var(--green));
     font-size: 13px;
     text-underline-offset: 4px;
+}
+.lobby-options {
+    border-bottom: 1px solid var(--account-line, var(--line));
+}
+.lobby-options summary {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-height: 44px;
+    padding: 8px 0;
+    color: var(--account-text, var(--cream));
+    font-size: 13px;
+    cursor: pointer;
+    list-style: none;
+}
+.lobby-options summary::-webkit-details-marker {
+    display: none;
+}
+.lobby-options-summary {
+    margin-left: auto;
+    color: var(--account-muted, var(--muted));
+    font-size: 12px;
+    text-align: right;
+}
+.lobby-options summary svg {
+    flex-shrink: 0;
+    color: var(--account-green, var(--green));
+}
+.lobby-options[open] summary svg {
+    transform: rotate(180deg);
+}
+.lobby-options summary:focus-visible {
+    outline: 2px solid var(--account-green, var(--green));
+    outline-offset: 3px;
+}
+.lobby-options-fields {
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+    padding: 5px 0 8px;
+}
+.entry-form .lobby-options-fields > input {
+    background: var(--account-deep, #132124);
+    color: var(--account-text, var(--cream));
+    border-color: var(--account-line, #435350);
+}
+.entry-form .lobby-options-fields > input::placeholder {
+    color: var(--account-muted, #8b9f99);
 }
 .room-visibility {
     min-width: 0;
@@ -484,7 +596,7 @@ async function enter() {
 }
 .visibility-options small {
     color: var(--account-muted, var(--muted));
-    font-size: 11px;
+    font-size: 12px;
 }
 .pin-help {
     margin: 0 0 8px;
@@ -493,15 +605,15 @@ async function enter() {
     line-height: 1.5;
 }
 .entry-settings {
-    margin: 6px 0 2px;
-    border-block: 1px solid var(--account-line, var(--line));
+    margin: 3px 0 0;
+    border-top: 1px solid var(--account-line, var(--line));
 }
 .entry-setting {
     display: flex;
     align-items: center;
     gap: 13px;
     width: 100%;
-    padding: 13px 0;
+    padding: 10px 0;
     border: 0;
     background: transparent;
     color: var(--account-text, var(--cream));
@@ -531,7 +643,7 @@ async function enter() {
 }
 .entry-setting-copy small {
     color: var(--account-muted, var(--muted));
-    font-size: 10px;
+    font-size: 12px;
 }
 .entry-setting-copy strong {
     font-size: 14px;
@@ -540,7 +652,20 @@ async function enter() {
 }
 .entry-setting-copy > span {
     color: var(--account-muted, var(--muted));
-    font-size: 10px;
+    font-size: 12px;
+}
+.guest-character-note {
+    margin: 1px 0 0 !important;
+    color: var(--account-muted, var(--muted));
+    font-size: 12px;
+    line-height: 1.5;
+    text-align: center;
+}
+.guest-character-note a {
+    color: var(--account-green, var(--green));
+}
+.entry-note {
+    font-size: 12px;
 }
 .entry-setting-arrow {
     margin-left: auto;

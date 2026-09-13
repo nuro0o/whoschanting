@@ -1,8 +1,11 @@
 <script setup lang="ts">
 import { t } from '@/i18n';
-import { Head } from '@inertiajs/vue3';
+import { Head, usePage } from '@inertiajs/vue3';
+import { computed, nextTick, ref, watch } from 'vue';
+import { useMediaQuery } from '@vueuse/core';
+import { PopoverContent, PopoverRoot, PopoverTrigger } from 'reka-ui';
 import LegalLinks from '@/components/LegalLinks.vue';
-import { ArrowDown, Eye, Moon, Users, Vote, Waves } from '@lucide/vue';
+import { ArrowDown, Eye, Menu, Moon, Users, Vote, Waves } from '@lucide/vue';
 import RoomEntry from '@/components/chanting/RoomEntry.vue';
 import RoleGuide from '@/components/chanting/RoleGuide.vue';
 import VillageScene from '@/components/chanting/VillageScene.vue';
@@ -11,6 +14,65 @@ import CharacterCarousel from '@/components/chanting/CharacterCarousel.vue';
 import { defaultCharacters, type Character } from '@/lib/chanting';
 import '../../css/chanting.css';
 import '../../css/tutorial-invitation.css';
+
+const page = usePage();
+const menuOpen = ref(false);
+const mobileNavigation = useMediaQuery('(max-width: 1050px)');
+const navigationLinks = computed(() => [
+    { href: '/rooms', label: t('welcome.navigation.rooms') },
+    { href: '#how-to-play', label: t('welcome.navigation.how_to_play') },
+    { href: '#roles', label: t('welcome.navigation.roles') },
+    { href: '/tutorial', label: t('welcome.navigation.practice') },
+    ...(page.props.auth.user
+        ? [{ href: '/dashboard', label: t('welcome.navigation.account') }]
+        : [
+              { href: '/login', label: t('welcome.navigation.sign_in') },
+              { href: '/register', label: t('welcome.navigation.register') },
+          ]),
+]);
+let navigationTarget: string | null = null;
+
+watch(mobileNavigation, () => {
+    menuOpen.value = false;
+});
+
+function selectNavigation(href: string, event: MouseEvent) {
+    navigationTarget = href.startsWith('#') ? href.slice(1) : null;
+    if (navigationTarget) event.preventDefault();
+    menuOpen.value = false;
+}
+
+function focusNavigationTarget(target: string) {
+    const section = document.getElementById(target);
+    section?.scrollIntoView({ block: 'start' });
+    const control =
+        target === 'play' ? section?.querySelector('input') : section;
+    control?.focus({ preventScroll: true });
+}
+
+function restoreNavigationFocus(event: Event) {
+    if (!mobileNavigation.value) {
+        event.preventDefault();
+        nextTick(() => {
+            document
+                .querySelector<HTMLAnchorElement>('.desktop-navigation a')
+                ?.focus();
+        });
+        return;
+    }
+    if (!navigationTarget) return;
+    event.preventDefault();
+    const target = navigationTarget;
+    navigationTarget = null;
+    nextTick(() => focusNavigationTarget(target));
+}
+
+function focusPlay() {
+    if (menuOpen.value) navigationTarget = 'play';
+    menuOpen.value = false;
+    nextTick(() => focusNavigationTarget('play'));
+}
+
 withDefaults(
     defineProps<{
         characters?: Character[];
@@ -42,35 +104,56 @@ withDefaults(
                 {{ t('welcome.brand.name')
                 }}<span class="brand-question">?</span></a
             >
-            <nav :aria-label="t('welcome.navigation.label')">
-                <a href="/rooms" class="quiet-link">{{
-                    t('welcome.navigation.rooms')
-                }}</a>
-                <a href="#roles" class="quiet-link">{{
-                    t('welcome.navigation.roles')
-                }}</a>
-                <a href="/tutorial" class="quiet-link">{{
-                    t('welcome.navigation.practice')
-                }}</a>
-                <a href="#how-to-play" class="quiet-link"
-                    >{{ t('welcome.navigation.how_to_play') }}
-                    <ArrowDown :size="14"
-                /></a>
+            <nav
+                class="desktop-navigation"
+                :aria-label="t('welcome.navigation.label')"
+            >
                 <a
-                    v-if="$page.props.auth.user"
-                    href="/dashboard"
+                    v-for="link in navigationLinks"
+                    :key="link.href"
+                    :href="link.href"
                     class="quiet-link"
-                    >{{ t('welcome.navigation.account') }}</a
-                >
-                <template v-else>
-                    <a href="/login" class="quiet-link">{{
-                        t('welcome.navigation.sign_in')
-                    }}</a>
-                    <a href="/register" class="quiet-link account-signup">{{
-                        t('welcome.navigation.register')
-                    }}</a>
-                </template>
+                    :class="{ 'account-signup': link.href === '/register' }"
+                    >{{ link.label
+                    }}<ArrowDown v-if="link.href === '#how-to-play'" :size="14"
+                /></a>
             </nav>
+            <div class="mobile-navigation">
+                <a
+                    href="#play"
+                    class="header-play"
+                    @click.prevent="focusPlay"
+                    >{{ t('welcome.navigation.play') }}</a
+                >
+                <PopoverRoot v-model:open="menuOpen">
+                    <PopoverTrigger
+                        class="header-menu"
+                        :aria-label="t('welcome.navigation.menu')"
+                    >
+                        <Menu :size="21" aria-hidden="true" />
+                    </PopoverTrigger>
+                    <PopoverContent
+                        :aria-label="t('welcome.navigation.label')"
+                        :style="{ zIndex: 10 }"
+                        align="end"
+                        :side-offset="12"
+                        @close-auto-focus="restoreNavigationFocus"
+                    >
+                        <div class="mobile-menu-panel">
+                            <nav :aria-label="t('welcome.navigation.label')">
+                                <a
+                                    v-for="link in navigationLinks"
+                                    :key="link.href"
+                                    :href="link.href"
+                                    class="quiet-link"
+                                    @click="selectNavigation(link.href, $event)"
+                                    >{{ link.label }}</a
+                                >
+                            </nav>
+                        </div>
+                    </PopoverContent>
+                </PopoverRoot>
+            </div>
         </header>
         <main>
             <section class="landing-hero" aria-labelledby="hero-title">
@@ -96,11 +179,6 @@ withDefaults(
                         }}<br class="desktop-break" />
                         {{ t('welcome.hero.description_line_two') }}
                     </p>
-                    <p class="hero-invitation">
-                        {{ t('welcome.hero.invitation_line_one')
-                        }}<br class="desktop-break" />
-                        {{ t('welcome.hero.invitation_line_two') }}
-                    </p>
                     <div class="hero-facts">
                         <span
                             ><Users :size="15" />{{
@@ -118,6 +196,7 @@ withDefaults(
                         >
                     </div>
                     <RoomEntry
+                        id="play"
                         :characters="characters"
                         :preferred-character="preferredCharacter"
                         compact-characters
@@ -134,17 +213,9 @@ withDefaults(
                     t('welcome.hero.side_note')
                 }}</span>
             </section>
-            <CharacterCarousel :characters="characters" />
-            <RoleGuide
-                id="roles"
-                class="home-roles"
-                :minimum-players="{
-                    ...rules.town_roles_min_players,
-                    ...rules.cult_roles_min_players,
-                }"
-            />
             <section
                 id="how-to-play"
+                tabindex="-1"
                 class="how-section"
                 aria-labelledby="how-title"
             >
@@ -239,6 +310,16 @@ withDefaults(
                 </details>
                 <GameGlossary />
             </section>
+            <CharacterCarousel :characters="characters" />
+            <RoleGuide
+                id="roles"
+                tabindex="-1"
+                class="home-roles"
+                :minimum-players="{
+                    ...rules.town_roles_min_players,
+                    ...rules.cult_roles_min_players,
+                }"
+            />
         </main>
         <footer class="site-footer">
             <span><Eye :size="16" /> {{ t('welcome.brand.full_name') }}</span>
@@ -252,31 +333,196 @@ withDefaults(
 </template>
 
 <style scoped>
+.mobile-navigation {
+    display: none;
+}
+
+.landing-hero {
+    padding-block: 44px 44px;
+}
+
+#play {
+    scroll-margin-top: 20px;
+}
+
 .home-roles {
     width: min(1268px, 88%);
     margin-inline: auto;
 }
 
-@media (max-width: 900px) {
-    .site-header {
-        height: auto;
-        min-height: 100px;
-        flex-wrap: wrap;
-        gap: 16px;
-        padding-block: 18px;
+.how-steps {
+    margin-block: 30px 24px;
+}
+
+@media (max-width: 1050px) {
+    .home-page .site-header {
+        height: 72px;
+        min-height: 72px;
+        flex-wrap: nowrap;
+        gap: 12px;
+        padding-block: 0;
     }
 
-    .site-header nav {
+    .site-header .desktop-navigation {
+        display: none;
+    }
+
+    .mobile-navigation {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .header-play,
+    .header-menu {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 44px;
+        border-radius: 4px;
+    }
+
+    .header-play {
+        padding: 0 16px;
+        background: var(--green);
+        color: var(--ink);
+        font-size: 13px;
+        font-weight: 600;
+        text-decoration: none;
+    }
+
+    .header-play:hover {
+        background: var(--cream);
+    }
+
+    .header-menu {
+        width: 44px;
+        border: 1px solid var(--line);
+        background: var(--panel);
+        color: var(--cream);
+    }
+
+    .header-menu:hover,
+    .header-menu[data-state='open'] {
+        border-color: var(--green);
+        color: var(--green);
+    }
+
+    .mobile-menu-panel {
+        z-index: 10;
+        min-width: 220px;
+        max-width: calc(100vw - 32px);
+        padding: 8px;
+        border: 1px solid var(--line, #344346);
+        border-radius: 4px;
+        background: var(--ink, #101d20);
+        color: var(--cream, #eee9d5);
+        font-family: 'DM Sans', sans-serif;
+        box-shadow: 0 16px 40px #0006;
+    }
+
+    .mobile-menu-panel nav {
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+        width: 100%;
+        gap: 0;
+    }
+
+    .mobile-menu-panel .quiet-link {
+        min-height: 44px;
+        padding: 10px 14px;
+        color: var(--cream, #eee9d5);
+        font-size: 14px;
+        text-decoration: none;
+    }
+
+    .mobile-menu-panel .quiet-link:hover {
+        background: var(--panel, #18282b);
+    }
+
+    .header-play:focus-visible,
+    .header-menu:focus-visible,
+    .mobile-menu-panel .quiet-link:focus-visible {
+        outline: 2px solid var(--green, #bdcd9c);
+        outline-offset: 3px;
+    }
+}
+
+@media (max-width: 700px) {
+    .landing-hero {
+        padding-block: 28px 30px;
+    }
+
+    .hero-content h1 {
+        margin-top: 18px;
+    }
+
+    .hero-facts {
         flex-wrap: wrap;
-        gap: 12px 20px;
+        gap: 10px 16px;
+        margin-block: 18px 22px;
+    }
+
+    .how-steps {
+        margin-block: 18px;
+    }
+
+    .how-steps article {
+        display: grid;
+        grid-template-columns: 44px minmax(0, 1fr);
+        column-gap: 14px;
+        padding: 18px 0;
+    }
+
+    .step-number,
+    .how-steps h3 {
+        grid-column: 2;
+    }
+
+    .step-symbol {
+        position: static;
+        grid-column: 1;
+        grid-row: 1 / 3;
+        width: 44px;
+        height: 44px;
+        margin: 0;
+    }
+
+    .step-symbol svg {
+        width: 26px;
+        height: 26px;
+    }
+
+    .how-steps h3 {
+        margin-top: 5px;
+    }
+
+    .how-steps p {
+        grid-column: 1 / -1;
+        font-size: 13px;
+        line-height: 1.7;
+        margin-top: 10px;
+    }
+
+    .rules-details {
+        margin-top: 20px;
     }
 }
 
 @media (max-width: 400px) {
-    .site-header nav {
-        display: grid;
-        grid-template-columns: repeat(2, max-content);
-        justify-content: space-between;
+    .wordmark {
+        font-size: 19px;
+        gap: 7px;
+    }
+
+    .brand-eye {
+        width: 29px;
+        height: 29px;
+    }
+
+    .header-play {
+        padding-inline: 13px;
     }
 }
 </style>
