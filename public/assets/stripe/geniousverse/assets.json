@@ -1,0 +1,47 @@
+{
+  "brand": "Geniousverse",
+  "source": "Existing GeniousverseHeroLogo.svg emblem; Bodoni MT wordmark converted to paths",
+  "colors": {
+    "background": "#f6f7fb",
+    "button": "#1616d7",
+    "text": "#242638",
+    "accent": "#4242e9"
+  },
+  "assets": [
+    {
+      "name": "icon",
+      "width": 512,
+      "height": 512,
+      "bytes": 126002,
+      "background": "indigo"
+    },
+    {
+      "name": "mark-indigo",
+      "width": 512,
+      "height": 512,
+      "bytes": 32811,
+      "background": "transparent"
+    },
+    {
+      "name": "mark-white",
+      "width": 512,
+      "height": 512,
+      "bytes": 19694,
+      "background": "transparent"
+    },
+    {
+      "name": "wordmark",
+      "width": 1400,
+      "height": 280,
+      "bytes": 41384,
+      "background": "transparent"
+    },
+    {
+      "name": "wordmark-white",
+      "width": 1400,
+      "height": 280,
+      "bytes": 34296,
+      "background": "transparent"
+    }
+  ]
+}
