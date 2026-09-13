@@ -172,3 +172,18 @@ Exact prompt:
 ```text
 Use case: precise-object-edit. Edit the supplied single square game portrait. Preserve its exact dark ink outlines, angular opaque gouache brush shapes, muted navy/teal/olive/burgundy/brass palette and expressive illustrated storybook finish. No photorealism, no 3D rendering, no smooth airbrushed skin. Keep the square close chest-up composition and original background. One portrait only, no border, text or watermark. Transform the Ringmaster into a white, fair-skinned adult man with a flamboyant ginger handlebar moustache, both ends rolled upward into distinct curls. Give him tousled ginger hair, a masculine angular face, light freckled peach/ivory skin consistently on face, ears, neck and hand, and a clean-shaven chin so the curled moustache is prominent. Make him look a little wild and unhinged in a playful theatrical way: bright wide eyes, one dramatically cocked eyebrow, and an impish lopsided toothy grin. No horror or gore. Preserve the jaunty short plum top hat, teal-and-burgundy striped ringmaster coat with brass fastenings, small fan of three prediction cards, carnival tent backdrop and painterly finish. Keep the complete hat in frame with small headroom and the face large enough to read as a tiny avatar.
 ```
+
+
+### Deep Diver: opaque glass and protective grille (revision 3)
+
+Generated with the built-in image_gen tool; visually inspected to confirm the face is completely concealed, the glass is dark and fogged, and thick brass bars run vertically and horizontally. Copied unchanged to `public/assets/chanting/expansions/drowned_diver-illustrated.png`. Portrait URL revision advanced to 3 to refresh cached store and wardrobe images.
+
+Edit input: the previous helmeted Deep Diver portrait (revision 2).
+
+Generated source: `C:\Users\nurdo\.codex\generated_images\01a09a12-d4c4-7453-bbfa-e69d41487edd\exec-569608b9-72fa-4b2a-95e7-8cc0dd70c092.png`
+
+Exact prompt:
+
+```text
+Use case: precise-object-edit. Edit the supplied single square illustrated game portrait of the Deep Diver. Change only the helmet viewports: the large front glass must be very dark, heavily fogged, opaque deep teal-black, with hazy condensation and subtle broad painterly cloudy patches. COMPLETELY conceal the occupant: absolutely no visible face, eyes, mouth, skin, head silhouette or facial features behind the glass. Across the circular front viewport add a clearly visible protective metal grille of thick worn brass bars running both VERTICALLY and HORIZONTALLY, intersecting into a sturdy rectangular lattice firmly attached to its circular brass rim. Make these structural metal bars substantial and readable at small avatar sizes, with dark ink edges and angular painted highlights, matching the helmet brass. Any side viewport must also be dark and opaque with protective bars. Preserve the existing riveted brass helmet shape, weathered patina and barnacles, diving suit, brass shoulder collar, ropes, chains, harbor background, composition, square dimensions and exact dark-ink/angular-opaque-gouache illustrated style. No photographic rendering or smooth 3D metal. One portrait, no text, no watermark, no border.
+```

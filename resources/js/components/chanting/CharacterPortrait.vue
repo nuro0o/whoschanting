@@ -32,7 +32,7 @@ const portraitImages: Record<string, string> = {
     seasonal_oathkeeper:
         '/assets/chanting/unlocks/seasonal_oathkeeper-illustrated.png',
     fae_envoy: '/assets/chanting/expansions/fae_envoy-illustrated.png?v=2',
-    drowned_diver: '/assets/chanting/expansions/drowned_diver-illustrated.png?v=2',
+    drowned_diver: '/assets/chanting/expansions/drowned_diver-illustrated.png?v=3',
     relic_broker: '/assets/chanting/expansions/relic_broker-illustrated.png',
     hollow_cantor: '/assets/chanting/expansions/hollow_cantor-illustrated.png',
     carnival_ringmaster:
