@@ -228,6 +228,14 @@ const nextAction = computed(() => {
                 shown in Play.
             </p>
         </details>
-        <GameGlossary />
+        <GameGlossary
+            :fae-in-match="!!state.fae || !!state.mode_setup?.fae_court"
+            :expansion-in-match="
+                state.expansion ??
+                state.expansion_catalog?.find(
+                    (item) => item.id === state.mode_setup?.expansion,
+                )
+            "
+        />
     </div>
 </template>
