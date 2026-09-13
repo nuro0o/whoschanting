@@ -1,4 +1,5 @@
 import type { Auth } from '@/types/auth';
+import type { ExpansionMetadata } from '@/lib/expansions';
 import type { LegalSettings } from '@/types/legal';
 
 // Extend ImportMeta interface for Vite...
@@ -18,6 +19,8 @@ declare module '@inertiajs/core' {
     export interface InertiaConfig {
         sharedPageProps: {
             name: string;
+            activeFactions: string[];
+            factionCatalog: ExpansionMetadata[];
             auth: Auth;
             legal: LegalSettings;
             sidebarOpen: boolean;

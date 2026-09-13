@@ -1,6 +1,10 @@
 import type { RoomState } from './chanting';
+import { relicNames } from './expansions.ts';
 
 export interface ActionChoice {
+    expansionAction?: string | null;
+    secondaryTarget?: string | null;
+    relicId?: string | null;
     target: string | null;
     useAbility: boolean;
     curse: string;
@@ -26,6 +30,19 @@ export function actionConsequence(
         );
     }
     const role = state.me.role;
+    if (choice.expansionAction) {
+        const action = state.expansion?.night_choices.find(
+            (item) => item.id === choice.expansionAction,
+        );
+        const destination = state.players.find(
+            (p) => p.id === choice.secondaryTarget,
+        )?.name;
+        return `${action?.label ?? choice.expansionAction}${choice.target ? `: ${name}` : ''}${choice.relicId ? ` · ${relicNames[choice.relicId] ?? choice.relicId}` : ''}${destination ? ` → ${destination}` : ''}. ${action?.description ?? ''} This replaces your usual night ability or chant. Your choice is final.${action?.target !== 'none' && state.me.curse?.type === 'misdirection' ? ' Break Misdirection before submitting this action.' : ''}`;
+    }
+    if (role === 'fae_collector')
+        return choice.target
+            ? `Renew the selected failed bargain with ${name}, keeping its original terms. Your once-per-match renewal is spent even if disrupted or voided.`
+            : 'Keep watch and save any unspent renewal.';
     if (role === 'fae_broker')
         return choice.target
             ? `Offer an anonymous bargain to ${name}. They can accept or decline after night actions resolve.`

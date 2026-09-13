@@ -40,6 +40,13 @@ await test('Borrowed Voice reports distinguish votes, abstentions and missing ba
     );
 });
 
+await test('Moonlit Passage result names exactly the next night and does not promise general protection', () => {
+    assert.equal(
+        privateResultText({ kind: 'passage', day: 2, target: 'Mara' }),
+        'You kept your promised vote on day 2. Your outgoing visit on night 3 will be hidden from tracking. Other abilities still affect you normally.',
+    );
+});
+
 await test('only curse-capable cultists can select themselves at night, with an explicit confirmation label', () => {
     for (const role of ['veilweaver', 'acolyte']) {
         const cult = { ...state, me: { ...state.me, role, alignment: 'cult' } };

@@ -19,7 +19,11 @@ return [
     'hard_town_roles_min_players' => ['tracker' => 5, 'exorcist' => 7, 'herbalist' => 8, 'oathkeeper' => 10],
     'hard_cult_roles_min_players' => ['counterfeiter' => 5, 'phantasm' => 7, 'dreamweaver' => 9],
     'role_alignments' => [
-        'fae_broker' => 'fae',
+        'fae_broker' => 'fae', 'fae_collector' => 'fae',
+        'drowned_tidecaller' => 'drowned', 'drowned_ferryman' => 'drowned',
+        'gilded_lifter' => 'gilded', 'gilded_appraiser' => 'gilded',
+        'choir_cantor' => 'choir', 'choir_resonant' => 'choir',
+        'carnival_harlequin' => 'carnival', 'carnival_augur' => 'carnival',
         'vigilante' => 'town',
         'oracle' => 'town', 'townsperson' => 'town', 'warden' => 'town', 'lamplighter' => 'town', 'medium' => 'town', 'bellkeeper' => 'town', 'exorcist' => 'town', 'oathkeeper' => 'town', 'tracker' => 'town', 'herbalist' => 'town',
         'veilweaver' => 'cult', 'acolyte' => 'cult', 'dreamweaver' => 'cult', 'phantasm' => 'cult', 'counterfeiter' => 'cult',

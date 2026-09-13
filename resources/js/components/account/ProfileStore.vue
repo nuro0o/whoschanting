@@ -30,7 +30,8 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
-import { roomRequest } from '@/lib/chanting';
+import { roomRequest, roles } from '@/lib/chanting';
+import { factionStyle } from '@/lib/expansions';
 import {
     recordDate,
     type ProgressionData,
@@ -45,6 +46,29 @@ const emit = defineEmits<{
     'progression-updated': [progression: ProgressionData | null];
 }>();
 const page = usePage();
+const factionContents = (id: string) => {
+    const expansion = page.props.factionCatalog?.find((item) => item.id === id);
+    if (id === 'fae-court')
+        return [
+            'One secret Fae Broker in Classic or Illusions',
+            'Three anonymous bargains to offer at night',
+            'Shared victory with Town or Cult',
+            '7–15 players · guests can play every role',
+        ];
+    return expansion
+        ? [
+              expansion.roles
+                  .map((role) => roles[role]?.name ?? role)
+                  .join(' and '),
+              expansion.instructions,
+              'Shared victory with Town or Cult',
+              `${expansion.min_players}–15 players · guests can play every role`,
+          ]
+        : [
+              'One owner unlocks the whole room',
+              'Roles are dealt normally to every player',
+          ];
+};
 const data = ref(props.progression);
 watch(data, (value) => emit('progression-updated', value));
 watch(
@@ -407,14 +431,19 @@ function transactionName(itemId: string | null) {
                         <div
                             v-if="bundle.kind === 'faction'"
                             class="premium-art fae-store-art"
+                            :style="{ color: factionStyle[bundle.id]?.color }"
                         >
-                            <span class="premium-edition"
-                                >The first faction expansion</span
-                            >
-                            <span class="fae-store-sigil" aria-hidden="true"
-                                >❧</span
-                            >
-                            <strong>Every gift<br />has a promise.</strong>
+                            <span class="premium-edition">{{
+                                bundle.id === 'fae-court'
+                                    ? 'The first faction expansion'
+                                    : 'A new reason to lie'
+                            }}</span>
+                            <span class="fae-store-sigil" aria-hidden="true">{{
+                                factionStyle[bundle.id]?.symbol
+                            }}</span>
+                            <strong>{{
+                                factionStyle[bundle.id]?.motto
+                            }}</strong>
                             <span class="premium-art-caption"
                                 >One owner. A whole room of possibilities.</span
                             >
@@ -484,21 +513,15 @@ function transactionName(itemId: string | null) {
                                 </li>
                             </ul>
                             <ul v-else class="premium-contents">
-                                <li>
-                                    <Check :size="12" />One secret Fae Broker in
-                                    Classic or Illusions
-                                </li>
-                                <li>
-                                    <Check :size="12" />Three anonymous bargains
-                                    to offer at night
-                                </li>
-                                <li>
-                                    <Check :size="12" />Shared victory with Town
-                                    or Cult
-                                </li>
-                                <li>
-                                    <Check :size="12" />7–15 players · guests
-                                    can play every role
+                                <li
+                                    v-for="content in factionContents(
+                                        bundle.id,
+                                    )"
+                                    :key="content"
+                                >
+                                    <Check :size="12" aria-hidden="true" />{{
+                                        content
+                                    }}
                                 </li>
                             </ul>
                             <button
@@ -543,7 +566,7 @@ function transactionName(itemId: string | null) {
                                             ? 'Opening checkout…'
                                             : bundle.available
                                               ? bundle.kind === 'faction'
-                                                  ? 'Unlock the Court'
+                                                  ? 'Unlock expansion'
                                                   : 'Get the bundle'
                                               : 'Coming soon'
                                     }}<ExternalLink

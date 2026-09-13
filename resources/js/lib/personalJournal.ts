@@ -28,9 +28,11 @@ export function groupJournalResults(results: PrivateNightResult[]) {
 
 export function journalResultLabel(result: PrivateNightResult): string {
     return {
+        expansion: 'Expansion result',
         alignment: 'Oracle reading',
         visits: 'Lamplighter watch',
         ballot: 'A Borrowed Voice',
+        passage: 'Moonlit Passage earned',
         tracking: 'Tracking',
         herbs: 'Village protection',
         shot: 'Vigilante shot',

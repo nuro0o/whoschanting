@@ -1,4 +1,5 @@
 import type { MatchRecapData, Player } from './chanting';
+import { victoryTitle } from './expansions.ts';
 
 export interface RecapStoryStep {
     id: string;
@@ -144,11 +145,12 @@ export function buildRecapStory(
         steps.push({
             id: 'ending',
             label: 'The ending',
-            title: recap.winners?.includes('fae')
-                ? `${recap.winner === 'town' ? 'Town' : 'Cult'} and the Fae Court share victory`
-                : recap.winner === 'town'
-                  ? 'The village prevailed'
-                  : 'The cult prevailed',
+            title:
+                (recap.winners?.length ?? 0) > 1
+                    ? victoryTitle(recap.winners, recap.winner)
+                    : recap.winner === 'town'
+                      ? 'The village prevailed'
+                      : 'The cult prevailed',
             body:
                 recap.win_reason || 'The match ended in victory for this team.',
             details: [],

@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Game\FactionExpansions;
 use App\Support\LegalDocuments;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
@@ -39,6 +40,8 @@ class HandleInertiaRequests extends Middleware
         return [
             ...parent::share($request),
             'name' => config('app.name'),
+            'activeFactions' => FactionExpansions::activeIds(),
+            'factionCatalog' => FactionExpansions::catalog(),
             'legal' => (new LegalDocuments)->details(),
             'auth' => [
                 'user' => $request->user(),

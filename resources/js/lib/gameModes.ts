@@ -1,5 +1,6 @@
 import { t } from '../i18n/index.ts';
 export interface ModeSetup {
+    expansion?: string | null;
     fae_court?: boolean;
     mode: 'classic' | 'hard' | 'chaos' | 'paranoia' | 'custom';
     classic_variant: 'classic' | 'illusions';

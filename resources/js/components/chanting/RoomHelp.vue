@@ -73,6 +73,13 @@ const nextAction = computed(() => {
         </section>
         <RoleGuide
             compact
+            :fae-in-match="!!state.fae"
+            :expansion-in-match="
+                state.expansion ??
+                state.expansion_catalog?.find(
+                    (item) => item.id === state.mode_setup?.expansion,
+                )
+            "
             :minimum-players="{
                 ...state.rules.town_roles_min_players,
                 ...state.rules.cult_roles_min_players,
@@ -82,9 +89,14 @@ const nextAction = computed(() => {
             <h3>How does the Fae Court win?</h3>
             <p>
                 One owner shares the expansion with everyone. A randomly dealt
-                Fae Broker replaces one Townsperson. Its anonymous night offers
-                arrive after night actions resolve. Recipients can accept a gift
-                and then break the promise; only fulfilled promises earn seals.
+                Broker and Collector replace one Townsperson and one Cult seat.
+                The Collector can renew one failed bargain with a different
+                partner, keeping its terms. Their anonymous offers arrive after
+                night actions resolve. Recipients can accept a gift and then
+                break the promise; only fulfilled promises earn seals. Moonlit
+                Passage also requires the promised vote to earn its gift: your
+                outgoing visit is hidden from tracking next night. Other
+                bargains keep their gifts even when a promise is broken.
                 Refusals and missing responses earn nothing. Each different
                 partner can earn one seal.
             </p>

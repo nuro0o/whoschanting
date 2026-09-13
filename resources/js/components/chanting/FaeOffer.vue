@@ -1,25 +1,34 @@
 <script setup lang="ts">
 import { computed, useId, watch } from 'vue';
 import type { RoomState } from '@/lib/chanting';
-import { bargains, bargainPromise, type BargainKind } from '@/lib/faeCourt';
+import {
+    bargains,
+    faeRecipients,
+    bargainPromise,
+    offerableBargains,
+    type BargainKind,
+} from '@/lib/faeCourt';
 const props = defineProps<{ state: RoomState; disabled: boolean }>();
 const target = defineModel<string | null>('target', { required: true });
 const kind = defineModel<BargainKind>('kind', { required: true });
 const promise = defineModel<string | null>('promise', { required: true });
 const gift = defineModel<string | null>('gift', { required: true });
-const id = useId();
-const recipients = computed(() =>
-    props.state.players.filter(
-        (player) =>
-            player.alive &&
-            player.id !== props.state.me.id &&
-            !props.state.fae?.bargains.some(
-                (bargain) =>
-                    bargain.recipient_id === player.id &&
-                    bargain.status === 'fulfilled',
-            ),
-    ),
+const renewal = defineModel<string | null>('renewal', { default: null });
+const collector = computed(() => props.state.me.role === 'fae_collector');
+const failed = computed(
+    () =>
+        props.state.fae?.bargains.filter((b) =>
+            props.state.fae?.renewable_ids?.includes(b.id),
+        ) ?? [],
 );
+const original = computed(() =>
+    failed.value.find((b) => b.id === renewal.value),
+);
+watch(renewal, () => {
+    target.value = null;
+});
+const id = useId();
+const recipients = computed(() => faeRecipients(props.state, renewal.value));
 const promises = computed(() =>
     props.state.players.filter(
         (player) => player.alive && player.id !== target.value,
@@ -39,14 +48,77 @@ watch([kind, target], () => {
 
 <template>
     <fieldset class="fae-offer" :disabled="disabled">
-        <legend>Offer a secret bargain</legend>
+        <legend>
+            {{
+                collector ? 'Renew a failed bargain' : 'Offer a secret bargain'
+            }}
+        </legend>
+        <template v-if="collector">
+            <p>
+                Once per match, renew a failed bargain with a different player.
+                Its original gift and promise stay the same. Your renewal is
+                spent when confirmed, even if disrupted or the offer becomes
+                void.
+            </p>
+            <p v-if="state.fae?.collector_used">
+                Your renewal is spent. You can keep watch and help the Court
+                through discussion and voting.
+            </p>
+            <template v-else>
+                <label :for="`${id}-renewal`">Failed bargain</label>
+                <select :id="`${id}-renewal`" v-model="renewal">
+                    <option :value="null">
+                        Keep watch - save your renewal
+                    </option>
+                    <option v-for="b in failed" :key="b.id" :value="b.id">
+                        Day {{ b.day }} / {{ bargains[b.kind].name }} /
+                        {{
+                            state.players.find((p) => p.id === b.recipient_id)
+                                ?.name
+                        }}
+                        / {{ b.status }}
+                    </option>
+                </select>
+                <p v-if="!failed.length">
+                    No eligible failed bargains yet. Wait for a declined,
+                    expired or broken offer from an earlier night.
+                </p>
+                <p v-if="original">
+                    <strong>Original gift:</strong>
+                    {{ bargains[original.kind].gift
+                    }}<span v-if="original.gift_target">
+                        Ballot to reveal:
+                        {{
+                            state.players.find(
+                                (p) => p.id === original?.gift_target,
+                            )?.name
+                        }}.</span
+                    >
+                </p>
+                <p v-if="original">
+                    <strong>Original promise:</strong>
+                    {{
+                        bargainPromise(
+                            original.kind,
+                            state.players.find(
+                                (p) => p.id === original?.promise_target,
+                            )?.name ?? 'the chosen player',
+                        )
+                    }}
+                </p>
+            </template>
+        </template>
         <p>
             Your identity stays hidden. The recipient answers in the private
             window after night actions resolve. Disruption prevents delivery;
             visits can still be tracked.
         </p>
         <label :for="`${id}-recipient`">Recipient</label>
-        <select :id="`${id}-recipient`" v-model="target">
+        <select
+            :id="`${id}-recipient`"
+            v-model="target"
+            :disabled="collector && (!original || state.fae?.collector_used)"
+        >
             <option :value="null">Keep watch — no offer tonight</option>
             <option
                 v-for="player in recipients"
@@ -56,15 +128,15 @@ watch([kind, target], () => {
                 {{ player.name }}
             </option>
         </select>
-        <template v-if="target">
+        <template v-if="target && !collector">
             <label :for="`${id}-kind`">Bargain</label>
             <select :id="`${id}-kind`" v-model="kind">
                 <option
-                    v-for="(bargain, key) in bargains"
+                    v-for="key in offerableBargains"
                     :key="key"
                     :value="key"
                 >
-                    {{ bargain.name }}
+                    {{ bargains[key].name }}
                 </option>
             </select>
             <p><strong>Your gift:</strong> {{ bargains[kind].gift }}</p>
@@ -84,7 +156,7 @@ watch([kind, target], () => {
             <template v-if="kind !== 'voice'">
                 <label :for="`${id}-promise`"
                     >Who must they
-                    {{ kind === 'thorn' ? 'vote for' : 'accuse' }}?</label
+                    {{ kind === 'lantern' ? 'accuse' : 'vote for' }}?</label
                 >
                 <select :id="`${id}-promise`" v-model="promise">
                     <option :value="null" disabled>Choose a player</option>

@@ -1,5 +1,11 @@
 import { t } from '../i18n/index.ts';
 import type { FaeState } from './faeCourt';
+import {
+    expansionRoles,
+    type Alignment,
+    type ExpansionAvailability,
+    type ExpansionState,
+} from './expansions.ts';
 import type { CreatorRecipe } from './creator';
 import type { ChaosEvent, ModeSetup } from './gameModes';
 import type { MatchReward, PublicCustomization } from './progression';
@@ -80,6 +86,9 @@ export interface Player {
     alignment?: string;
 }
 export interface RecapNightAction {
+    expansion_action?: string | null;
+    secondary_target_id?: string | null;
+    relic_id?: string | null;
     shot_fired?: boolean;
     guilty?: boolean;
     tracked_target_id?: string | null;
@@ -105,9 +114,11 @@ export interface RecapNightAction {
     true_alignment?: string | null;
 }
 export type PrivateNightResult = { day: number; target: string } & (
+    | { kind: 'expansion'; text: string }
     | { kind?: 'alignment'; alignment: string }
     | { kind: 'visits'; visited: boolean }
     | { kind: 'ballot'; submitted: boolean; voted_for: string | null }
+    | { kind: 'passage' }
     | { kind: 'tracking'; visited_target: string | null }
     | { kind: 'herbs' }
     | { kind: 'shot'; guilty: boolean }
@@ -162,6 +173,7 @@ export interface LastWordsRecord {
     defenses: { player_id: string; body: string }[];
 }
 export interface MatchRecapData {
+    expansion?: ExpansionState | null;
     winners?: string[];
     fae?: FaeState | null;
     claims?: PublicClaim[];
@@ -231,7 +243,15 @@ export interface Curse {
     challenge: CurseChallenge | null;
 }
 export interface RoomState {
-    expansions?: { fae_court: { available: boolean; min_players: number } };
+    expansion_catalog?: ExpansionAvailability[];
+    expansion?: ExpansionState | null;
+    expansions?: {
+        fae_court: {
+            active?: boolean;
+            available: boolean;
+            min_players: number;
+        };
+    };
     fae?: FaeState | null;
     winners?: string[];
     cosmetics?: { table: string; events: RitualCosmeticEvent[] };
@@ -298,7 +318,7 @@ export interface RoomState {
         alive: boolean;
         character: string;
         role: string | null;
-        alignment: 'cult' | 'town' | 'fae' | null;
+        alignment: Alignment | null;
         mission: { id: string; name: string; description: string } | null;
         allies: { id: string; name: string; role: string }[];
         results: PrivateNightResult[];
@@ -307,6 +327,7 @@ export interface RoomState {
         haunting?: { day: number; seat_id: string } | null;
         oath_protected?: boolean;
         fae_protected?: boolean;
+        fae_passage?: boolean;
         submitted: boolean;
         curse: Curse | null;
         curse_notice: string | null;
@@ -408,12 +429,20 @@ export const roles: Record<
     string,
     { name: string; subtitle: string; description: string; symbol: string }
 > = {
+    ...expansionRoles,
+    fae_collector: {
+        name: 'The Fae Collector',
+        subtitle: 'Fae Court - keeper of second chances',
+        symbol: '◇',
+        description:
+            'Once per match, anonymously renew a declined, expired or broken bargain from an earlier night with a different living player outside the Court. Keep its original gift and promise. Your renewal is spent when submitted, even if disrupted or voided. Share seals and private bargain history with the Broker; a partner can earn only one seal for the Court. Break Misdirection before renewing, or keep watch.',
+    },
     fae_broker: {
         name: 'The Fae Broker',
         subtitle: 'Fae Court · keeper of secret bargains',
         symbol: '❧',
         description:
-            'Blend in by day. Each night, anonymously offer one living player a gift for a voting or accusation promise. They accept or decline after night actions resolve. Earn seals from different fulfilled partners to share Town or Cult victory. An ordinary Oracle reading identifies you as Fae; a veil makes you appear Cult and a forgery can make you appear Town or Cult. Break Misdirection before offering, or keep watch.',
+            'Blend in by day. Each night, anonymously offer one living player a gift for a voting promise. They accept or decline after night actions resolve. Earn seals from different fulfilled partners to share Town or Cult victory. An ordinary Oracle reading identifies you as Fae; a veil makes you appear Cult and a forgery can make you appear Town or Cult. Break Misdirection before offering, or keep watch.',
     },
     vigilante: {
         name: t('roles.vigilante.name'),

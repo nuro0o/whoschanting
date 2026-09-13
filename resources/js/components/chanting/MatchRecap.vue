@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { bargains, bargainPromise } from '@/lib/faeCourt';
+import { factionStyle, relicNames } from '@/lib/expansions';
 import {
     ArrowRight,
     ChevronDown,
@@ -87,6 +88,8 @@ function actionDescription(action: RecapNightAction) {
     if (!action.submitted) return 'Missed the night deadline. No action taken.';
     if (action.disrupted)
         return `Night action disrupted. No ability or chant took effect.${action.used_ability ? ' The once-per-match ability was spent.' : ''}`;
+    if (action.expansion_action)
+        return `Chose ${action.expansion_action}${action.target_id ? ` on ${name(action.target_id)}` : ''}${action.secondary_target_id ? ` → ${name(action.secondary_target_id)}` : ''}${action.relic_id ? ` · ${relicNames[action.relic_id] ?? action.relic_id}` : ''} instead of the usual night ability or chant. See the expansion record for outcomes.`;
     if (action.role === 'vigilante')
         return action.shot_fired
             ? `Shot ${name(action.target_id)}.${action.guilty ? ' The target was not a cultist, triggering guilt and departure if the Vigilante survived the night.' : ' The target was a cultist.'}`
@@ -151,7 +154,10 @@ function actionDescription(action: RecapNightAction) {
                   : '';
         return [chant, veil, curse].filter(Boolean).join(' ');
     }
-    if (action.role === 'fae_broker' && action.target_id)
+    if (
+        ['fae_broker', 'fae_collector'].includes(action.role ?? '') &&
+        action.target_id
+    )
         return `Sent an anonymous bargain to ${name(action.target_id)}. See the Court’s bargain record for the promise and outcome.`;
     return 'Kept watch.';
 }
@@ -166,6 +172,36 @@ function actionDescription(action: RecapNightAction) {
             <h2 id="recap-title">What really happened</h2>
             <span>Every secret, revealed</span>
         </div>
+        <section
+            v-if="recap.expansion"
+            class="table-step"
+            :style="{ borderColor: factionStyle[recap.expansion.id]?.color }"
+        >
+            <h3>
+                {{ recap.expansion.name }}
+                {{
+                    recap.winners?.includes(recap.expansion.alignment)
+                        ? 'shares victory'
+                        : 'did not complete its objective'
+                }}
+            </h3>
+            <p>
+                {{ recap.expansion.progress }} / {{ recap.expansion.goal }} ·
+                {{
+                    recap.expansion.secured
+                        ? 'Objective secured'
+                        : 'Objective incomplete'
+                }}. {{ recap.expansion.instructions }}
+            </p>
+            <ul v-if="recap.expansion.events?.length">
+                <li
+                    v-for="(event, index) in recap.expansion.events"
+                    :key="index"
+                >
+                    Day {{ event.day }} · {{ event.text }}
+                </li>
+            </ul>
+        </section>
         <section v-if="recap.fae" class="table-step">
             <h3>
                 {{

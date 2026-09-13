@@ -3,22 +3,40 @@ import {
     ChevronDown,
     Eye,
     Flower2,
-    Lamp,
+    Moon,
     Shield,
     Sprout,
     Users,
     Volume2,
 } from '@lucide/vue';
-import { ref, useId } from 'vue';
+import { computed, ref, useId } from 'vue';
+import { usePage } from '@inertiajs/vue3';
 import { t } from '@/i18n';
 import { roles } from '@/lib/chanting';
+import { factionStyle, type ExpansionMetadata } from '@/lib/expansions';
 
-withDefaults(
+const props = withDefaults(
     defineProps<{
         compact?: boolean;
+        faeInMatch?: boolean;
+        expansionInMatch?: ExpansionMetadata | null;
         minimumPlayers?: Record<string, number>;
     }>(),
-    { compact: false },
+    { compact: false, faeInMatch: false },
+);
+const page = usePage();
+const visibleExpansions = computed(() => {
+    const catalog = (page.props.factionCatalog ?? []).filter(
+        (item) => item.id !== 'fae-court',
+    );
+    if (props.compact)
+        return props.expansionInMatch ? [props.expansionInMatch] : [];
+    return catalog;
+});
+const showFae = computed(
+    () =>
+        props.faeInMatch ||
+        (!props.compact && page.props.activeFactions?.includes('fae-court')),
 );
 const headingId = useId();
 const expanded = ref<Record<string, boolean>>({ town: false, cult: false });
@@ -70,10 +88,10 @@ const gifts = [
         description: t('roleGuide.fae.voice.description'),
     },
     {
-        id: 'lantern',
-        icon: Lamp,
-        name: t('roleGuide.fae.lantern.name'),
-        description: t('roleGuide.fae.lantern.description'),
+        id: 'passage',
+        icon: Moon,
+        name: t('roleGuide.fae.passage.name'),
+        description: t('roleGuide.fae.passage.description'),
     },
 ];
 </script>
@@ -196,6 +214,7 @@ const gifts = [
         </div>
         <section
             class="role-guide__expansions"
+            v-if="showFae || visibleExpansions.length"
             :aria-labelledby="`${headingId}-expansions`"
         >
             <header class="role-guide__expansions-heading">
@@ -210,94 +229,318 @@ const gifts = [
                 </p>
             </header>
             <article
+                v-if="showFae"
                 class="role-guide__fae"
+                :class="{ 'is-expanded': expanded['fae-court'] }"
                 :aria-labelledby="`${headingId}-fae`"
             >
-                <div class="role-guide__fae-introduction">
-                    <span
-                        v-if="!compact"
-                        class="role-guide__fae-emblem"
-                        aria-hidden="true"
-                        ><Flower2 :size="42" :stroke-width="1"
-                    /></span>
-                    <div>
-                        <p class="role-guide__expansion-label">
-                            {{ t('roleGuide.fae.eyebrow') }}
-                        </p>
-                        <component
-                            :is="compact ? 'h5' : 'h3'"
-                            :id="`${headingId}-fae`"
-                            class="role-guide__fae-name"
-                            >{{ t('roleGuide.fae.name') }}</component
-                        >
-                        <p class="role-guide__intro">
-                            {{ t('roleGuide.fae.intro') }}
-                        </p>
-                        <p class="role-guide__contents">
-                            {{ t('roleGuide.fae.contents') }}
-                        </p>
-                    </div>
-                </div>
-                <div class="role-guide__fae-details">
-                    <div class="role-guide__broker role-guide__entry">
-                        <span class="role-guide__symbol" aria-hidden="true">{{
-                            roles.fae_broker.symbol
+                <h3 v-if="!compact" class="role-guide__row-heading">
+                    <button
+                        :id="`${headingId}-fae`"
+                        type="button"
+                        class="role-guide__toggle"
+                        :aria-expanded="!!expanded['fae-court']"
+                        :aria-controls="`${headingId}-fae-details`"
+                        @click="expanded['fae-court'] = !expanded['fae-court']"
+                    >
+                        <span class="role-guide__emblem" aria-hidden="true"
+                            ><Flower2 :size="28" :stroke-width="1.4"
+                        /></span>
+                        <span class="role-guide__row-copy">
+                            <span class="role-guide__faction-name">{{
+                                t('roleGuide.fae.name')
+                            }}</span>
+                            <span class="role-guide__purpose">{{
+                                t('roleGuide.fae.bargains_intro')
+                            }}</span>
+                        </span>
+                        <span class="role-guide__count">{{
+                            t('roleGuide.role_count', { count: 2 })
                         }}</span>
+                        <ChevronDown
+                            class="role-guide__chevron"
+                            :size="21"
+                            aria-hidden="true"
+                        />
+                    </button>
+                </h3>
+                <div
+                    :id="`${headingId}-fae-details`"
+                    v-show="compact || expanded['fae-court']"
+                    class="role-guide__expansion-details"
+                >
+                    <div class="role-guide__fae-introduction">
+                        <span
+                            v-if="!compact"
+                            class="role-guide__fae-emblem"
+                            aria-hidden="true"
+                            ><Flower2 :size="42" :stroke-width="1"
+                        /></span>
                         <div>
-                            <component
-                                :is="compact ? 'h6' : 'h4'"
-                                class="role-guide__name"
-                                >{{ roles.fae_broker.name }}</component
-                            >
-                            <p class="role-guide__subtitle">
-                                {{ roles.fae_broker.subtitle }}
+                            <p class="role-guide__expansion-label">
+                                {{ t('roleGuide.fae.eyebrow') }}
                             </p>
-                            <p class="role-guide__description">
-                                {{ roles.fae_broker.description }}
+                            <component
+                                v-if="compact"
+                                :is="'h5'"
+                                :id="`${headingId}-fae`"
+                                class="role-guide__fae-name"
+                                >{{ t('roleGuide.fae.name') }}</component
+                            >
+                            <p class="role-guide__intro">
+                                {{ t('roleGuide.fae.intro') }}
+                            </p>
+                            <p class="role-guide__contents">
+                                {{ t('roleGuide.fae.contents') }}
                             </p>
                         </div>
                     </div>
-                    <section
-                        v-if="!compact"
-                        class="role-guide__bargains"
-                        :aria-labelledby="`${headingId}-bargains`"
-                    >
-                        <h4 :id="`${headingId}-bargains`">
-                            {{ t('roleGuide.fae.bargains_title') }}
-                        </h4>
-                        <p class="role-guide__bargains-intro">
-                            {{ t('roleGuide.fae.bargains_intro') }}
-                        </p>
-                        <ul>
-                            <li v-for="gift in gifts" :key="gift.id">
+                    <div class="role-guide__fae-details">
+                        <div
+                            v-for="role in [
+                                roles.fae_broker,
+                                roles.fae_collector,
+                            ]"
+                            :key="role.name"
+                            class="role-guide__broker role-guide__entry"
+                        >
+                            <span
+                                class="role-guide__symbol"
+                                aria-hidden="true"
+                                >{{ role.symbol }}</span
+                            >
+                            <div>
                                 <component
-                                    :is="gift.icon"
-                                    :size="18"
-                                    :stroke-width="1.5"
-                                    aria-hidden="true"
-                                />
-                                <div>
-                                    <h5>{{ gift.name }}</h5>
-                                    <p>{{ gift.description }}</p>
-                                </div>
-                            </li>
-                        </ul>
-                    </section>
+                                    :is="compact ? 'h6' : 'h4'"
+                                    class="role-guide__name"
+                                    >{{ role.name }}</component
+                                >
+                                <p class="role-guide__subtitle">
+                                    {{ role.subtitle }}
+                                </p>
+                                <p class="role-guide__description">
+                                    {{ role.description }}
+                                </p>
+                            </div>
+                        </div>
+                        <section
+                            v-if="!compact"
+                            class="role-guide__bargains"
+                            :aria-labelledby="`${headingId}-bargains`"
+                        >
+                            <h4 :id="`${headingId}-bargains`">
+                                {{ t('roleGuide.fae.bargains_title') }}
+                            </h4>
+                            <p class="role-guide__bargains-intro">
+                                {{ t('roleGuide.fae.bargains_intro') }}
+                            </p>
+                            <ul>
+                                <li v-for="gift in gifts" :key="gift.id">
+                                    <component
+                                        :is="gift.icon"
+                                        :size="18"
+                                        :stroke-width="1.5"
+                                        aria-hidden="true"
+                                    />
+                                    <div>
+                                        <h5>{{ gift.name }}</h5>
+                                        <p>{{ gift.description }}</p>
+                                    </div>
+                                </li>
+                            </ul>
+                        </section>
+                    </div>
+                    <footer class="role-guide__fae-footer">
+                        <p>
+                            <Sprout :size="17" aria-hidden="true" />{{
+                                t('roleGuide.fae.sharing')
+                            }}
+                        </p>
+                        <p>{{ t('roleGuide.fae.support') }}</p>
+                    </footer>
                 </div>
-                <footer class="role-guide__fae-footer">
-                    <p>
-                        <Sprout :size="17" aria-hidden="true" />{{
-                            t('roleGuide.fae.sharing')
-                        }}
+            </article>
+            <article
+                v-for="expansion in visibleExpansions"
+                :key="expansion.id"
+                class="role-guide__new-expansion"
+                :class="{ 'is-expanded': expanded[expansion.id] }"
+                :aria-labelledby="`${headingId}-${expansion.id}`"
+                :style="{ '--role-accent': factionStyle[expansion.id]?.color }"
+            >
+                <h3 v-if="!compact" class="role-guide__row-heading">
+                    <button
+                        :id="`${headingId}-${expansion.id}`"
+                        type="button"
+                        class="role-guide__toggle"
+                        :aria-expanded="!!expanded[expansion.id]"
+                        :aria-controls="`${headingId}-${expansion.id}-details`"
+                        @click="
+                            expanded[expansion.id] = !expanded[expansion.id]
+                        "
+                    >
+                        <span
+                            class="role-guide__emblem role-guide__expansion-symbol"
+                            aria-hidden="true"
+                            >{{ factionStyle[expansion.id]?.symbol }}</span
+                        >
+                        <span class="role-guide__row-copy">
+                            <span class="role-guide__faction-name">{{
+                                expansion.name
+                            }}</span>
+                            <span class="role-guide__purpose">{{
+                                expansion.description
+                            }}</span>
+                        </span>
+                        <span class="role-guide__count">{{
+                            t('roleGuide.role_count', {
+                                count: expansion.roles.length,
+                            })
+                        }}</span>
+                        <ChevronDown
+                            class="role-guide__chevron"
+                            :size="21"
+                            aria-hidden="true"
+                        />
+                    </button>
+                </h3>
+                <div
+                    :id="`${headingId}-${expansion.id}-details`"
+                    v-show="compact || expanded[expansion.id]"
+                    class="role-guide__expansion-details"
+                >
+                    <header v-if="compact" class="role-guide__new-heading">
+                        <span
+                            class="role-guide__new-emblem"
+                            aria-hidden="true"
+                            >{{ factionStyle[expansion.id]?.symbol }}</span
+                        >
+                        <div>
+                            <p class="role-guide__expansion-label">
+                                ROOM EXPANSION · {{ expansion.min_players }}–15
+                                PLAYERS
+                            </p>
+                            <component
+                                :is="compact ? 'h5' : 'h3'"
+                                :id="`${headingId}-${expansion.id}`"
+                                class="role-guide__fae-name"
+                                >{{ expansion.name }}</component
+                            >
+                            <p class="role-guide__intro">
+                                {{ expansion.description }}
+                            </p>
+                        </div>
+                    </header>
+                    <p v-if="!compact" class="role-guide__expansion-label">
+                        ROOM EXPANSION · {{ expansion.min_players }}–15 PLAYERS
                     </p>
-                    <p>{{ t('roleGuide.fae.support') }}</p>
-                </footer>
+                    <p class="role-guide__new-objective">
+                        {{ expansion.instructions }}
+                    </p>
+                    <ul class="role-guide__new-roles">
+                        <li
+                            v-for="roleId in expansion.roles"
+                            :key="roleId"
+                            class="role-guide__entry"
+                        >
+                            <span
+                                class="role-guide__symbol"
+                                aria-hidden="true"
+                                >{{ roles[roleId]?.symbol }}</span
+                            >
+                            <div>
+                                <component
+                                    :is="compact ? 'h6' : 'h4'"
+                                    class="role-guide__name"
+                                    >{{
+                                        roles[roleId]?.name ?? roleId
+                                    }}</component
+                                >
+                                <p class="role-guide__subtitle">
+                                    {{ roles[roleId]?.subtitle }}
+                                </p>
+                                <p class="role-guide__description">
+                                    {{ roles[roleId]?.description }}
+                                </p>
+                            </div>
+                        </li>
+                    </ul>
+                    <footer class="role-guide__fae-footer">
+                        <p>
+                            <Users :size="17" aria-hidden="true" />One owner
+                            unlocks the whole room. Anyone can be dealt these
+                            roles.
+                        </p>
+                        <p>
+                            Classic or Classic Illusions · one expansion per
+                            room · victory can be shared with Town or Cult.
+                        </p>
+                    </footer>
+                </div>
             </article>
         </section>
     </section>
 </template>
 
 <style scoped>
+.role-guide:not(.role-guide--compact) .role-guide__fae,
+.role-guide:not(.role-guide--compact) .role-guide__new-expansion {
+    padding: 0;
+    border: 1px solid var(--line);
+    border-left: 3px solid var(--role-accent);
+}
+.role-guide:not(.role-guide--compact) .role-guide__new-expansion {
+    margin-top: 14px;
+}
+.role-guide__expansion-symbol {
+    font-size: 28px;
+}
+.role-guide:not(.role-guide--compact) .role-guide__expansion-details {
+    border-top: 1px solid var(--line);
+}
+.role-guide:not(.role-guide--compact)
+    .role-guide__new-expansion
+    .role-guide__expansion-details {
+    padding: clamp(18px, 3vw, 28px);
+}
+
+.role-guide__new-expansion {
+    margin-top: 20px;
+    border: 1px solid var(--line);
+    border-top: 3px solid var(--role-accent);
+    padding: clamp(18px, 3vw, 32px);
+}
+.role-guide__new-heading {
+    display: flex;
+    align-items: center;
+    gap: 22px;
+}
+.role-guide__new-emblem {
+    color: var(--role-accent);
+    font-size: 52px;
+}
+.role-guide__new-objective {
+    padding-block: 18px;
+    border-block: 1px solid var(--line);
+    line-height: 1.75;
+    color: var(--cream);
+    font-size: 13px;
+}
+.role-guide__new-roles {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 24px;
+    list-style: none;
+    padding: 12px 0;
+}
+@media (max-width: 640px) {
+    .role-guide__new-roles {
+        grid-template-columns: 1fr;
+    }
+    .role-guide__new-heading {
+        gap: 12px;
+    }
+}
 .role-guide {
     padding-block: 52px;
     border-top: 1px solid var(--line);

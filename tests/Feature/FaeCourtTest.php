@@ -33,6 +33,7 @@ class FaeCourtTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        config(['factions.fae-court.active' => true]);
         Event::fake([RoomUpdated::class]);
         $this->engine = app(MatchEngine::class);
         $this->owner = User::factory()->create();
@@ -103,8 +104,16 @@ class FaeCourtTest extends TestCase
 
     private function offer(GameRoom $room, string $kind, string $recipient, ?string $promise = null, ?string $gift = null): string
     {
-        $this->act($room, $this->role($room, 'fae_broker'), 'night', ['target' => $recipient, 'bargain_kind' => $kind, 'promise_target' => $promise,
-            'gift_target' => $kind === 'voice' ? ($gift ?? $this->role($room, 'fae_broker')) : null]);
+        $fields = ['target' => $recipient, 'bargain_kind' => $kind, 'promise_target' => $promise,
+            'gift_target' => $kind === 'voice' ? ($gift ?? $this->role($room, 'fae_broker')) : null];
+        if ($kind === 'lantern') {
+            // A legacy offer already submitted before Moonlit Passage replaced Lantern Secret.
+            $s = $room->fresh()->state;
+            $s['actions'][$this->role($room, 'fae_broker')] = ['type' => 'night', ...$fields];
+            $room->update(['state' => $s]);
+        } else {
+            $this->act($room, $this->role($room, 'fae_broker'), 'night', $fields);
+        }
         $this->expire($room);
         $this->assertSame('bargains', $room->state['phase']);
 
@@ -116,11 +125,126 @@ class FaeCourtTest extends TestCase
         $room = $this->gathering();
         $roles = array_count_values(array_column($room->state['players'], 'role'));
         $this->assertSame(1, $roles['fae_broker']);
+        $this->assertSame(1, $roles['fae_collector']);
         $this->assertSame(1, $roles['oracle']);
-        $this->assertSame(['cult' => 3, 'town' => 3, 'fae' => 1], array_replace(['cult' => 0, 'town' => 0, 'fae' => 0], array_count_values(array_column($room->state['players'], 'alignment'))));
+        $this->assertSame(['cult' => 2, 'town' => 3, 'fae' => 2], array_replace(['cult' => 0, 'town' => 0, 'fae' => 0], array_count_values(array_column($room->state['players'], 'alignment'))));
         $this->assertNull($room->state['players'][$room->state['host_id']]['user_id']);
         $this->assertSame(25, $room->state['match_rules']['seconds']['bargains']);
         $this->assertSame(3, $room->state['fae']['rules']['seals_to_win']);
+    }
+
+    private function failedBargain(GameRoom $room, string $kind = 'passage'): string
+    {
+        $s = $room->fresh()->state;
+        $s['day'] = 2;
+        $id = (string) Str::uuid();
+        $s['fae']['bargains'][] = ['id' => $id, 'day' => 1, 'sender_id' => $this->role($room, 'fae_broker'),
+            'recipient_id' => $this->role($room, 'oracle'), 'kind' => $kind,
+            'promise_target' => $kind === 'voice' ? null : $this->role($room, 'fae_broker'),
+            'gift_target' => $kind === 'voice' ? $this->role($room, 'fae_broker') : null, 'status' => 'broken'];
+        $room->update(['state' => $s]);
+
+        return $id;
+    }
+
+    public function test_collector_privately_knows_the_broker_and_renews_original_terms_anonymously(): void
+    {
+        foreach (['thorn', 'voice', 'passage'] as $kind) {
+            $room = $this->gathering();
+            $source = $this->failedBargain($room, $kind);
+            $collector = $this->role($room, 'fae_collector');
+            $broker = $this->role($room, 'fae_broker');
+            $recipient = $this->role($room, 'warden');
+            $view = $this->roomView($room, $collector);
+            $this->assertSame([$broker], array_column($view['me']['allies'], 'id'));
+            $this->assertSame([$collector], array_column($this->roomView($room, $broker)['me']['allies'], 'id'));
+            $this->assertSame([$source], $view['fae']['renewable_ids']);
+            $this->assertArrayNotHasKey('renewable_ids', $this->roomView($room, $recipient)['fae']);
+            $this->act($room, $collector, 'night', ['target' => $recipient, 'renewal_id' => $source]);
+            $this->assertTrue($room->fresh()->state['players'][$collector]['collector_used']);
+            $this->expire($room);
+            $offers = $this->roomView($room, $recipient)['fae']['bargains'];
+            $this->assertCount(1, $offers);
+            $this->assertSame($kind, $offers[0]['kind']);
+            $this->assertSame($kind === 'voice' ? null : $broker, $offers[0]['promise_target']);
+            $this->assertSame($kind === 'voice' ? $broker : null, $offers[0]['gift_target']);
+            $this->assertArrayNotHasKey('sender_id', $offers[0]);
+            $this->assertArrayNotHasKey('renewal_id', $offers[0]);
+            $this->act($room, $recipient, 'fae_response', ['bargain_id' => $offers[0]['id'], 'accept' => true]);
+            $this->expire($room);
+            $this->expire($room);
+            $this->act($room, $recipient, 'vote', ['target' => $kind === 'voice' ? null : $broker]);
+            $this->expire($room);
+            $this->assertSame(1, $this->roomView($room, $collector)['fae']['seals']);
+            if ($kind === 'passage') {
+                $this->assertSame(3, $room->state['players'][$recipient]['fae_passage_day']);
+            }
+            $this->reject(fn () => $this->act($room, $collector, 'night', ['target' => $this->role($room, 'lamplighter'), 'renewal_id' => $source]));
+        }
+    }
+
+    public function test_renewals_reject_changed_terms_old_partner_teammates_missing_or_successful_sources(): void
+    {
+        $room = $this->gathering();
+        $source = $this->failedBargain($room);
+        $collector = $this->role($room, 'fae_collector');
+        $broker = $this->role($room, 'fae_broker');
+        $target = $this->role($room, 'warden');
+        foreach ([['renewal_id' => (string) Str::uuid(), 'target' => $target],
+            ['renewal_id' => $source, 'target' => $this->role($room, 'oracle')],
+            ['renewal_id' => $source, 'target' => $broker],
+            ['renewal_id' => $source, 'target' => $target, 'bargain_kind' => 'voice'],
+            ['renewal_id' => $source, 'target' => $target, 'use_ability' => true],
+            ['target' => $target], ['renewal_id' => $source]] as $fields) {
+            $this->reject(fn () => $this->act($room, $collector, 'night', $fields));
+        }
+        $this->reject(fn () => $this->act($room, $broker, 'night', ['renewal_id' => $source, 'target' => $target]));
+        $s = $room->fresh()->state;
+        $s['fae']['bargains'][0]['status'] = 'fulfilled';
+        $room->update(['state' => $s]);
+        $this->reject(fn () => $this->act($room, $collector, 'night', ['renewal_id' => $source, 'target' => $target]));
+        $this->assertFalse($room->fresh()->state['players'][$collector]['collector_used'] ?? false);
+        $this->reject(fn () => (new GameModes)->normalize(['mode' => 'custom', 'roles' => ['fae_collector' => 1, 'oracle' => 4, 'acolyte' => 2]]));
+    }
+
+    public function test_a_disrupted_renewal_is_spent_and_does_not_deliver_an_offer(): void
+    {
+        $room = $this->gathering();
+        $source = $this->failedBargain($room);
+        $collector = $this->role($room, 'fae_collector');
+        $this->act($room, $collector, 'night', ['renewal_id' => $source, 'target' => $this->role($room, 'warden')]);
+        $this->act($room, $this->role($room, 'dreamweaver'), 'night', ['target' => $collector, 'use_ability' => true]);
+        $this->expire($room);
+        $this->assertCount(1, $room->state['fae']['bargains']);
+        $this->assertTrue($this->roomView($room, $collector)['fae']['collector_used']);
+        $this->assertSame([], $this->roomView($room, $collector)['fae']['renewable_ids']);
+    }
+
+    public function test_two_fae_cannot_offer_the_same_recipient_or_farm_an_already_fulfilled_partner(): void
+    {
+        foreach ([true, false] as $collectorFirst) {
+            $room = $this->gathering();
+            $source = $this->failedBargain($room);
+            $collector = $this->role($room, 'fae_collector');
+            $broker = $this->role($room, 'fae_broker');
+            $recipient = $this->role($room, 'warden');
+            $actions = [$collector => ['renewal_id' => $source, 'target' => $recipient],
+                $broker => ['bargain_kind' => 'voice', 'gift_target' => $broker, 'target' => $recipient]];
+            if (! $collectorFirst) {
+                $actions = array_reverse($actions, true);
+            }
+            $first = array_key_first($actions);
+            $last = array_key_last($actions);
+            $this->act($room, $first, 'night', $actions[$first]);
+            $this->reject(fn () => $this->act($room, $last, 'night', $actions[$last]));
+        }
+        $room = $this->gathering();
+        $source = $this->failedBargain($room);
+        $s = $room->fresh()->state;
+        $recipient = $this->role($room, 'warden');
+        $s['fae']['bargains'][] = [...$s['fae']['bargains'][0], 'id' => (string) Str::uuid(), 'recipient_id' => $recipient, 'status' => 'fulfilled'];
+        $room->update(['state' => $s]);
+        $this->reject(fn () => $this->act($room, $this->role($room, 'fae_collector'), 'night', ['renewal_id' => $source, 'target' => $recipient]));
     }
 
     public function test_unowned_forged_custom_and_too_small_setups_are_rejected(): void
@@ -135,6 +259,7 @@ class FaeCourtTest extends TestCase
                 $roster = $modes->roster($modes->normalize(['fae_court' => true, 'classic_variant' => $variant]), $count);
                 $this->assertCount($count, $roster);
                 $this->assertSame(1, array_count_values($roster)['fae_broker']);
+                $this->assertSame(1, array_count_values($roster)['fae_collector']);
             }
         }
         $this->assertNotContains('fae_broker', $modes->roster($modes->normalize(['mode' => 'chaos']), 15));
@@ -284,6 +409,7 @@ class FaeCourtTest extends TestCase
             $s = $room->state;
             $broker = $this->role($room, 'fae_broker');
             $partners = array_keys(array_filter($s['players'], fn (array $p): bool => $p['alignment'] === $winner));
+            $partners = array_unique([...$partners, $this->role($room, 'oracle')]);
             foreach (array_slice($partners, 0, 3) as $i => $id) {
                 $s['fae']['bargains'][] = ['id' => (string) Str::uuid(), 'sender_id' => $broker, 'recipient_id' => $id, 'kind' => 'voice', 'promise_target' => null, 'day' => $i + 1, 'status' => 'fulfilled'];
             }
@@ -342,8 +468,10 @@ class FaeCourtTest extends TestCase
         }
         unset($p);
         $s['mission'] = config('game.missions.concord');
+        $s['threshold'] = 6;
         $room->update(['state' => $s]);
         $partners = array_keys(array_filter($s['players'], fn (array $p): bool => $p['alignment'] === 'cult'));
+        $partners[] = $this->role($room, 'oracle');
         foreach ($partners as $index => $recipient) {
             foreach ($room->fresh()->state['players'] as $id => $player) {
                 $extra = $id === $broker ? ['target' => $recipient, 'bargain_kind' => 'voice', 'gift_target' => $broker]
@@ -409,7 +537,7 @@ class FaeCourtTest extends TestCase
 
     public function test_voice_reveals_only_resolved_ballot_after_voting_to_town_or_cult_recipient_even_when_banished(): void
     {
-        foreach (['oracle', 'acolyte'] as $role) {
+        foreach (['oracle', 'veilweaver'] as $role) {
             $room = $this->gathering();
             $recipient = $this->role($room, $role);
             $voter = $this->role($room, 'warden');
@@ -566,5 +694,117 @@ class FaeCourtTest extends TestCase
         $room = $this->gathering();
         $this->reject(fn () => $this->act($room, $this->role($room, 'oracle'), 'night', ['target' => $this->role($room, 'warden'), 'bargain_kind' => 'voice']));
         $this->reject(fn () => $this->act($room, $this->role($room, 'fae_broker'), 'night', ['target' => $this->role($room, 'oracle'), 'bargain_kind' => 'thorn', 'promise_target' => $this->role($room, 'oracle')]));
+    }
+
+    public function test_moonlit_passage_requires_kept_vote_then_hides_visits_for_exactly_one_night(): void
+    {
+        $room = $this->gathering();
+        $recipient = $this->role($room, 'veilweaver');
+        $promise = $this->role($room, 'oracle');
+        $watcher = $this->role($room, 'lamplighter');
+        $tracker = $this->role($room, 'warden');
+        $broker = $this->role($room, 'fae_broker');
+        $s = $room->state;
+        $s['players'][$tracker]['role'] = 'tracker';
+        $room->update(['state' => $s]);
+        $this->act($room, $recipient, 'night', ['target' => $promise]);
+        $this->act($room, $watcher, 'night', ['target' => $promise]);
+        $offer = $this->offer($room, 'passage', $recipient, $promise);
+        $this->assertTrue($this->roomView($room, $watcher)['me']['results'][0]['visited']);
+        $this->assertArrayNotHasKey('sender_id', $this->roomView($room, $recipient)['fae']['bargains'][0]);
+        $this->assertEmpty($this->roomView($room, $promise)['fae']['bargains']);
+        $this->act($room, $recipient, 'fae_response', ['bargain_id' => $offer, 'accept' => true]);
+        $this->assertArrayNotHasKey('fae_passage_day', $room->fresh()->state['players'][$recipient]);
+        $this->expire($room);
+        while ($curse = $room->fresh()->state['players'][$promise]['curse']) {
+            $this->act($room, $promise, 'solve_curse', ['curse_id' => $curse['id'], 'answer' => $curse['solution']]);
+        }
+        $this->expire($room);
+        $this->act($room, $recipient, 'vote', ['target' => $promise]);
+        $this->expire($room);
+        $this->assertSame('fulfilled', $room->state['fae']['bargains'][0]['status']);
+        $this->assertTrue($room->state['players'][$promise]['alive']); // A vote is enough, no banishment required.
+        $this->assertSame(2, $room->state['players'][$recipient]['fae_passage_day']);
+        $this->assertTrue($this->roomView($room, $recipient)['me']['fae_passage']);
+        $this->assertSame(1, $this->roomView($room, $broker)['fae']['seals']);
+        $this->assertSame('passage', $this->roomView($room, $recipient)['me']['results'][0]['kind']);
+        $this->assertArrayNotHasKey('fae_passage_day', collect($this->roomView($room, $promise)['players'])->firstWhere('id', $recipient));
+        $this->act($room, $recipient, 'night', ['target' => $promise]);
+        $this->act($room, $watcher, 'night', ['target' => $promise]);
+        $this->act($room, $tracker, 'night', ['target' => $recipient]);
+        $this->act($room, $promise, 'night', ['target' => $recipient]);
+        $this->expire($room);
+        $this->assertFalse($this->roomView($room, $watcher)['me']['results'][1]['visited']);
+        $this->assertNull($this->roomView($room, $tracker)['me']['results'][0]['visited_target']);
+        $this->assertSame('cult', $this->roomView($room, $promise)['me']['results'][0]['alignment']);
+        $this->assertNotNull($room->state['players'][$promise]['curse']); // The concealed visit still has its normal effect.
+        $this->expire($room);
+        $this->expire($room);
+        $this->expire($room);
+        $this->assertSame(3, $room->state['day']);
+        $this->assertFalse($this->roomView($room, $recipient)['me']['fae_passage']);
+        $this->act($room, $recipient, 'night', ['target' => $promise]);
+        $this->act($room, $watcher, 'night', ['target' => $promise]);
+        $this->act($room, $tracker, 'night', ['target' => $recipient]);
+        $this->expire($room);
+        $this->assertTrue($this->roomView($room, $watcher)['me']['results'][2]['visited']);
+        $this->assertSame($room->state['players'][$promise]['name'], $this->roomView($room, $tracker)['me']['results'][1]['visited_target']);
+    }
+
+    public function test_moonlit_passage_does_not_reward_declines_expiry_abstention_missing_or_wrong_votes(): void
+    {
+        foreach (['declined', 'expired', 'abstain', 'missed', 'different', 'redirected'] as $outcome) {
+            $room = $this->gathering();
+            $recipient = $this->role($room, 'veilweaver');
+            $promise = $this->role($room, 'oracle');
+            $offer = $this->offer($room, 'passage', $recipient, $promise);
+            if ($outcome !== 'expired') {
+                $this->act($room, $recipient, 'fae_response', ['bargain_id' => $offer, 'accept' => $outcome !== 'declined']);
+            }
+            $this->expire($room);
+            $this->expire($room);
+            if ($outcome === 'redirected') {
+                $s = $room->state;
+                $s['players'][$recipient]['curse'] = ['id' => (string) Str::uuid(), 'type' => 'misdirection', 'day' => 1, 'level' => 3, 'challenge' => null];
+                $room->update(['state' => $s]);
+            }
+            if ($outcome !== 'missed') {
+                $target = match ($outcome) {
+                    'abstain' => null,
+                    'different' => $this->role($room, 'warden'),
+                    default => $promise,
+                };
+                $this->act($room, $recipient, 'vote', ['target' => $target]);
+            }
+            $this->expire($room);
+            $this->assertSame(in_array($outcome, ['declined', 'expired']) ? $outcome : 'broken', $room->state['fae']['bargains'][0]['status']);
+            $this->assertArrayNotHasKey('fae_passage_day', $room->state['players'][$recipient]);
+            $this->assertEmpty($this->roomView($room, $recipient)['me']['results']);
+            $this->assertSame(0, $this->roomView($room, $recipient)['fae']['seals']);
+        }
+    }
+
+    public function test_inactive_fae_blocks_new_games_but_preserves_started_matches_and_can_be_reactivated(): void
+    {
+        $room = $this->gathering(false);
+        config(['factions.fae-court.active' => false]);
+        $this->assertFalse(FaeCourt::available($room->state));
+        $view = $this->roomView($room, $room->state['host_id']);
+        $this->assertFalse($view['expansions']['fae_court']['active']);
+        $this->assertStringContainsString('inactive', $view['mode_preview']['error']);
+        $this->reject(fn () => $this->act($room, $room->state['host_id'], 'start'));
+        $this->reject(fn () => $this->act($room, $room->state['host_id'], 'configure_mode', ['setup' => ['fae_court' => true]]));
+        $this->reject(fn () => $this->engine->create('inactive-guest', 'Guest', setup: ['fae_court' => true]));
+        config(['factions.fae-court.active' => true]);
+        $this->act($room, $room->state['host_id'], 'start');
+        config(['factions.fae-court.active' => false]);
+        $this->expire($room);
+        $recipient = $this->role($room, 'oracle');
+        $promise = $this->role($room, 'warden');
+        $this->reject(fn () => $this->act($room, $this->role($room, 'fae_broker'), 'night', ['target' => $recipient, 'bargain_kind' => 'lantern', 'promise_target' => $promise]));
+        $offer = $this->offer($room, 'passage', $recipient, $promise);
+        $this->act($room, $recipient, 'fae_response', ['bargain_id' => $offer, 'accept' => true]);
+        $this->assertSame('accepted', $room->fresh()->state['fae']['bargains'][0]['status']);
+        $this->assertDatabaseHas('paid_orders', ['id' => $this->order->id, 'status' => 'paid']);
     }
 }

@@ -29,6 +29,9 @@ class GameModes
         $classic = $input['classic_variant'] ?? 'classic';
         $chaos = $input['chaos_variant'] ?? 'wildcards';
         $fae = $input['fae_court'] ?? false;
+        $expansion = $input['expansion'] ?? null;
+        $this->ensure($expansion === null || (is_string($expansion) && in_array($expansion, FactionExpansions::ADDITIONAL, true)), 'Choose a known faction expansion.');
+        $this->ensure($expansion === null || ($mode === 'classic' && ! $fae), 'Choose one faction expansion in Classic or Classic Illusions.');
         $this->ensure(is_bool($fae), 'Choose whether to enable the Fae Court.');
         $this->ensure(! $fae || $mode === 'classic', 'The Fae Court currently supports Classic and Classic Illusions.');
         $this->ensure(in_array($mode, ['classic', 'hard', 'chaos', 'paranoia', 'custom'], true), 'Choose a valid mode.');
@@ -41,6 +44,7 @@ class GameModes
             foreach ($selected as $role => $count) {
                 $this->ensure(isset(config('game.role_alignments')[$role]), 'Choose a known role.');
                 $this->ensure($role !== 'fae_broker', 'Enable the Fae Court expansion in Classic to include the Broker.');
+                $this->ensure(in_array(config('game.role_alignments')[$role], ['town', 'cult'], true), 'Paid faction roles must be enabled through their room expansion.');
                 $this->ensure(is_int($count) && $count >= 0 && $count <= config('game.max_players'), 'Role counts must be whole numbers between 0 and '.config('game.max_players').'.');
                 if ($count > 0) {
                     $roles[$role] = $count;
@@ -53,7 +57,7 @@ class GameModes
             ksort($roles);
         }
 
-        return ['mode' => $mode, 'classic_variant' => $classic, 'chaos_variant' => $chaos, 'roles' => $roles, 'fae_court' => $fae];
+        return ['mode' => $mode, 'classic_variant' => $classic, 'chaos_variant' => $chaos, 'roles' => $roles, 'fae_court' => $fae, 'expansion' => $expansion];
     }
 
     /** @param array<string, mixed> $state
@@ -69,6 +73,20 @@ class GameModes
      */
     public function roster(array $setup, int $count): array
     {
+        if (isset($setup['expansion'])) {
+            $this->ensure(in_array($setup['expansion'], FactionExpansions::ADDITIONAL, true), 'Choose a known faction expansion.');
+            $rules = config('factions.'.$setup['expansion']);
+            $this->ensure($setup['mode'] === 'classic' && ! ($setup['fae_court'] ?? false) && $count >= $rules['min_players'],
+                $rules['name'].' needs '.$rules['min_players'].' or more players in Classic or Classic Illusions, with one expansion selected.');
+            $roles = $this->roster([...$setup, 'expansion' => null], $count);
+            foreach ($rules['roles'] as $index => $role) {
+                $seat = array_search($rules['replace'][$index], $roles, true);
+                $this->ensure($seat !== false, 'This roster has no room for '.$rules['name'].'.');
+                $roles[$seat] = $role;
+            }
+
+            return array_values($roles);
+        }
         if ($setup['fae_court'] ?? false) {
             $this->ensure($setup['mode'] === 'classic' && $count >= config('fae.min_players'), 'The Fae Court needs at least '.config('fae.min_players').' players in Classic.');
             $roles = $this->roster([...$setup, 'fae_court' => false], $count);
@@ -76,6 +94,12 @@ class GameModes
             $index = array_search('townsperson', $roles, true);
             $this->ensure($index !== false, 'This roster has no Townsperson seat for the Fae Court.');
             $roles[$index] = 'fae_broker';
+            $cultSeat = array_search('acolyte', $roles, true);
+            if ($cultSeat === false) {
+                $cultSeat = array_search('dreamweaver', $roles, true);
+            }
+            $this->ensure($cultSeat !== false, 'This roster has no spare Cult seat for the Collector.');
+            $roles[$cultSeat] = 'fae_collector';
 
             return array_values($roles);
         }

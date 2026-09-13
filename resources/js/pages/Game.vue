@@ -30,9 +30,12 @@ import {
 import RoomEntry from '@/components/chanting/RoomEntry.vue';
 import RoomSessionControls from '@/components/chanting/RoomSessionControls.vue';
 import ModeSelector from '@/components/chanting/ModeSelector.vue';
+import ExpansionActions from '@/components/chanting/ExpansionActions.vue';
+import ExpansionPanel from '@/components/chanting/ExpansionPanel.vue';
+import { expansionTargets, isExpansionRole } from '@/lib/expansions';
 import FaeOffer from '@/components/chanting/FaeOffer.vue';
 import FaeCourtPanel from '@/components/chanting/FaeCourtPanel.vue';
-import type { BargainKind } from '@/lib/faeCourt';
+import { faeRecipients, type BargainKind } from '@/lib/faeCourt';
 import {
     chaosEvents,
     copyModeSetup,
@@ -181,6 +184,40 @@ const pending = ref(false);
 const disconnected = ref(false);
 const live = ref(false);
 const target = ref<string | null>(null);
+const expansionAction = ref('');
+const secondaryTarget = ref<string | null>(null);
+const relicId = ref<string | null>(null);
+const selectedExpansionChoice = computed(() =>
+    state.value?.expansion?.night_choices.find(
+        (choice) => choice.id === expansionAction.value,
+    ),
+);
+watch(expansionAction, () => {
+    target.value = null;
+    secondaryTarget.value = null;
+    relicId.value = null;
+    useAbility.value = false;
+});
+const invalidExpansionAction = computed(() => {
+    if (state.value?.phase !== 'night' || !expansionAction.value) return false;
+    const choice = selectedExpansionChoice.value;
+    return (
+        !choice ||
+        (choice.target !== 'none' &&
+            (state.value.me.curse?.type === 'misdirection' ||
+                !expansionTargets(state.value, choice).some(
+                    (p) => p.id === target.value,
+                ))) ||
+        (choice.secondary &&
+            (!secondaryTarget.value ||
+                secondaryTarget.value === target.value ||
+                !state.value.players.some(
+                    (p) => p.id === secondaryTarget.value && p.alive,
+                ))) ||
+        (choice.relic && !relicId.value)
+    );
+});
+const renewalId = ref<string | null>(null);
 const bargainKind = ref<BargainKind>('thorn');
 const promiseTarget = ref<string | null>(null);
 const giftTarget = ref<string | null>(null);
@@ -190,18 +227,27 @@ watch(
         promiseTarget.value = null;
         giftTarget.value = null;
         bargainKind.value = 'thorn';
+        renewalId.value = null;
+        expansionAction.value = '';
+        secondaryTarget.value = null;
+        relicId.value = null;
     },
 );
 const invalidBargain = computed(
     () =>
         state.value?.phase === 'night' &&
-        state.value.me.role === 'fae_broker' &&
+        ['fae_broker', 'fae_collector'].includes(state.value.me.role ?? '') &&
         !!target.value &&
-        ((bargainKind.value !== 'voice' &&
-            (!promiseTarget.value || promiseTarget.value === target.value)) ||
-            (bargainKind.value === 'voice' &&
-                (!giftTarget.value || giftTarget.value === target.value)) ||
-            state.value.me.curse?.type === 'misdirection'),
+        (state.value.me.role === 'fae_collector'
+            ? !faeRecipients(state.value, renewalId.value).some(
+                  (p) => p.id === target.value,
+              ) || state.value.me.curse?.type === 'misdirection'
+            : (bargainKind.value !== 'voice' &&
+                  (!promiseTarget.value ||
+                      promiseTarget.value === target.value)) ||
+              (bargainKind.value === 'voice' &&
+                  (!giftTarget.value || giftTarget.value === target.value)) ||
+              state.value.me.curse?.type === 'misdirection'),
 );
 const inspectedPlayerId = ref<string | null>(null);
 const useAbility = ref(false);
@@ -306,6 +352,9 @@ const currentConsequence = computed(() =>
               useAbility: useAbility.value,
               curse: selectedCurse.value,
               forgedAlignment: forgedAlignment.value,
+              expansionAction: expansionAction.value,
+              secondaryTarget: secondaryTarget.value,
+              relicId: relicId.value,
           })
         : '',
 );
@@ -342,6 +391,7 @@ const dockDisabled = computed(
         disconnected.value ||
         seconds.value === 0 ||
         invalidBargain.value ||
+        invalidExpansionAction.value ||
         puzzleCursed.value ||
         mistCursed.value ||
         (state.value?.phase === 'reveal' && !roleRead.value) ||
@@ -375,7 +425,21 @@ const dockTitle = computed(() => {
 });
 async function confirmDock() {
     if (dockDisabled.value || !state.value || state.value.me.submitted) return;
-    if (state.value.phase === 'night')
+    if (state.value.phase === 'night' && selectedExpansionChoice.value)
+        await act('night', {
+            target:
+                selectedExpansionChoice.value.target === 'none'
+                    ? null
+                    : target.value,
+            expansion_action: expansionAction.value,
+            secondary_target: selectedExpansionChoice.value.secondary
+                ? secondaryTarget.value
+                : null,
+            relic_id: selectedExpansionChoice.value.relic
+                ? relicId.value
+                : null,
+        });
+    else if (state.value.phase === 'night')
         await act('night', {
             target: target.value,
             use_ability: useAbility.value,
@@ -391,6 +455,9 @@ async function confirmDock() {
                               ? giftTarget.value
                               : null,
                   }
+                : {}),
+            ...(state.value.me.role === 'fae_collector' && target.value
+                ? { renewal_id: renewalId.value }
                 : {}),
             ...(useAbility.value && state.value.me.role === 'counterfeiter'
                 ? { forged_alignment: forgedAlignment.value }
@@ -618,7 +685,14 @@ const lobbyRoster = computed(() => {
     };
 });
 const targets = computed(() =>
-    state.value ? eligibleTargets(state.value, useAbility.value) : [],
+    state.value
+        ? state.value.phase === 'night' && selectedExpansionChoice.value
+            ? expansionTargets(state.value, selectedExpansionChoice.value)
+            : state.value.phase === 'night' &&
+                state.value.me.alignment === 'fae'
+              ? faeRecipients(state.value, renewalId.value)
+              : eligibleTargets(state.value, useAbility.value)
+        : [],
 );
 const canChat = computed(
     () =>
@@ -687,8 +761,29 @@ const tableDisplay = computed(() => {
 const requiresTarget = computed(
     () =>
         state.value?.phase === 'night' &&
-        (['lamplighter', 'tracker'].includes(state.value.me.role ?? '') ||
+        (selectedExpansionChoice.value
+            ? selectedExpansionChoice.value.target !== 'none'
+            : ['lamplighter', 'tracker'].includes(state.value.me.role ?? '') ||
+              (useAbility.value &&
+                  [
+                      'vigilante',
+                      'oracle',
+                      'medium',
+                      'dreamweaver',
+                      'phantasm',
+                      'counterfeiter',
+                  ].includes(state.value.me.role ?? ''))),
+);
+const canChooseNightTarget = computed(
+    () =>
+        !expansionAction.value &&
+        (state.value?.me.role === 'warden' ||
+            state.value?.me.role === 'lamplighter' ||
+            state.value?.me.role === 'tracker' ||
+            state.value?.me.role === 'veilweaver' ||
+            state.value?.me.role === 'acolyte' ||
             (useAbility.value &&
+                !state.value?.me.ability_used &&
                 [
                     'vigilante',
                     'oracle',
@@ -696,25 +791,7 @@ const requiresTarget = computed(
                     'dreamweaver',
                     'phantasm',
                     'counterfeiter',
-                ].includes(state.value.me.role ?? ''))),
-);
-const canChooseNightTarget = computed(
-    () =>
-        state.value?.me.role === 'warden' ||
-        state.value?.me.role === 'lamplighter' ||
-        state.value?.me.role === 'tracker' ||
-        state.value?.me.role === 'veilweaver' ||
-        state.value?.me.role === 'acolyte' ||
-        (useAbility.value &&
-            !state.value?.me.ability_used &&
-            [
-                'vigilante',
-                'oracle',
-                'medium',
-                'dreamweaver',
-                'phantasm',
-                'counterfeiter',
-            ].includes(state.value?.me.role ?? '')),
+                ].includes(state.value?.me.role ?? ''))),
 );
 const puzzleCursed = computed(
     () =>
@@ -740,7 +817,9 @@ const canSelectSeat = computed(
         (state.value.phase === 'voting' ||
             (state.value.phase === 'night' &&
                 revealed.value &&
-                canChooseNightTarget.value)),
+                (selectedExpansionChoice.value
+                    ? selectedExpansionChoice.value.target !== 'none'
+                    : canChooseNightTarget.value))),
 );
 function selectSeat(id: string) {
     if (
@@ -753,7 +832,9 @@ function selectSeat(id: string) {
 }
 const nightLabel = computed(() =>
     state.value
-        ? nightActionLabel(state.value, useAbility.value, target.value)
+        ? selectedExpansionChoice.value
+            ? `Confirm ${selectedExpansionChoice.value.label.toLowerCase()}`
+            : nightActionLabel(state.value, useAbility.value, target.value)
         : '',
 );
 const selectedPlayer = computed(() =>
@@ -774,6 +855,11 @@ const turnBlocker = computed(() => {
     if (!state.value?.me.alive || state.value.me.submitted) return '';
     if (disconnected.value)
         return 'Reconnecting to the village. Please wait before confirming.';
+    if (invalidExpansionAction.value && revealed.value)
+        return state.value.me.curse?.type === 'misdirection' &&
+            selectedExpansionChoice.value?.target !== 'none'
+            ? 'Break Misdirection before choosing an expansion target, or select an action without a target.'
+            : 'Complete your expansion choice, including its player, destination or relic, before confirming.';
     if (invalidBargain.value && revealed.value)
         return state.value.me.curse?.type === 'misdirection'
             ? 'Break Misdirection before offering, or choose Keep watch.'
@@ -1088,12 +1174,15 @@ async function act(type: string, extra: object = {}) {
         use_ability?: boolean;
         curse_type?: string;
         forged_alignment?: string;
+        expansion_action?: string;
+        secondary_target?: string | null;
+        relic_id?: string | null;
     };
     const actionReceipt = ['night', 'vote'].includes(type)
         ? {
               match: submittedState.match_id,
               seat: submittedState.me.id,
-              text: `${type === 'night' ? 'Night' : 'Day'} ${submittedState.day} submitted choice confirmed: ${actionConsequence(submittedState, { target: fields.target ?? null, useAbility: fields.use_ability ?? false, curse: fields.curse_type ?? 'puzzle', forgedAlignment: fields.forged_alignment ?? 'cult' })}`,
+              text: `${type === 'night' ? 'Night' : 'Day'} ${submittedState.day} submitted choice confirmed: ${actionConsequence(submittedState, { target: fields.target ?? null, useAbility: fields.use_ability ?? false, curse: fields.curse_type ?? 'puzzle', forgedAlignment: fields.forged_alignment ?? 'cult', expansionAction: fields.expansion_action, secondaryTarget: fields.secondary_target, relicId: fields.relic_id })}`,
           }
         : ['exorcise', 'oath'].includes(type)
           ? {
@@ -1559,6 +1648,11 @@ onBeforeUnmount(() => {
                         </RoomBriefing>
                     </template>
                     <template #actions>
+                        <ExpansionPanel
+                            v-if="state.phase !== 'finished'"
+                            :state="state"
+                            :revealed="privateVisible"
+                        />
                         <FaeCourtPanel
                             v-if="state.phase !== 'finished'"
                             :state="state"
@@ -1686,138 +1780,283 @@ onBeforeUnmount(() => {
                                     "
                                     class="game-panel action-panel"
                                 >
-                                    <FaeOffer
-                                        v-if="state.me.role === 'fae_broker'"
+                                    <ExpansionActions
+                                        v-if="
+                                            privateVisible &&
+                                            state.expansion?.night_choices
+                                                .length
+                                        "
+                                        v-model:action="expansionAction"
                                         v-model:target="target"
-                                        v-model:kind="bargainKind"
-                                        v-model:promise="promiseTarget"
-                                        v-model:gift="giftTarget"
+                                        v-model:secondary="secondaryTarget"
+                                        v-model:relic="relicId"
                                         :state="state"
-                                        :disabled="pending || disconnected"
+                                        :disabled="
+                                            pending ||
+                                            disconnected ||
+                                            puzzleCursed ||
+                                            mistCursed ||
+                                            seconds === 0
+                                        "
                                     />
-                                    <p>
-                                        {{
-                                            state.me.role === 'oracle'
-                                                ? 'Once per match, investigate a living player. Enable your ability tonight or keep watch to save it. Your private reading arrives at dawn.'
-                                                : state.me.role === 'warden' ||
-                                                    state.me.role ===
-                                                        'lamplighter' ||
-                                                    state.me.role ===
-                                                        'tracker' ||
-                                                    limitedAbility ||
-                                                    [
-                                                        'exorcist',
-                                                        'fae_broker',
-                                                        'oathkeeper',
-                                                    ].includes(
-                                                        state.me.role ?? '',
-                                                    )
-                                                  ? roles[state.me.role ?? '']
-                                                        ?.description
-                                                  : state.me.role ===
-                                                      'veilweaver'
-                                                    ? 'Choose someone, including yourself, to veil and curse, or chant without a target. Their alignment appears reversed tonight; your chosen curse takes hold at dawn. You chant either way.'
-                                                    : state.me.role ===
-                                                        'acolyte'
-                                                      ? 'Choose someone, including yourself, and a curse, or chant without a target. Your chosen curse takes hold at dawn. Either way, your chant advances the ritual if your shared mission’s condition is met.'
-                                                      : 'Stay alert. You have no secret ability, but your voice and your vote matter in the morning.'
-                                        }}
-                                    </p>
                                     <p
                                         v-if="
-                                            state.me.role === 'warden' &&
-                                            state.me.previous_protection_target
+                                            privateVisible &&
+                                            isExpansionRole(state.me.role) &&
+                                            !expansionAction
                                         "
-                                        class="small-help"
                                     >
-                                        You protected
                                         {{
-                                            state.players.find(
-                                                (player) =>
-                                                    player.id ===
-                                                    state?.me
-                                                        .previous_protection_target,
-                                            )?.name
+                                            roles[state.me.role ?? '']
+                                                ?.description
                                         }}
-                                        last night. Choose someone else tonight,
-                                        or skip protection.
+                                        Choose an expansion action above, or
+                                        confirm to keep watch.
                                     </p>
-
-                                    <div
-                                        v-if="limitedAbility"
-                                        class="small-help"
+                                    <template
+                                        v-if="
+                                            !expansionAction &&
+                                            !isExpansionRole(state.me.role)
+                                        "
                                     >
+                                        <FaeOffer
+                                            v-if="
+                                                [
+                                                    'fae_broker',
+                                                    'fae_collector',
+                                                ].includes(state.me.role ?? '')
+                                            "
+                                            v-model:target="target"
+                                            v-model:kind="bargainKind"
+                                            v-model:promise="promiseTarget"
+                                            v-model:gift="giftTarget"
+                                            v-model:renewal="renewalId"
+                                            :state="state"
+                                            :disabled="pending || disconnected"
+                                        />
+                                        <p>
+                                            {{
+                                                state.me.role === 'oracle'
+                                                    ? 'Once per match, investigate a living player. Enable your ability tonight or keep watch to save it. Your private reading arrives at dawn.'
+                                                    : state.me.role ===
+                                                            'warden' ||
+                                                        state.me.role ===
+                                                            'lamplighter' ||
+                                                        state.me.role ===
+                                                            'tracker' ||
+                                                        limitedAbility ||
+                                                        [
+                                                            'exorcist',
+                                                            'fae_broker',
+                                                            'fae_collector',
+                                                            'oathkeeper',
+                                                        ].includes(
+                                                            state.me.role ?? '',
+                                                        )
+                                                      ? roles[
+                                                            state.me.role ?? ''
+                                                        ]?.description
+                                                      : state.me.role ===
+                                                          'veilweaver'
+                                                        ? 'Choose someone, including yourself, to veil and curse, or chant without a target. Their alignment appears reversed tonight; your chosen curse takes hold at dawn. You chant either way.'
+                                                        : state.me.role ===
+                                                            'acolyte'
+                                                          ? 'Choose someone, including yourself, and a curse, or chant without a target. Your chosen curse takes hold at dawn. Either way, your chant advances the ritual if your shared mission’s condition is met.'
+                                                          : 'Stay alert. You have no secret ability, but your voice and your vote matter in the morning.'
+                                            }}
+                                        </p>
                                         <p
                                             v-if="
-                                                state.me.role === 'vigilante' &&
-                                                !state.me.ability_used
+                                                state.me.role === 'warden' &&
+                                                state.me
+                                                    .previous_protection_target
                                             "
+                                            class="small-help"
                                         >
-                                            You have one shot. If your target is
-                                            not a cultist, you will also leave
-                                            the village with guilt.
-                                        </p>
-                                        <p v-if="state.me.ability_used">
-                                            Your once-per-match ability is
-                                            spent. You can still
+                                            You protected
                                             {{
-                                                state.me.alignment === 'cult'
-                                                    ? 'chant'
-                                                    : 'keep watch'
-                                            }}.
+                                                state.players.find(
+                                                    (player) =>
+                                                        player.id ===
+                                                        state?.me
+                                                            .previous_protection_target,
+                                                )?.name
+                                            }}
+                                            last night. Choose someone else
+                                            tonight, or skip protection.
                                         </p>
-                                        <template v-else>
-                                            <label class="quiet-link">
-                                                <input
-                                                    type="checkbox"
-                                                    v-model="useAbility"
-                                                    :disabled="
-                                                        pending ||
-                                                        disconnected ||
-                                                        puzzleCursed ||
-                                                        mistCursed ||
-                                                        (state.me.role ===
-                                                            'medium' &&
-                                                            !state.players.some(
-                                                                (player) =>
-                                                                    !player.alive,
-                                                            ))
-                                                    "
-                                                />
-                                                Use my once-per-match ability
-                                                tonight
-                                            </label>
+
+                                        <div
+                                            v-if="limitedAbility"
+                                            class="small-help"
+                                        >
                                             <p
                                                 v-if="
                                                     state.me.role ===
-                                                        'medium' &&
-                                                    !state.players.some(
-                                                        (player) =>
-                                                            !player.alive,
-                                                    )
+                                                        'vigilante' &&
+                                                    !state.me.ability_used
                                                 "
                                             >
-                                                Nobody has been banished yet.
-                                                Keep watch to save your ability.
+                                                You have one shot. If your
+                                                target is not a cultist, you
+                                                will also leave the village with
+                                                guilt.
                                             </p>
-                                            <p v-else>
-                                                Leave this unchecked to save it.
-                                                Confirming its use spends it
-                                                even if your action is
-                                                disrupted.
+                                            <p v-if="state.me.ability_used">
+                                                Your once-per-match ability is
+                                                spent. You can still
+                                                {{
+                                                    state.me.alignment ===
+                                                    'cult'
+                                                        ? 'chant'
+                                                        : 'keep watch'
+                                                }}.
                                             </p>
-                                        </template>
-                                    </div>
-                                    <label
-                                        v-if="
-                                            useAbility &&
-                                            state.me.role === 'counterfeiter'
-                                        "
-                                        class="small-help"
-                                    >
-                                        Forged Oracle reading
-                                        <select
-                                            v-model="forgedAlignment"
+                                            <template v-else>
+                                                <label class="quiet-link">
+                                                    <input
+                                                        type="checkbox"
+                                                        v-model="useAbility"
+                                                        :disabled="
+                                                            pending ||
+                                                            disconnected ||
+                                                            puzzleCursed ||
+                                                            mistCursed ||
+                                                            (state.me.role ===
+                                                                'medium' &&
+                                                                !state.players.some(
+                                                                    (player) =>
+                                                                        !player.alive,
+                                                                ))
+                                                        "
+                                                    />
+                                                    Use my once-per-match
+                                                    ability tonight
+                                                </label>
+                                                <p
+                                                    v-if="
+                                                        state.me.role ===
+                                                            'medium' &&
+                                                        !state.players.some(
+                                                            (player) =>
+                                                                !player.alive,
+                                                        )
+                                                    "
+                                                >
+                                                    Nobody has been banished
+                                                    yet. Keep watch to save your
+                                                    ability.
+                                                </p>
+                                                <p v-else>
+                                                    Leave this unchecked to save
+                                                    it. Confirming its use
+                                                    spends it even if your
+                                                    action is disrupted.
+                                                </p>
+                                            </template>
+                                        </div>
+                                        <label
+                                            v-if="
+                                                useAbility &&
+                                                state.me.role ===
+                                                    'counterfeiter'
+                                            "
+                                            class="small-help"
+                                        >
+                                            Forged Oracle reading
+                                            <select
+                                                v-model="forgedAlignment"
+                                                :disabled="
+                                                    pending ||
+                                                    disconnected ||
+                                                    puzzleCursed ||
+                                                    mistCursed
+                                                "
+                                            >
+                                                <option value="cult">
+                                                    Make the target appear cult
+                                                </option>
+                                                <option value="town">
+                                                    Make the target appear town
+                                                </option>
+                                            </select>
+                                        </label>
+                                        <div
+                                            v-if="canChooseNightTarget"
+                                            class="target-list player-target-list"
+                                            role="group"
+                                            aria-label="Night target"
+                                        >
+                                            <button
+                                                v-for="player in targets"
+                                                :key="player.id"
+                                                class="target-button"
+                                                :class="{
+                                                    selected:
+                                                        target === player.id,
+                                                }"
+                                                :aria-pressed="
+                                                    target === player.id
+                                                "
+                                                :disabled="
+                                                    pending ||
+                                                    puzzleCursed ||
+                                                    mistCursed ||
+                                                    disconnected
+                                                "
+                                                @click="selectSeat(player.id)"
+                                            >
+                                                <CharacterPortrait
+                                                    :character="
+                                                        player.character
+                                                    "
+                                                    :creator="
+                                                        player.customization
+                                                            ?.creator
+                                                    "
+                                                    :frame="
+                                                        player.customization
+                                                            ?.frame
+                                                    "
+                                                    :accent="
+                                                        player.customization
+                                                            ?.accent
+                                                    "
+                                                    :background="
+                                                        player.customization
+                                                            ?.background
+                                                    "
+                                                    decorative
+                                                />
+                                                <Check
+                                                    v-if="target === player.id"
+                                                    :size="15"
+                                                /><Circle
+                                                    v-else
+                                                    :size="15"
+                                                /><span>{{
+                                                    player.name
+                                                }}</span></button
+                                            ><button
+                                                v-if="!requiresTarget"
+                                                class="target-button"
+                                                :class="{
+                                                    selected: target === null,
+                                                }"
+                                                :aria-pressed="target === null"
+                                                :disabled="!canSelectSeat"
+                                                @click="target = null"
+                                            >
+                                                <Moon :size="15" /><span>{{
+                                                    state.me.role === 'warden'
+                                                        ? 'Nobody (skip protection)'
+                                                        : 'Chant without a target'
+                                                }}</span>
+                                            </button>
+                                        </div>
+                                        <fieldset
+                                            v-if="canCurse && target"
+                                            class="curse-picker"
                                             :disabled="
                                                 pending ||
                                                 disconnected ||
@@ -1825,132 +2064,50 @@ onBeforeUnmount(() => {
                                                 mistCursed
                                             "
                                         >
-                                            <option value="cult">
-                                                Make the target appear cult
-                                            </option>
-                                            <option value="town">
-                                                Make the target appear town
-                                            </option>
-                                        </select>
-                                    </label>
-                                    <div
-                                        v-if="canChooseNightTarget"
-                                        class="target-list player-target-list"
-                                        role="group"
-                                        aria-label="Night target"
-                                    >
-                                        <button
-                                            v-for="player in targets"
-                                            :key="player.id"
-                                            class="target-button"
-                                            :class="{
-                                                selected: target === player.id,
-                                            }"
-                                            :aria-pressed="target === player.id"
-                                            :disabled="
-                                                pending ||
-                                                puzzleCursed ||
-                                                mistCursed ||
-                                                disconnected
-                                            "
-                                            @click="selectSeat(player.id)"
-                                        >
-                                            <CharacterPortrait
-                                                :character="player.character"
-                                                :creator="
-                                                    player.customization
-                                                        ?.creator
-                                                "
-                                                :frame="
-                                                    player.customization?.frame
-                                                "
-                                                :accent="
-                                                    player.customization?.accent
-                                                "
-                                                :background="
-                                                    player.customization
-                                                        ?.background
-                                                "
-                                                decorative
-                                            />
-                                            <Check
-                                                v-if="target === player.id"
-                                                :size="15"
-                                            /><Circle
-                                                v-else
-                                                :size="15"
-                                            /><span>{{
-                                                player.name
-                                            }}</span></button
-                                        ><button
-                                            v-if="!requiresTarget"
-                                            class="target-button"
-                                            :class="{
-                                                selected: target === null,
-                                            }"
-                                            :aria-pressed="target === null"
-                                            :disabled="!canSelectSeat"
-                                            @click="target = null"
-                                        >
-                                            <Moon :size="15" /><span>{{
-                                                state.me.role === 'warden'
-                                                    ? 'Nobody (skip protection)'
-                                                    : 'Chant without a target'
-                                            }}</span>
-                                        </button>
-                                    </div>
-                                    <fieldset
-                                        v-if="canCurse && target"
-                                        class="curse-picker"
-                                        :disabled="
-                                            pending ||
-                                            disconnected ||
-                                            puzzleCursed ||
-                                            mistCursed
-                                        "
-                                    >
-                                        <legend>Choose a curse</legend>
-                                        <div class="target-list">
-                                            <label
-                                                v-for="choice in curseChoices"
-                                                :key="choice.type"
-                                                class="target-button"
-                                                :class="{
-                                                    selected:
-                                                        selectedCurse ===
-                                                        choice.type,
-                                                }"
-                                            >
-                                                <input
-                                                    v-model="selectedCurse"
-                                                    type="radio"
-                                                    name="curse-type"
-                                                    :value="choice.type"
-                                                    :disabled="
-                                                        choice.type ===
-                                                            'misdirection' &&
-                                                        state.ritual.level < 3
-                                                    "
-                                                />
-                                                <span
-                                                    >{{ choice.label
-                                                    }}<small>{{
-                                                        choice.type ===
-                                                            'misdirection' &&
-                                                        state.ritual.level < 3
-                                                            ? 'Unlocks at ritual level 3'
-                                                            : choice.description
-                                                    }}</small></span
+                                            <legend>Choose a curse</legend>
+                                            <div class="target-list">
+                                                <label
+                                                    v-for="choice in curseChoices"
+                                                    :key="choice.type"
+                                                    class="target-button"
+                                                    :class="{
+                                                        selected:
+                                                            selectedCurse ===
+                                                            choice.type,
+                                                    }"
                                                 >
-                                            </label>
-                                        </div>
-                                        <p class="small-help">
-                                            You chant and curse in the same
-                                            action. The curse takes hold at
-                                            dawn.
-                                        </p>
-                                    </fieldset>
-
+                                                    <input
+                                                        v-model="selectedCurse"
+                                                        type="radio"
+                                                        name="curse-type"
+                                                        :value="choice.type"
+                                                        :disabled="
+                                                            choice.type ===
+                                                                'misdirection' &&
+                                                            state.ritual.level <
+                                                                3
+                                                        "
+                                                    />
+                                                    <span
+                                                        >{{ choice.label
+                                                        }}<small>{{
+                                                            choice.type ===
+                                                                'misdirection' &&
+                                                            state.ritual.level <
+                                                                3
+                                                                ? 'Unlocks at ritual level 3'
+                                                                : choice.description
+                                                        }}</small></span
+                                                    >
+                                                </label>
+                                            </div>
+                                            <p class="small-help">
+                                                You chant and curse in the same
+                                                action. The curse takes hold at
+                                                dawn.
+                                            </p>
+                                        </fieldset>
+                                    </template>
                                     <p
                                         v-if="puzzleCursed"
                                         id="night-curse-help"
@@ -2575,12 +2732,16 @@ onBeforeUnmount(() => {
                                 class="lobby-mode-editor"
                             >
                                 <ModeSelector
+                                    :expansion-catalog="state.expansion_catalog"
                                     v-model="modeDraft"
                                     :disabled="pending || disconnected"
                                     :min-players="state.rules.min_players"
                                     :max-players="state.rules.max_players"
                                     :fae-available="
                                         state.expansions?.fae_court.available
+                                    "
+                                    :fae-active="
+                                        state.expansions?.fae_court.active
                                     "
                                     :fae-min-players="
                                         state.expansions?.fae_court.min_players

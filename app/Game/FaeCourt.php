@@ -12,6 +12,9 @@ class FaeCourt
     /** @param array<string, mixed> $state */
     public static function available(array $state): bool
     {
+        if (! FactionExpansions::active('fae-court')) {
+            return false;
+        }
         $accounts = array_values(array_filter(array_column($state['players'], 'user_id')));
 
         return $accounts !== [] && PaidOrder::whereIn('user_id', User::whereIn('id', $accounts)->whereNotNull('email_verified_at')->select('id'))
@@ -24,32 +27,52 @@ class FaeCourt
         if (! ($state['mode_setup']['fae_court'] ?? false)) {
             return;
         }
+        self::ensure(FactionExpansions::active('fae-court'), 'The Fae Court expansion is currently inactive.');
         self::ensure(self::available($state), 'The Fae Court needs one seated player who owns the expansion.');
         $state['fae'] = ['rules' => config('fae'), 'bargains' => []];
     }
 
     /** @param array<string, mixed> $state
      * @param  array<string, mixed>  $action
+     * @return array<string,mixed>
      */
-    public static function validateOffer(array $state, string $id, array $action): void
+    public static function validateOffer(array $state, string $id, array $action): array
     {
+        $renewal = $action['renewal_id'] ?? null;
+        $collector = $state['players'][$id]['role'] === 'fae_collector';
+        if ($collector && $renewal !== null) {
+            self::ensure(! ($state['players'][$id]['collector_used'] ?? false), 'Your renewal has already been spent.');
+            self::ensure(($action['bargain_kind'] ?? null) === null && ($action['promise_target'] ?? null) === null && ($action['gift_target'] ?? null) === null, 'A renewed bargain keeps its original terms.');
+            $original = collect(self::renewable($state))->firstWhere('id', $renewal);
+            self::ensure($original !== null, 'Choose a failed bargain from an earlier night.');
+            self::ensure(($action['target'] ?? null) !== null && $action['target'] !== $original['recipient_id'], 'Renew the bargain with a different player.');
+            $action['bargain_kind'] = $original['kind'];
+            $action['promise_target'] = $original['promise_target'];
+            $action['gift_target'] = $original['gift_target'] ?? null;
+        } else {
+            self::ensure($renewal === null, 'Only the Collector can renew a bargain.');
+            self::ensure(! $collector || ($action['target'] ?? null) === null, 'Choose a failed bargain to renew, or keep watch.');
+        }
         $target = $action['target'] ?? null;
         $kind = $action['bargain_kind'] ?? null;
         $promise = $action['promise_target'] ?? null;
         $gift = $action['gift_target'] ?? null;
-        if ($state['players'][$id]['role'] !== 'fae_broker') {
+        if (! in_array($state['players'][$id]['role'], ['fae_broker', 'fae_collector'], true)) {
             self::ensure($kind === null && $promise === null && $gift === null, 'Only the Fae Broker can offer a bargain.');
 
-            return;
+            return $action;
         }
         self::ensure(isset($state['fae']), 'This match does not include the Fae Court.');
         if ($target === null) {
             self::ensure($kind === null && $promise === null && $gift === null, 'Choose a recipient for your bargain.');
 
-            return;
+            return $action;
         }
-        self::ensure(in_array($kind, ['thorn', 'voice', 'lantern'], true), 'Choose a bargain.');
+        self::ensure(in_array($kind, ['thorn', 'voice', 'passage'], true), 'Choose a bargain.');
         self::ensure(($state['players'][$target]['alignment'] ?? null) !== 'fae', 'Choose a player outside the Court.');
+        foreach ($state['actions'] as $actor => $submitted) {
+            self::ensure(! in_array($state['players'][$actor]['role'], ['fae_broker', 'fae_collector'], true) || ($submitted['target'] ?? null) !== $target, 'Your teammate already chose that recipient tonight. Choose another player.');
+        }
         // A partner who has already earned a seal cannot be farmed for another.
         foreach ($state['fae']['bargains'] as $bargain) {
             self::ensure($bargain['recipient_id'] !== $target || $bargain['status'] !== 'fulfilled', 'That partner has already earned the Court a seal.');
@@ -61,6 +84,22 @@ class FaeCourt
             self::ensure($gift === null, 'Only A Borrowed Voice can offer a ballot report.');
             self::ensure($promise !== $target && isset($state['players'][$promise]) && $state['players'][$promise]['alive'], 'Choose a living player other than the recipient for the promise.');
         }
+
+        return $action;
+    }
+
+    /** @param array<string,mixed> $state
+     * @return list<array<string,mixed>>
+     */
+    private static function renewable(array $state): array
+    {
+        return array_values(array_filter($state['fae']['bargains'] ?? [], function (array $b) use ($state): bool {
+            return $b['day'] < $state['day'] && in_array($b['status'], ['broken', 'declined', 'expired'], true)
+                && in_array($b['kind'], ['thorn', 'voice', 'passage'], true)
+                && ($b['kind'] === 'voice'
+                    ? isset($b['gift_target']) && $state['players'][$b['gift_target']]['alive']
+                    : $state['players'][$b['promise_target']]['alive']);
+        }));
     }
 
     /** Resolve offers only after disruptions and night departures, before the private response window.
@@ -75,7 +114,7 @@ class FaeCourt
         }
         foreach ($effective as $id => $action) {
             $target = $action['target'] ?? null;
-            if ($state['players'][$id]['role'] !== 'fae_broker' || $target === null) {
+            if (! in_array($state['players'][$id]['role'], ['fae_broker', 'fae_collector'], true) || $target === null) {
                 continue;
             }
             $promise = $action['promise_target'] ?? null;
@@ -89,7 +128,7 @@ class FaeCourt
                 }
             }
             $state['fae']['bargains'][] = ['id' => (string) Str::uuid(), 'day' => $state['day'], 'sender_id' => $id,
-                'recipient_id' => $target, 'kind' => $action['bargain_kind'], 'promise_target' => $promise, 'gift_target' => $gift,
+                'renewal_id' => $action['renewal_id'] ?? null, 'recipient_id' => $target, 'kind' => $action['bargain_kind'], 'promise_target' => $promise, 'gift_target' => $gift,
                 'status' => $valid ? 'offered' : 'void', 'visited' => $visited];
         }
     }
@@ -148,7 +187,7 @@ class FaeCourt
             $id = $bargain['recipient_id'];
             $ballot = $state['actions'][$id] ?? null;
             $kept = match ($bargain['kind']) {
-                'thorn' => ($ballot['type'] ?? null) === 'vote' && ($ballot['target'] ?? null) === $bargain['promise_target'],
+                'thorn', 'passage' => ($ballot['type'] ?? null) === 'vote' && ($ballot['target'] ?? null) === $bargain['promise_target'],
                 'voice' => ($ballot['type'] ?? null) === 'vote' && ($ballot['target'] ?? null) === null,
                 'lantern' => array_filter($state['rounds'][$state['day']]['last_words']['accusations'] ?? [],
                     fn (array $accusation): bool => $accusation['player_id'] === $id && $accusation['target_id'] === $bargain['promise_target']) !== [],
@@ -166,6 +205,10 @@ class FaeCourt
                     'voted_for' => $votedFor === null ? null : $state['players'][$votedFor]['name']];
             }
             if ($kept) {
+                if ($bargain['kind'] === 'passage') {
+                    $state['players'][$id]['fae_passage_day'] = $state['day'] + 1;
+                    $state['players'][$id]['results'][] = ['kind' => 'passage', 'day' => $state['day'], 'target' => $state['players'][$id]['name']];
+                }
                 $state['log'][] = 'A bargain was fulfilled. The Fae Court earned a seal.';
             }
         }
@@ -220,13 +263,18 @@ class FaeCourt
             $public = array_intersect_key($bargain, array_flip(['id', 'day', 'recipient_id', 'kind', 'promise_target', 'gift_target', 'status']));
             if ($finished) {
                 $public['sender_id'] = $bargain['sender_id'];
+                $public['renewal_id'] = $bargain['renewal_id'] ?? null;
             }
             $bargains[] = $public;
         }
 
         return ['seals' => count(array_unique(array_column(self::fulfilled($state), 'recipient_id'))),
             'goal' => $state['fae']['rules']['seals_to_win'], 'minimum_rounds' => $state['fae']['rules']['rounds_to_win'],
-            'bargains' => $bargains];
+            'bargains' => $bargains,
+            ...($state['players'][$id]['role'] === 'fae_collector' ? [
+                'collector_used' => $state['players'][$id]['collector_used'] ?? false,
+                'renewable_ids' => ($state['players'][$id]['collector_used'] ?? false) ? [] : array_column(self::renewable($state), 'id'),
+            ] : [])];
     }
 
     private static function ensure(bool $condition, string $message): void

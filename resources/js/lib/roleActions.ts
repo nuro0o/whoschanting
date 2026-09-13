@@ -16,6 +16,9 @@ export function discussionActionTypes(
 }
 
 export function privateResultText(result: PrivateNightResult): string {
+    if (result.kind === 'expansion') return result.text;
+    if (result.kind === 'passage')
+        return `You kept your promised vote on day ${result.day}. Your outgoing visit on night ${result.day + 1} will be hidden from tracking. Other abilities still affect you normally.`;
     if (result.kind === 'ballot') {
         if (!result.submitted)
             return `${result.target} did not submit a ballot on day ${result.day}.`;
@@ -94,10 +97,15 @@ export function eligibleTargets(
         night && ['veilweaver', 'acolyte'].includes(state.me.role ?? '');
     return state.players.filter(
         (player) =>
+            !(
+                night &&
+                state.me.alignment === 'fae' &&
+                state.me.allies.some((ally) => ally.id === player.id)
+            ) &&
             player.alive !== deadTarget &&
             !(
                 night &&
-                state.me.role === 'fae_broker' &&
+                ['fae_broker', 'fae_collector'].includes(state.me.role ?? '') &&
                 state.fae?.bargains.some(
                     (bargain) =>
                         bargain.recipient_id === player.id &&
@@ -118,7 +126,7 @@ export function nightActionLabel(
     useAbility: boolean,
     target: string | null,
 ): string {
-    if (state.me.role === 'fae_broker')
+    if (['fae_broker', 'fae_collector'].includes(state.me.role ?? ''))
         return target ? 'Seal the anonymous offer' : 'Keep watch tonight';
     if (
         target === state.me.id &&

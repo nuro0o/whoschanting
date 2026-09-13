@@ -2,6 +2,7 @@
 import { computed } from 'vue';
 import { Check, Clock3, LockKeyhole } from '@lucide/vue';
 import type { RoomState } from '@/lib/chanting';
+import { victoryTitle } from '@/lib/expansions';
 import { usePanelMotion } from '@/composables/usePanelMotion';
 const panel = usePanelMotion();
 const props = defineProps<{
@@ -23,11 +24,7 @@ const step = computed(() => {
         ];
     if (phase === 'finished')
         return [
-            props.state.winners?.includes('fae')
-                ? `${props.state.winner === 'cult' ? 'The Cult' : 'The Town'} and Fae Court share victory.`
-                : props.state.winner === 'cult'
-                  ? 'The cult prevails.'
-                  : 'The town prevails.',
+            `${victoryTitle(props.state.winners, props.state.winner)}.`,
             props.state.win_reason ||
                 'Every role is now face-up around the table.',
         ];

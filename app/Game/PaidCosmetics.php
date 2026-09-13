@@ -9,7 +9,8 @@ class PaidCosmetics
     /** @return list<array<string,mixed>> */
     public function bundles(): array
     {
-        return config('payments.bundles', []);
+        return array_values(array_filter(config('payments.bundles', []),
+            fn (array $bundle): bool => ($bundle['kind'] ?? null) !== 'faction' || FactionExpansions::active($bundle['id'])));
     }
 
     /** @return list<array<string,mixed>> */

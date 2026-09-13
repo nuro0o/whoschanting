@@ -103,9 +103,13 @@ class GameController extends Controller
     {
         $data = $request->validate([
             'type' => ['required', 'string', 'in:ready,start,night,vote,chat,rematch,character,discussion_ready,solve_curse,roster,exorcise,oath,configure_mode,claim,discussion_response,prediction,transfer_host,remove_player,extend_discussion,feedback,accuse,defend,set_pin,fae_response'],
-            'bargain_kind' => ['nullable', 'string', 'in:thorn,voice,lantern'],
+            'bargain_kind' => ['nullable', 'string', 'in:thorn,voice,passage'],
             'promise_target' => ['nullable', 'uuid'],
             'gift_target' => ['nullable', 'uuid'],
+            'renewal_id' => ['nullable', 'uuid'],
+            'expansion_action' => ['nullable', 'string', 'in:mark,ferry,sound,cleanse,steal,locate,give,siphon,listen,resonate,taunt,tie,foretell'],
+            'secondary_target' => ['nullable', 'uuid'],
+            'relic_id' => ['nullable', 'string', 'in:silver_key,glass_eye,sun_coin'],
             'bargain_id' => ['required_if:type,fae_response', 'uuid'],
             'accept' => ['required_if:type,fae_response', 'boolean'],
             'pin' => ['present_if:type,set_pin', ...$this->pinRules()],
@@ -150,8 +154,9 @@ class GameController extends Controller
     private function modeRules(): array
     {
         return [
-            'setup' => ['sometimes', 'array:mode,classic_variant,chaos_variant,roles,fae_court'],
+            'setup' => ['sometimes', 'array:mode,classic_variant,chaos_variant,roles,fae_court,expansion'],
             'setup.fae_court' => ['sometimes', 'boolean'],
+            'setup.expansion' => ['nullable', 'string', 'in:drowned,gilded-hand,hollow-choir,carnival'],
             'setup.mode' => ['sometimes', 'string', 'in:classic,hard,chaos,paranoia,custom'],
             'setup.classic_variant' => ['sometimes', 'string', 'in:classic,illusions'],
             'setup.chaos_variant' => ['sometimes', 'string', 'in:wildcards,maelstrom'],

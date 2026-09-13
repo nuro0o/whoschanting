@@ -48,6 +48,9 @@ function name(id: string | null | undefined) {
         <p v-if="revealed && state.me.fae_protected" role="status">
             Your accepted bargain protects you from all new curses tonight.
         </p>
+        <p v-if="revealed && state.me.fae_passage" role="status">
+            Your kept promise hides tonight’s outgoing visit from tracking.
+        </p>
         <details class="fae-rules">
             <summary>How the Court shares victory</summary>
             <p class="small-help">
@@ -84,7 +87,12 @@ function name(id: string | null | undefined) {
                     <strong>You promise:</strong>
                     {{ bargainPromise(offer.kind, name(offer.promise_target)) }}
                 </p>
-                <p>
+                <p v-if="offer.kind === 'passage'">
+                    Keep the promised vote to earn the passage and a seal for
+                    the Court. Breaking this promise earns neither reward. Your
+                    role and faction stay the same.
+                </p>
+                <p v-else>
                     You can break your promise and keep the gift. Fulfilling it
                     earns the Court a seal. Your role and faction stay the same.
                 </p>
@@ -120,7 +128,9 @@ function name(id: string | null | undefined) {
                     answered.status === 'accepted'
                         ? answered.kind === 'voice' && answered.gift_target
                             ? `Bargain accepted. The ballot report about ${name(answered.gift_target)} will appear in your Journal after today’s voting closes.`
-                            : 'Bargain accepted. Your gift is yours to keep.'
+                            : answered.kind === 'passage'
+                              ? 'Bargain accepted. Keep the promised vote today to earn Moonlit Passage for next night.'
+                              : 'Bargain accepted. Your gift is yours to keep.'
                         : 'Bargain declined. You received no gift and made no promise.'
                 }}
                 <template v-if="answered.status === 'accepted'"

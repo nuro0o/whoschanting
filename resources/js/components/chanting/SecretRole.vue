@@ -2,6 +2,7 @@
 import { nextTick, ref, watch } from 'vue';
 import { BookOpen, Eye, EyeOff, LockKeyhole } from '@lucide/vue';
 import { roles, type RoomState } from '@/lib/chanting';
+import { factionNames, isExpansionRole } from '@/lib/expansions';
 import { hasLimitedAbility } from '@/lib/roleActions';
 import { usePanelMotion } from '@/composables/usePanelMotion';
 const panel = usePanelMotion();
@@ -66,19 +67,17 @@ async function hideRole() {
             <div class="role-objective">
                 <p class="eyebrow">YOUR OBJECTIVE</p>
                 <strong>{{
-                    state.me.alignment === 'cult'
-                        ? 'Your team: Cult'
-                        : state.me.alignment === 'fae'
-                          ? 'Your team: Fae Court'
-                          : 'Your team: Town'
+                    `Your team: ${factionNames[state.me.alignment ?? 'town'] ?? state.me.alignment}`
                 }}</strong>
                 <p>
                     {{
-                        state.me.alignment === 'cult'
-                            ? 'Fill the ritual and have at least one cultist survive the final vote, eliminate the town, or reach a final pair of one cultist and one town player.'
-                            : state.me.alignment === 'fae'
-                              ? `Earn ${state.fae?.goal ?? 3} seals from different fulfilled partners over at least ${state.fae?.minimum_rounds ?? 2} rounds. At least one partner must belong to the eventual winning side. You can share either Town or Cult victory, even if banished. Completing bargains does not end the match.`
-                              : 'Find and banish every cultist. If the ritual fills, you still have one final discussion and vote to stop the summoning.'
+                        isExpansionRole(state.me.role)
+                            ? state.expansion?.instructions
+                            : state.me.alignment === 'cult'
+                              ? 'Fill the ritual and have at least one cultist survive the final vote, eliminate the town, or reach a final pair of one cultist and one town player.'
+                              : state.me.alignment === 'fae'
+                                ? `Earn ${state.fae?.goal ?? 3} seals from different fulfilled partners over at least ${state.fae?.minimum_rounds ?? 2} rounds. At least one partner must belong to the eventual winning side. You can share either Town or Cult victory, even if banished. Completing bargains does not end the match.`
+                                : 'Find and banish every cultist. If the ritual fills, you still have one final discussion and vote to stop the summoning.'
                     }}
                 </p>
             </div>

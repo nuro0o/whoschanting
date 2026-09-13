@@ -3,6 +3,7 @@
 namespace App\Game;
 
 use App\Models\PaidOrder;
+use App\Models\User;
 use Illuminate\Support\Facades\DB;
 
 class PaidPackUsage
@@ -37,17 +38,18 @@ class PaidPackUsage
                 $this->record($state, $playerId, 'table');
             }
         }
-        if (isset($state['fae'])) {
+        $expansion = isset($state['fae']) ? 'fae-court' : ($state['expansion']['id'] ?? null);
+        if ($expansion !== null) {
             // The host's entitlement is preferred. Other owners joining do not all consume their purchases.
             $players = [$state['host_id'] => $state['players'][$state['host_id']], ...$state['players']];
             foreach ($players as $playerId => $player) {
-                if (! isset($player['user_id'])) {
+                if (! isset($player['user_id']) || ! User::whereKey($player['user_id'])->whereNotNull('email_verified_at')->exists()) {
                     continue;
                 }
-                $order = PaidOrder::where('user_id', $player['user_id'])->where('bundle_id', 'fae-court')
+                $order = PaidOrder::where('user_id', $player['user_id'])->where('bundle_id', $expansion)
                     ->where('status', 'paid')->orderBy('id')->lockForUpdate()->first();
                 if ($order !== null) {
-                    $state['paid_cosmetic_orders'][$playerId]['expansion'] = ['order_id' => $order->id, 'cosmetic' => 'expansions:fae-court'];
+                    $state['paid_cosmetic_orders'][$playerId]['expansion'] = ['order_id' => $order->id, 'cosmetic' => 'expansions:'.$expansion];
                     $this->record($state, $playerId, 'expansion');
                     break;
                 }

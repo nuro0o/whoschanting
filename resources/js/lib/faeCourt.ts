@@ -1,4 +1,31 @@
-export type BargainKind = 'thorn' | 'voice' | 'lantern';
+import type { RoomState } from './chanting';
+
+export function faeRecipients(
+    state: RoomState,
+    renewalId: string | null = null,
+) {
+    const collector = state.me.role === 'fae_collector';
+    const original = state.fae?.bargains.find(
+        (b) => b.id === renewalId && state.fae?.renewable_ids?.includes(b.id),
+    );
+    if (collector && (!original || state.fae?.collector_used)) return [];
+    return state.players.filter(
+        (p) =>
+            p.alive &&
+            p.id !== state.me.id &&
+            !state.me.allies.some((ally) => ally.id === p.id) &&
+            !state.fae?.bargains.some(
+                (b) => b.recipient_id === p.id && b.status === 'fulfilled',
+            ) &&
+            (!collector ||
+                (p.id !== original?.recipient_id &&
+                    p.id !== original?.promise_target &&
+                    p.id !== original?.gift_target)),
+    );
+}
+
+export type BargainKind = 'thorn' | 'voice' | 'passage' | 'lantern';
+export const offerableBargains: BargainKind[] = ['thorn', 'voice', 'passage'];
 export interface FaeBargain {
     id: string;
     day: number;
@@ -17,6 +44,8 @@ export interface FaeBargain {
         | 'broken';
 }
 export interface FaeState {
+    collector_used?: boolean;
+    renewable_ids?: string[];
     seals: number;
     goal: number;
     minimum_rounds: number;
@@ -34,6 +63,10 @@ export const bargains: Record<BargainKind, { name: string; gift: string }> = {
     lantern: {
         name: 'Lantern Secret',
         gift: 'A private clue about whether someone other than you visibly visited the promised accusation target tonight. Hidden visits stay hidden.',
+    },
+    passage: {
+        name: 'Moonlit Passage',
+        gift: 'Keep your promised vote today to hide your outgoing visit from the Lamplighter and Tracker next night. A different vote, abstention or missed ballot earns no passage. This does not stop role readings, curses, attacks or disruption. No benefit if the match ends before next night.',
     },
 };
 export function bargainGift(bargain: FaeBargain, targetName: string): string {

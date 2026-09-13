@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Game\FactionExpansions;
 use App\Game\FaeCourt;
 use App\Game\PaidCosmetics;
 use App\Game\PurchasePolicy;
@@ -16,6 +17,15 @@ use Tests\TestCase;
 class FaeCheckoutTest extends TestCase
 {
     use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        config(['factions.fae-court.active' => true, 'inertia.ssr.enabled' => false]);
+        foreach (FactionExpansions::ADDITIONAL as $id) {
+            config(['factions.'.$id.'.active' => false]);
+        }
+    }
 
     public function test_checkout_grants_room_access_only_after_verified_payment_and_refund_revokes_it(): void
     {
@@ -52,7 +62,10 @@ class FaeCheckoutTest extends TestCase
         $this->assertSame([], $order->cosmetics);
         $room = ['players' => [['user_id' => $user->id]]];
         $this->assertFalse(FaeCourt::available($room));
+        config(['factions.fae-court.active' => false]);
         $this->getJson('/account/store/status?session_id=cs_test_fae')->assertOk()->assertJsonPath('status', 'paid');
+        $this->assertFalse(FaeCourt::available($room));
+        config(['factions.fae-court.active' => true]);
         $this->assertTrue(FaeCourt::available($room));
         $bundle = collect((new PaidCosmetics)->view($user->id))->firstWhere('id', 'fae-court');
         $this->assertTrue($bundle['owned']);
@@ -78,5 +91,25 @@ class FaeCheckoutTest extends TestCase
             'purchase_policy_version' => PurchasePolicy::VERSION])->assertUnprocessable()->assertJsonValidationErrors('bundle_id');
         $this->assertDatabaseCount('paid_orders', 0);
         Http::assertNothingSent();
+    }
+
+    public function test_inactive_faction_is_hidden_and_cannot_be_purchased_even_with_stripe_configured(): void
+    {
+        $user = User::factory()->create();
+        $index = array_search('fae-court', array_column(config('payments.bundles'), 'id'), true);
+        config(['factions.fae-court.active' => false, 'payments.secret_key' => 'sk_test_fae',
+            'payments.webhook_secret' => 'whsec_fae', 'payments.bundles.'.$index.'.price_id' => 'price_fae']);
+        Http::preventStrayRequests();
+        $this->assertNull(collect((new PaidCosmetics)->view($user->id))->firstWhere('id', 'fae-court'));
+        $this->assertNotNull(collect((new PaidCosmetics)->view($user->id))->firstWhere('id', 'founders-pack'));
+        $this->get('/')->assertOk()->assertInertia(fn ($page) => $page->where('activeFactions', []));
+        $this->actingAs($user)->postJson('/account/store/checkout', ['bundle_id' => 'fae-court',
+            'terms' => true, 'terms_version' => config('legal.version'), 'digital_content_consent' => true,
+            'purchase_policy_version' => PurchasePolicy::VERSION])->assertUnprocessable()->assertJsonValidationErrors('bundle_id');
+        $this->assertDatabaseCount('paid_orders', 0);
+        Http::assertNothingSent();
+        config(['factions.fae-court.active' => true]);
+        $this->get('/')->assertOk()->assertInertia(fn ($page) => $page->where('activeFactions', ['fae-court']));
+        $this->assertTrue(collect((new PaidCosmetics)->view($user->id))->firstWhere('id', 'fae-court')['available']);
     }
 }

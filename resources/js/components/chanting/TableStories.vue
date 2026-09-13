@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
 import { roles, type RoomState } from '@/lib/chanting';
+import { isExpansionRole } from '@/lib/expansions';
 
 const props = defineProps<{
     state: RoomState;
@@ -11,6 +12,16 @@ const props = defineProps<{
     submit: (type: string, extra?: object) => Promise<boolean>;
 }>();
 const role = ref('');
+const claimRoles = computed(() =>
+    Object.fromEntries(
+        Object.entries(roles).filter(([id]) =>
+            ['fae_broker', 'fae_collector'].includes(id)
+                ? !!props.state.fae
+                : !isExpansionRole(id) ||
+                  props.state.expansion?.roles.includes(id),
+        ),
+    ),
+);
 const claimBody = ref('');
 const claimTarget = ref('');
 const responseBody = ref('');
@@ -205,7 +216,7 @@ async function extend() {
                             >
                                 <option disabled value="">Choose a role</option>
                                 <option
-                                    v-for="(details, id) in roles"
+                                    v-for="(details, id) in claimRoles"
                                     :key="id"
                                     :value="id"
                                 >

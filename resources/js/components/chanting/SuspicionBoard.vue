@@ -4,6 +4,7 @@ import { useSuspicionBoard } from '@/composables/useSuspicionBoard';
 import { Link, LockKeyhole, X } from '@lucide/vue';
 import CharacterPortrait from './CharacterPortrait.vue';
 import { eliminationLabel, roles, type RoomState } from '@/lib/chanting';
+import { isExpansionRole } from '@/lib/expansions';
 import { journalResultLabel } from '@/lib/personalJournal';
 import { privateResultText } from '@/lib/roleActions';
 import {
@@ -29,7 +30,14 @@ const {
 } = useSuspicionBoard(() => props.state);
 const selectedId = ref('');
 const chosenResult = ref('');
-const roleIds = Object.keys(roles);
+const roleIds = computed(() =>
+    Object.keys(roles).filter((role) =>
+        ['fae_broker', 'fae_collector'].includes(role)
+            ? !!props.state.fae
+            : !isExpansionRole(role) ||
+              props.state.expansion?.roles.includes(role),
+    ),
+);
 const stances: { id: SuspicionStance; label: string }[] = [
     { id: 'unmarked', label: 'Unmarked' },
     { id: 'suspicious', label: 'Suspicious' },
@@ -65,7 +73,7 @@ function update(patch: Partial<SuspicionEntry>) {
 }
 function changeClaim(event: Event) {
     const role = (event.target as HTMLSelectElement).value;
-    update({ claimedRole: roleIds.includes(role) ? role : null });
+    update({ claimedRole: roleIds.value.includes(role) ? role : null });
 }
 function changeNote(event: Event) {
     update({

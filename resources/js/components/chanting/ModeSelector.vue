@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { t } from '@/i18n';
 import { computed, useId } from 'vue';
+import { usePage } from '@inertiajs/vue3';
 import { roles } from '@/lib/chanting';
+import { factionStyle, type ExpansionAvailability } from '@/lib/expansions';
 import {
     cultRoleIds,
     customModeError,
@@ -16,11 +18,28 @@ const props = withDefaults(
         modelValue: ModeSetup;
         disabled?: boolean;
         faeAvailable?: boolean;
+        expansionCatalog?: ExpansionAvailability[];
+        faeActive?: boolean;
         faeMinPlayers?: number;
         minPlayers?: number;
         maxPlayers?: number;
     }>(),
-    { minPlayers: 3, maxPlayers: 15, faeMinPlayers: 7 },
+    { minPlayers: 3, maxPlayers: 15, faeMinPlayers: 7, faeActive: undefined },
+);
+const page = usePage();
+const expansionCatalog = computed(() =>
+    (
+        props.expansionCatalog ??
+        (page.props.factionCatalog ?? [])
+            .filter((item) => item.id !== 'fae-court')
+            .map((item) => ({ ...item, active: true, available: false }))
+    ).filter((item) => item.active || item.id === props.modelValue.expansion),
+);
+const faeActive = computed(
+    () =>
+        props.faeActive ??
+        page.props.activeFactions?.includes('fae-court') ??
+        false,
 );
 const emit = defineEmits<{ 'update:modelValue': [value: ModeSetup] }>();
 const id = useId();
@@ -65,7 +84,12 @@ const sides = [
     { id: 'cult', name: t('modeSelector.cult'), ids: cultRoleIds },
 ];
 function update(change: Partial<ModeSetup>) {
-    if (change.mode && change.mode !== 'classic') change.fae_court = false;
+    if (change.mode && change.mode !== 'classic') {
+        change.fae_court = false;
+        change.expansion = null;
+    }
+    if (change.fae_court) change.expansion = null;
+    if (change.expansion) change.fae_court = false;
     if (change.mode === 'custom' && !Object.keys(props.modelValue.roles).length)
         change.roles = defaultModeSetup().roles;
     emit('update:modelValue', { ...props.modelValue, ...change });
@@ -121,8 +145,60 @@ function invalidCount(role: string): boolean {
             </label>
         </div>
         <div class="mode-detail" aria-live="polite">
+            <template v-if="modelValue.mode === 'classic'">
+                <div
+                    v-for="expansion in expansionCatalog"
+                    :key="expansion.id"
+                    class="fae-expansion-choice"
+                    :style="{ borderColor: factionStyle[expansion.id]?.color }"
+                >
+                    <label :for="`${id}-${expansion.id}`"
+                        ><input
+                            :id="`${id}-${expansion.id}`"
+                            type="checkbox"
+                            :checked="modelValue.expansion === expansion.id"
+                            :disabled="
+                                !expansion.available &&
+                                modelValue.expansion !== expansion.id
+                            "
+                            @change="
+                                update({
+                                    expansion: (
+                                        $event.target as HTMLInputElement
+                                    ).checked
+                                        ? expansion.id
+                                        : null,
+                                })
+                            "
+                        />{{ expansion.name }} · room expansion</label
+                    >
+                    <p>{{ expansion.description }}</p>
+                    <p>{{ expansion.instructions }}</p>
+                    <p>
+                        {{ expansion.min_players }}–{{ maxPlayers }} players.
+                        One owner unlocks randomly dealt roles for everyone.
+                        Choose one expansion per room.
+                    </p>
+                    <p v-if="!expansion.active">
+                        This expansion is currently inactive. Turn it off to
+                        start a new match.
+                    </p>
+                    <p v-else-if="!expansion.available">
+                        A seated owner unlocks this expansion.
+                        <a
+                            href="/settings/profile#store"
+                            target="_blank"
+                            rel="noopener"
+                            >View expansions in the store</a
+                        >.
+                    </p>
+                </div>
+            </template>
             <div
-                v-if="modelValue.mode === 'classic'"
+                v-if="
+                    modelValue.mode === 'classic' &&
+                    (faeActive || modelValue.fae_court)
+                "
                 class="fae-expansion-choice"
             >
                 <label :for="`${id}-fae`">
@@ -143,10 +219,14 @@ function invalidCount(role: string): boolean {
                 <p>
                     One owner at the table unlocks anonymous bargains and shared
                     victories for everyone. {{ faeMinPlayers }}–{{ maxPlayers }}
-                    players; one Townsperson becomes the randomly dealt Fae
-                    Broker.
+                    players; the Broker and Collector replace one Townsperson
+                    and one Cult seat. Both roles are dealt randomly.
                 </p>
-                <p v-if="!faeAvailable">
+                <p v-if="!faeActive">
+                    This expansion is currently inactive. Turn it off to start a
+                    new match.
+                </p>
+                <p v-else-if="!faeAvailable">
                     An owner can join first, then the host can enable the
                     expansion here.
                     <a

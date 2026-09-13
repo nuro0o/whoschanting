@@ -237,7 +237,7 @@ The two Cult abilities break Concord's all-chant requirement. Invalid or missed 
 
 ### Paranoia preset
 
-**Paranoia (5+ players)** draws from every implemented role, with possible duplicates and no guaranteed Oracle. It keeps the normal Town/Cult split. The lobby lists the possible roles and team sizes; the dealt role counts stay out of player responses until the match ends, including for banished spectators. Roles are drawn once per match.
+**Paranoia (5+ players)** draws from every implemented Town/Cult role, with possible duplicates and no guaranteed Oracle. It keeps the normal Town/Cult split. The lobby lists the possible roles and team sizes; the dealt role counts stay out of player responses until the match ends, including for banished spectators. Roles are drawn once per match.
 
 Every living player may make one public, unchangeable voting oath per discussion. Making an oath does not prove a role. Only an Oathkeeper whose actual ballot matches their oath receives protection from new curses the following night. Other roles can bluff with the same public oath, and Exorcists can both pledge and cleanse. Oaths do not consume discussion readiness. Existing modes retain their Oathkeeper-only oaths.
 
@@ -258,3 +258,7 @@ Room creation includes a **Modes** tab. The chosen settings are saved immediatel
 **Herbalist (Town):** once per match, makes a targetless night action that protects all living players against new curses that dawn. It does not clear old curses or stop veils, forgeries, hauntings, disruptions or ritual progress. Committing the ability spends it even on a quiet night or when disrupted. Keeping watch saves it.
 
 Duplicate roles have independent actions, private results and ability budgets. In Custom/Chaos, overlapping effects resolve in public seat order: the last effective Counterfeiter's forgery wins for a shared target; multiple veils on the same target still reverse once; only the first effective curse takes hold. Each Bellkeeper can prevent one eligible new ritual step. Classic retains its previous curse ordering. Mode settings and each Maelstrom event are archived in the existing recap JSON, without a database migration.
+
+### Paid faction expansions
+
+The Fae Court, Drowned, Gilded Hand, Hollow Choir and Carnival are room expansions: one seated owner unlocks randomly dealt roles for everyone. Each has its own release switch, initially disabled. See [room expansion rules and release settings](docs/room-expansions.md) for roles, shared victories, prices and activation.
