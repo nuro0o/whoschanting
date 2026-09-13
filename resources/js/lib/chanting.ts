@@ -6,7 +6,6 @@ import {
     type ExpansionAvailability,
     type ExpansionState,
 } from './expansions.ts';
-import type { CreatorRecipe } from './creator';
 import type { ChaosEvent, ModeSetup } from './gameModes';
 import type { MatchReward, PublicCustomization } from './progression';
 import type { TableChatMessage } from './tableChat';
@@ -346,84 +345,13 @@ export interface RoomState {
     };
 }
 
-export interface Character {
-    creator?: CreatorRecipe | null;
-    id: string;
-    name: string;
-    unlocked?: boolean;
-    requirement?: string;
-    seasonal?: boolean;
-    collection?: 'classics' | 'levelup' | 'seasonal' | 'custom';
-    season_id?: string | null;
-    season_name?: string | null;
-    hidden?: boolean;
-    role_name?: string;
-}
-export const characterIds = [
-    'mariner',
-    'botanist',
-    'lamplighter',
-    'archivist',
-    'baker',
-    'astronomer',
-    'ferryman',
-    'musician',
-    'drifter',
-    'whisperer',
-    'smuggler',
-    'lookout',
-    'trickster',
-    'locksmith',
-    'prowler',
-    'stranger',
-    'tidecaller',
-    'cartographer',
-    'maskmaker',
-    'drowned_regent',
-    'seasonal_warden',
-    'seasonal_cultist',
-    'seasonal_oathkeeper',
-];
-export const seasonalCharacters: Record<
-    string,
-    { name: string; role: string }
-> = {
-    seasonal_warden: { name: 'The Knight', role: 'Warden' },
-    seasonal_cultist: { name: 'The Dark Elf', role: 'Cultist' },
-    seasonal_oathkeeper: { name: 'The Paladin', role: 'Oathkeeper' },
-};
-const characterRequirements: Record<string, string> = {
-    tidecaller: 'Reach level 2 (250 lifetime XP)',
-    cartographer: 'Reach level 3 (750 lifetime XP)',
-    maskmaker:
-        'Earn Many faces: complete qualifying matches as 5 different roles',
-    drowned_regent: 'Earn Village veteran: complete 25 qualifying matches',
-};
-export const defaultCharacters: Character[] = characterIds.map((id) => ({
-    id,
-    name: seasonalCharacters[id]
-        ? '?'
-        : `The ${id
-              .split('_')
-              .map((word) => word[0].toUpperCase() + word.slice(1))
-              .join(' ')}`,
-    unlocked: !characterRequirements[id] && !seasonalCharacters[id],
-    requirement: seasonalCharacters[id]?.role ?? characterRequirements[id],
-    collection: seasonalCharacters[id]
-        ? 'seasonal'
-        : characterRequirements[id]
-          ? 'levelup'
-          : 'classics',
-    ...(seasonalCharacters[id]
-        ? {
-              seasonal: true,
-              season_id: '2026-Q3',
-              season_name: 'Season 3 · 2026',
-              hidden: true,
-              role_name: seasonalCharacters[id].role,
-          }
-        : {}),
-}));
+export {
+    characterIds,
+    defaultCharacters,
+    seasonalCharacters,
+    expansionCharacters,
+    type Character,
+} from './characters.ts';
 
 export const roles: Record<
     string,

@@ -216,7 +216,10 @@ class RoomExpansionsTest extends TestCase
             $this->assertTrue(FactionExpansions::available($seats, $id));
             $this->assertDatabaseHas('paid_orders', ['user_id' => $buyer->id, 'bundle_id' => $id, 'amount' => 499]);
         }
-        $this->assertSame([], (new PaidCosmetics)->ownedCosmetics($buyer->id));
+        $portraits = collect((new PaidCosmetics)->ownedCosmetics($buyer->id));
+        $this->assertCount(4, $portraits);
+        $this->assertSame(['characters'], $portraits->pluck('category')->unique()->values()->all());
+        $this->assertEqualsCanonicalizing(['drowned_diver', 'relic_broker', 'hollow_cantor', 'carnival_ringmaster'], $portraits->pluck('id')->all());
     }
 
     public function test_cleanse_prevents_new_marks_and_ferry_conflicts_are_submission_order_independent(): void

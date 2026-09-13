@@ -29,7 +29,22 @@ class PaidCosmetics
     public function ownedCosmetics(int $userId): array
     {
         return array_values(PaidOrder::where('user_id', $userId)->where('status', 'paid')->get()
-            ->flatMap(fn (PaidOrder $order): array => $order->cosmetics)->all());
+            ->flatMap(fn (PaidOrder $order): array => $this->orderCosmetics($order))->all());
+    }
+
+    /** Add expansion portraits retroactively without rewriting purchase or receipt snapshots.
+     * @return list<array{category:string,id:string,name:string}>
+     */
+    public function orderCosmetics(PaidOrder $order): array
+    {
+        $items = collect($order->cosmetics)->keyBy(fn (array $item): string => $item['category'].':'.$item['id']);
+        foreach (config('game.characters') as $character) {
+            if (config('progression.character_unlocks.'.$character['id'].'.bundle') === $order->bundle_id) {
+                $items->put('characters:'.$character['id'], ['category' => 'characters', 'id' => $character['id'], 'name' => $character['name']]);
+            }
+        }
+
+        return array_values($items->all());
     }
 
     /** @param array<string,list<array<string,mixed>>> $catalog

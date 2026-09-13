@@ -8,7 +8,7 @@ use Illuminate\Support\Facades\DB;
 
 class PaidPackUsage
 {
-    private const SLOTS = ['title' => 'titles', 'frame' => 'frames', 'accent' => 'accents', 'background' => 'backgrounds', 'table' => 'tables', 'banishment' => 'banishments', 'celebration' => 'celebrations'];
+    private const SLOTS = ['character' => 'characters', 'title' => 'titles', 'frame' => 'frames', 'accent' => 'accents', 'background' => 'backgrounds', 'table' => 'tables', 'banishment' => 'banishments', 'celebration' => 'celebrations'];
 
     /** Snapshot provenance at match start so an old match never charges usage to a later repurchase.
      * @param  array<string,mixed>  $state
@@ -22,16 +22,16 @@ class PaidPackUsage
             }
             $orders = PaidOrder::where('user_id', $player['user_id'])->where('status', 'paid')->orderBy('id')->lockForUpdate()->get();
             foreach (self::SLOTS as $slot => $category) {
-                $selected = $player['customization'][$slot] ?? null;
+                $selected = $slot === 'character' ? ($player['character'] ?? null) : ($player['customization'][$slot] ?? null);
                 foreach ($orders as $order) {
-                    if (collect($order->cosmetics)->contains(fn (array $item): bool => $item['category'] === $category && $item['id'] === $selected)) {
+                    if (collect((new PaidCosmetics)->orderCosmetics($order))->contains(fn (array $item): bool => $item['category'] === $category && $item['id'] === $selected)) {
                         $state['paid_cosmetic_orders'][$playerId][$slot] = ['order_id' => $order->id, 'cosmetic' => $category.':'.$selected];
                         // Shared ownership of identical content does not mark two packs used.
                         break;
                     }
                 }
             }
-            foreach (['title', 'frame', 'accent', 'background'] as $slot) {
+            foreach (['character', 'title', 'frame', 'accent', 'background'] as $slot) {
                 $this->record($state, $playerId, $slot);
             }
             if ($playerId === $state['host_id'] && MatchCosmetics::choice($player, 'table') !== 'classic') {

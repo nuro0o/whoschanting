@@ -380,6 +380,7 @@ class MatchEngine
             $roster = $this->modes->roster($setup, $count);
             FaeCourt::start($s);
             foreach ($ids as $index => $pid) {
+                $s['players'][$pid]['character'] = $this->character($s['players'][$pid]);
                 if (isset($s['players'][$pid]['user_id'])) {
                     $appearance = $this->progression->appearance($s['players'][$pid]['user_id'], $s['players'][$pid]['character'] ?? null);
                     // A design cleared in another tab still has its valid lobby snapshot.
@@ -1145,8 +1146,13 @@ class MatchEngine
     private function character(array $player): string
     {
         $characters = $this->progression->starterCharacterIds();
+        $selected = $player['character'] ?? null;
+        if ($selected !== null && config('progression.character_unlocks.'.$selected.'.bundle') !== null
+            && ! $this->progression->canUseCharacter($player['user_id'] ?? null, $selected)) {
+            $selected = null;
+        }
 
-        return $player['character'] ?? $characters[hexdec(substr(hash('sha256', $player['id']), 0, 6)) % count($characters)];
+        return $selected ?? $characters[hexdec(substr(hash('sha256', $player['id']), 0, 6)) % count($characters)];
     }
 
     /** @param array<string, mixed> $player */

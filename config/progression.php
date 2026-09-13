@@ -17,6 +17,12 @@ return [
         'seasonal_warden' => ['achievement' => 'seasonal_warden', 'seasonal' => true, 'season_id' => '2026-Q3'],
         'seasonal_cultist' => ['achievement' => 'seasonal_cultist', 'seasonal' => true, 'season_id' => '2026-Q3'],
         'seasonal_oathkeeper' => ['achievement' => 'seasonal_oathkeeper', 'seasonal' => true, 'season_id' => '2026-Q3'],
+        // Permanent purchaser bonuses, including orders placed before portraits were added.
+        'fae_envoy' => ['bundle' => 'fae-court'],
+        'drowned_diver' => ['bundle' => 'drowned'],
+        'relic_broker' => ['bundle' => 'gilded-hand'],
+        'hollow_cantor' => ['bundle' => 'hollow-choir'],
+        'carnival_ringmaster' => ['bundle' => 'carnival'],
     ],
     'seasonal_achievements' => [
         'seasonal_warden' => ['role' => 'warden', 'role_name' => 'Warden', 'character' => 'seasonal_warden'],

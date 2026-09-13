@@ -59,7 +59,7 @@ class FaeCheckoutTest extends TestCase
         $order = PaidOrder::firstOrFail();
         $this->assertSame(299, $order->amount);
         $this->assertSame('price_fae', $order->price_id);
-        $this->assertSame([], $order->cosmetics);
+        $this->assertSame([['category' => 'characters', 'id' => 'fae_envoy', 'name' => 'The Thorn Envoy']], $order->cosmetics);
         $room = ['players' => [['user_id' => $user->id]]];
         $this->assertFalse(FaeCourt::available($room));
         config(['factions.fae-court.active' => false]);
@@ -70,7 +70,7 @@ class FaeCheckoutTest extends TestCase
         $bundle = collect((new PaidCosmetics)->view($user->id))->firstWhere('id', 'fae-court');
         $this->assertTrue($bundle['owned']);
         $this->assertSame('faction', $bundle['kind']);
-        $this->assertSame([], (new PaidCosmetics)->ownedCosmetics($user->id));
+        $this->assertSame($order->cosmetics, (new PaidCosmetics)->ownedCosmetics($user->id));
         $this->assertDatabaseCount('coin_transactions', 0);
         $charge['refunded'] = true;
         $this->getJson('/account/store/status?session_id=cs_test_fae')->assertOk()->assertJsonPath('status', 'refunded');

@@ -51,7 +51,11 @@ const originalCharacters = computed(() =>
 );
 const earnedCharacters = computed(() =>
     characters.value.filter(
-        (item) => characterIds.indexOf(item.id) >= 16 && !item.seasonal,
+        (item) =>
+            characterIds.indexOf(item.id) >= 16 &&
+            !item.seasonal &&
+            item.collection !== 'expansion' &&
+            !item.expansion,
     ),
 );
 const seasonalCharacters = computed(() =>
@@ -64,6 +68,15 @@ const wardrobeCharacterGroups = computed(() => [
         description:
             'New faces, earned through play. Every character is cosmetic.',
         characters: earnedCharacters.value,
+    },
+    {
+        id: 'expansion',
+        name: 'Expansion characters',
+        description:
+            'A face from each expansion, included for its owner. Wear them in any game, with any role.',
+        characters: characters.value.filter(
+            (item) => item.collection === 'expansion' || item.expansion,
+        ),
     },
     {
         id: 'seasonal',

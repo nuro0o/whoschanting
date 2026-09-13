@@ -48,13 +48,6 @@ const emit = defineEmits<{
 const page = usePage();
 const factionContents = (id: string) => {
     const expansion = page.props.factionCatalog?.find((item) => item.id === id);
-    if (id === 'fae-court')
-        return [
-            'One secret Fae Broker in Classic or Illusions',
-            'Three anonymous bargains to offer at night',
-            'Shared victory with Town or Cult',
-            '7–15 players · guests can play every role',
-        ];
     return expansion
         ? [
               expansion.roles
@@ -86,6 +79,16 @@ const checkoutStatusElement = ref<HTMLElement>();
 const checkoutStatus = ref<CheckoutStatus | null>(null);
 const checkingPayment = ref(false);
 const previewBundle = ref<StoreBundle | null>(null);
+let previewTrigger: HTMLElement | null = null;
+function openPreview(bundle: StoreBundle, event: MouseEvent) {
+    previewTrigger = event.currentTarget as HTMLElement;
+    previewBundle.value = bundle;
+}
+function restorePreviewFocus(event: Event) {
+    if (!previewTrigger?.isConnected) return;
+    event.preventDefault();
+    previewTrigger.focus();
+}
 const consentBundleId = ref<string | null>(null);
 const consentBundle = computed(() =>
     bundles.value.find((bundle) => bundle.id === consentBundleId.value),
@@ -138,7 +141,11 @@ const categoryNames: Record<string, string> = {
     tables: 'Table',
     banishments: 'Banishment',
     celebrations: 'Victory celebration',
+    characters: 'Character',
 };
+function bundleCharacter(bundle: StoreBundle) {
+    return bundle.cosmetics.find((item) => item.category === 'characters');
+}
 function bundleCosmetic(bundle: StoreBundle, category: string) {
     return bundle.cosmetics.find((item) => item.category === category)?.id;
 }
@@ -425,28 +432,59 @@ function transactionName(itemId: string | null) {
                         class="premium-bundle"
                         :class="[
                             `premium-bundle--${bundle.id}`,
-                            { 'is-owned': bundle.owned },
+                            {
+                                'is-owned': bundle.owned,
+                                'premium-bundle--expansion':
+                                    bundle.kind === 'faction',
+                            },
                         ]"
+                        :style="
+                            bundle.kind === 'faction'
+                                ? {
+                                      '--bundle-accent':
+                                          factionStyle[bundle.id]?.color,
+                                  }
+                                : undefined
+                        "
                     >
                         <div
                             v-if="bundle.kind === 'faction'"
                             class="premium-art fae-store-art"
-                            :style="{ color: factionStyle[bundle.id]?.color }"
                         >
                             <span class="premium-edition">{{
-                                bundle.id === 'fae-court'
-                                    ? 'The first faction expansion'
-                                    : 'A new reason to lie'
-                            }}</span>
-                            <span class="fae-store-sigil" aria-hidden="true">{{
-                                factionStyle[bundle.id]?.symbol
-                            }}</span>
-                            <strong>{{
                                 factionStyle[bundle.id]?.motto
-                            }}</strong>
-                            <span class="premium-art-caption"
-                                >One owner. A whole room of possibilities.</span
+                            }}</span>
+                            <button
+                                v-if="bundleCharacter(bundle)"
+                                type="button"
+                                class="expansion-portrait-stage"
+                                :aria-label="`Preview ${bundleCharacter(bundle)!.name}`"
+                                @click="openPreview(bundle, $event)"
                             >
+                                <CharacterPortrait
+                                    :character="bundleCharacter(bundle)!.id"
+                                    decorative
+                                />
+                                <span
+                                    class="expansion-portrait-sigil"
+                                    aria-hidden="true"
+                                    >{{ factionStyle[bundle.id]?.symbol }}</span
+                                >
+                            </button>
+                            <span
+                                v-else
+                                class="fae-store-sigil"
+                                aria-hidden="true"
+                                >{{ factionStyle[bundle.id]?.symbol }}</span
+                            >
+                            <strong class="expansion-character-name">{{
+                                bundleCharacter(bundle)?.name ?? bundle.name
+                            }}</strong>
+                            <span class="premium-art-caption">{{
+                                bundleCharacter(bundle)
+                                    ? 'Your character. Included with this expansion.'
+                                    : 'One owner. A whole room of possibilities.'
+                            }}</span>
                         </div>
                         <div v-else class="premium-art">
                             <span class="premium-edition">{{
@@ -512,7 +550,23 @@ function transactionName(itemId: string | null) {
                                     >
                                 </li>
                             </ul>
-                            <ul v-else class="premium-contents">
+                            <ul
+                                v-else
+                                class="premium-contents"
+                                :aria-label="`${bundle.name} contents`"
+                            >
+                                <li
+                                    v-if="bundleCharacter(bundle)"
+                                    class="expansion-included-character"
+                                >
+                                    <Check :size="12" aria-hidden="true" /><span
+                                        >{{ bundleCharacter(bundle)!.name
+                                        }}<small
+                                            >Character for your wardrobe · play
+                                            as any role</small
+                                        ></span
+                                    >
+                                </li>
                                 <li
                                     v-for="content in factionContents(
                                         bundle.id,
@@ -525,14 +579,28 @@ function transactionName(itemId: string | null) {
                                 </li>
                             </ul>
                             <button
-                                v-if="bundle.kind !== 'faction'"
+                                v-if="
+                                    bundle.kind !== 'faction' ||
+                                    bundleCharacter(bundle)
+                                "
                                 type="button"
                                 class="premium-preview-button"
-                                @click="previewBundle = bundle"
+                                @click="openPreview(bundle, $event)"
                             >
-                                <Play :size="13" aria-hidden="true" /> Preview
-                                the collection
+                                <Play :size="13" aria-hidden="true" />
+                                {{
+                                    bundle.kind === 'faction'
+                                        ? 'Meet your character'
+                                        : 'Preview the collection'
+                                }}
                             </button>
+                            <Link
+                                v-if="bundle.owned && bundleCharacter(bundle)"
+                                href="/progression#progression-panel-wardrobe"
+                                class="expansion-equip-link"
+                                >Equip character
+                                <ArrowRight :size="13" aria-hidden="true"
+                            /></Link>
                             <div class="premium-purchase">
                                 <div>
                                     <strong>{{ money(bundle) }}</strong
@@ -910,17 +978,54 @@ function transactionName(itemId: string | null) {
             :open="!!previewBundle"
             @update:open="!$event && (previewBundle = null)"
         >
-            <DialogContent class="account-theme premium-preview-dialog">
+            <DialogContent
+                class="account-theme premium-preview-dialog"
+                @close-auto-focus="restorePreviewFocus"
+            >
                 <template v-if="previewBundle">
                     <DialogHeader
                         ><DialogTitle>{{ previewBundle.name }}</DialogTitle
                         ><DialogDescription
+                            v-if="previewBundle.kind === 'faction'"
+                            >One expansion for the whole room. A new face for
+                            your own wardrobe.</DialogDescription
+                        ><DialogDescription v-else
                             >Take a seat at this table. Play the banishment and
                             victory effects to see what your gathering will
                             enjoy.</DialogDescription
                         ></DialogHeader
                     >
+                    <div
+                        v-if="bundleCharacter(previewBundle)"
+                        class="expansion-character-preview"
+                        :style="{
+                            '--bundle-accent':
+                                factionStyle[previewBundle.id]?.color,
+                        }"
+                    >
+                        <CharacterPortrait
+                            :character="bundleCharacter(previewBundle)!.id"
+                        />
+                        <p class="account-kicker">Included character</p>
+                        <h3>{{ bundleCharacter(previewBundle)!.name }}</h3>
+                        <p>
+                            Yours to wear in any game, with any role. Other
+                            players can enjoy your expansion when you share a
+                            room; this character belongs to the purchaser.
+                        </p>
+                        <Link
+                            v-if="previewBundle.owned"
+                            href="/progression#progression-panel-wardrobe"
+                            class="store-equip"
+                            >Equip in your wardrobe <ArrowRight :size="14"
+                        /></Link>
+                        <span v-else class="expansion-preview-price"
+                            >Included with {{ previewBundle.name }} ·
+                            {{ money(previewBundle) }}</span
+                        >
+                    </div>
                     <CosmeticScenePreview
+                        v-else
                         :table="bundleCosmetic(previewBundle, 'tables')"
                         :banishment="
                             bundleCosmetic(previewBundle, 'banishments')
@@ -929,7 +1034,10 @@ function transactionName(itemId: string | null) {
                             bundleCosmetic(previewBundle, 'celebrations')
                         "
                     />
-                    <p class="premium-note">
+                    <p
+                        v-if="previewBundle.kind !== 'faction'"
+                        class="premium-note"
+                    >
                         All {{ previewBundle.cosmetics.length }} cosmetics are
                         included for {{ money(previewBundle) }}. Equip each
                         detail separately in your wardrobe.
@@ -1122,6 +1230,143 @@ function transactionName(itemId: string | null) {
 .premium-bundle--harvest-festival {
     --bundle-accent: #edbe79;
     --bundle-dark: #4b392b;
+}
+.premium-bundle--expansion {
+    --bundle-dark: #20342f;
+}
+.premium-bundle--drowned {
+    --bundle-dark: #18383e;
+}
+.premium-bundle--gilded-hand {
+    --bundle-dark: #423923;
+}
+.premium-bundle--hollow-choir {
+    --bundle-dark: #352c3b;
+}
+.premium-bundle--carnival {
+    --bundle-dark: #402c36;
+}
+.premium-bundle--expansion .premium-art {
+    min-height: 318px;
+    gap: 13px;
+    background: radial-gradient(
+        ellipse at 50% 55%,
+        color-mix(in srgb, var(--bundle-accent) 22%, var(--bundle-dark)),
+        var(--bundle-dark) 82%
+    );
+}
+.expansion-portrait-stage {
+    position: relative;
+    padding: 5px;
+    border: 1px solid color-mix(in srgb, var(--bundle-accent) 55%, transparent);
+    border-radius: 80px 80px 6px 6px;
+    cursor: zoom-in;
+    transition:
+        transform 180ms ease,
+        border-color 180ms ease;
+}
+.premium-art .expansion-portrait-stage .character-portrait {
+    width: 150px;
+    height: 170px;
+    border-radius: 75px 75px 3px 3px;
+    border: 1px solid var(--bundle-accent);
+    box-shadow: 0 10px 25px #07171566;
+}
+.expansion-portrait-stage:hover {
+    transform: translateY(-3px);
+    border-color: var(--bundle-accent);
+}
+.expansion-portrait-stage:focus-visible {
+    outline: 2px solid #f5efd9;
+    outline-offset: 5px;
+}
+.expansion-portrait-sigil {
+    position: absolute;
+    right: -16px;
+    bottom: 14px;
+    display: grid;
+    place-items: center;
+    width: 35px;
+    height: 35px;
+    border: 1px solid var(--bundle-accent);
+    background: var(--bundle-dark);
+    color: var(--bundle-accent);
+    border-radius: 50%;
+    font-size: 21px;
+}
+.premium-art .expansion-character-name {
+    color: #f5efd9;
+    font:
+        400 23px/1.15 'Fraunces',
+        Georgia,
+        serif;
+}
+.premium-bundle--expansion .premium-art-caption {
+    text-align: center;
+    font:
+        10px/1.6 'DM Sans',
+        sans-serif;
+}
+.expansion-included-character {
+    grid-column: 1 / -1;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--account-line);
+}
+.expansion-equip-link {
+    display: inline-flex;
+    align-items: center;
+    align-self: start;
+    gap: 7px;
+    font-size: 11px;
+    color: var(--account-green);
+    padding: 8px 0;
+    text-decoration: underline;
+    text-underline-offset: 4px;
+}
+.expansion-equip-link:focus-visible {
+    outline: 2px solid var(--account-green);
+    outline-offset: 4px;
+}
+.expansion-character-preview {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 14px;
+    padding: 14px 8px;
+    text-align: center;
+}
+.expansion-character-preview .character-portrait {
+    display: block;
+    width: min(290px, 65vw);
+    aspect-ratio: 1;
+    height: auto;
+    border: 3px double var(--bundle-accent);
+    border-radius: 6px;
+    box-shadow: 0 8px 24px #07171533;
+}
+.expansion-character-preview h3 {
+    font:
+        400 30px/1.15 'Fraunces',
+        Georgia,
+        serif;
+}
+.expansion-character-preview > p:not(.account-kicker) {
+    max-width: 420px;
+    color: var(--account-muted);
+    font-size: 12px;
+    line-height: 1.8;
+}
+.expansion-preview-price {
+    font-size: 12px;
+    color: var(--account-green);
+}
+@media (prefers-reduced-motion: reduce) {
+    .expansion-portrait-stage {
+        transition: none;
+    }
+    .expansion-portrait-stage:hover {
+        transform: none;
+    }
 }
 .premium-art {
     position: relative;

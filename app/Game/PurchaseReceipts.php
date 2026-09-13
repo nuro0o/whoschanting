@@ -21,11 +21,16 @@ class PurchaseReceipts
             default => 'Your original purchase terms and applicable statutory rights remain in effect. This receipt does not introduce a withdrawal waiver. Contact support for refunds and purchase questions.',
         };
         $amount = $order->total_amount ?? $order->amount;
+        $items = array_column($order->cosmetics, 'name');
+        $bundle = collect(config()->array('payments.bundles'))->firstWhere('id', $order->bundle_id);
+        if (($bundle['kind'] ?? null) === 'faction') {
+            array_unshift($items, $order->bundle_name ?? $order->bundle_id);
+        }
         $order->receipt_payload = [
             'order_id' => $order->id, 'name' => $order->bundle_name ?? $order->bundle_id,
             'email' => $order->checkout_parameters['customer_email'] ?? null,
             'amount_label' => strtoupper($order->currency).' '.number_format($amount / 100, 2, '.', '').($order->total_amount === null ? ' (subtotal; see Stripe receipt for final total)' : ''),
-            'paid_at' => $order->paid_at?->toISOString(), 'items' => array_column($order->cosmetics, 'name') ?: [$order->bundle_name ?? $order->bundle_id],
+            'paid_at' => $order->paid_at?->toISOString(), 'items' => $items ?: [$order->bundle_name ?? $order->bundle_id],
             'consent_text' => $hasConsent ? ($consent['digital_content_consent_text'] ?? null) : null,
             'consent_accepted_at' => $hasConsent ? ($consent['accepted_at'] ?? null) : null,
             'policy_text' => $policyText,

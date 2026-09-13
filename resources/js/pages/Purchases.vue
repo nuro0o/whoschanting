@@ -20,6 +20,7 @@ const categories: Record<string, string> = {
     tables: 'Table',
     banishments: 'Banishment',
     celebrations: 'Celebration',
+    characters: 'Character',
 };
 const statuses: Record<string, string> = {
     pending: 'Awaiting payment',

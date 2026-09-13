@@ -41,6 +41,13 @@ export function characterCollections(
         if (character.id === 'custom' || character.collection === 'custom') {
             id = 'custom';
         } else if (
+            character.collection === 'expansion' ||
+            character.expansion
+        ) {
+            id = 'expansion';
+            name = t('characterCollections.expansion');
+            earned = true;
+        } else if (
             character.season_id ||
             character.seasonal ||
             character.collection === 'seasonal'

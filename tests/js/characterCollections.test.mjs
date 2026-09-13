@@ -1,6 +1,44 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { characterCollections } from '../../resources/js/lib/characterCollections.ts';
+import {
+    defaultCharacters,
+    characterIds,
+    expansionCharacters,
+} from '../../resources/js/lib/characters.ts';
+
+test('expansion previews stay visible but locked in client defaults and separate from play rewards', () => {
+    const ids = Object.keys(expansionCharacters);
+    assert.equal(ids.length, 5);
+    const characters = defaultCharacters.filter(({ id }) => ids.includes(id));
+    assert.equal(characters.length, 5);
+    for (const character of characters) {
+        assert.equal(character.unlocked, false);
+        assert.equal(character.collection, 'expansion');
+        assert.equal(character.name, expansionCharacters[character.id].name);
+        assert.equal(
+            character.expansion,
+            expansionCharacters[character.id].expansion,
+        );
+        assert.ok(
+            character.requirement.includes(
+                expansionCharacters[character.id].expansionName,
+            ),
+        );
+        assert.notEqual(character.hidden, true);
+    }
+    const groups = characterCollections(defaultCharacters, characterIds);
+    assert.deepEqual(
+        groups.find(({ id }) => id === 'expansion').characters,
+        characters,
+    );
+    assert.equal(groups.find(({ id }) => id === 'expansion').earned, true);
+    assert.ok(
+        !groups
+            .find(({ id }) => id === 'levelup')
+            .characters.some(({ id }) => ids.includes(id)),
+    );
+});
 
 test('collections retain custom, locked, and hidden characters and separate named seasons', () => {
     const characters = [

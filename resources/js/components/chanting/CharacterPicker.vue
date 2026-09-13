@@ -21,7 +21,7 @@ const groups = computed(() =>
 const categories = computed(() =>
     groups.value.filter(
         (group) =>
-            ['classics', 'levelup'].includes(group.id) ||
+            ['classics', 'levelup', 'expansion'].includes(group.id) ||
             group.id.startsWith('season:'),
     ),
 );

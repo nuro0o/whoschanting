@@ -40,14 +40,22 @@ class AccountProgression
     }
 
     /** @param array<string, string> $achievements
+     * @param  list<string>  $ownedCharacters
      * @return list<array<string, mixed>>
      */
-    private function characters(int $level, array $achievements, bool $account): array
+    private function characters(int $level, array $achievements, bool $account, array $ownedCharacters = []): array
     {
-        return array_map(function (array $character) use ($level, $achievements, $account): array {
+        return array_map(function (array $character) use ($level, $achievements, $account, $ownedCharacters): array {
             $unlock = config('progression.character_unlocks.'.$character['id']);
             if ($unlock === null) {
                 return [...$character, 'collection' => 'classics', 'unlocked' => true, 'requirement' => 'Available from the start'];
+            }
+            if (isset($unlock['bundle'])) {
+                $unlocked = $account && in_array($character['id'], $ownedCharacters, true);
+                $bundle = collect(config()->array('payments.bundles'))->firstWhere('id', $unlock['bundle']);
+
+                return [...$character, 'collection' => 'expansion', 'expansion' => $unlock['bundle'], 'unlocked' => $unlocked,
+                    'requirement' => ($unlocked ? 'Owned from ' : 'Included in ').($bundle['name'] ?? 'the village store')];
             }
             $unlocked = $account && (isset($unlock['achievement'])
                 ? isset($achievements[$unlock['achievement']]) : $level >= $unlock['level']);
@@ -77,7 +85,9 @@ class AccountProgression
         $profile = $eligible ? PlayerProfile::find($userId) : null;
 
         $level = $this->level($profile->xp ?? 0);
-        $characters = $this->characters($level, $profile->achievements ?? [], $eligible);
+        $ownedCharacters = $eligible ? array_column(array_filter((new PaidCosmetics)->ownedCosmetics($userId),
+            fn (array $item): bool => $item['category'] === 'characters'), 'id') : [];
+        $characters = $this->characters($level, $profile->achievements ?? [], $eligible, $ownedCharacters);
         $recipe = $this->creator->saved($profile?->customization['creator'] ?? null, $level);
         if (config('character_creator.enabled') && $eligible && $recipe !== null) {
             $characters[] = ['id' => 'custom', 'name' => 'Your creation', 'collection' => 'custom', 'unlocked' => true,
